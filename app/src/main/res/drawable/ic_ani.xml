@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Top Manga Wing -->
+    <path
+        android:pathData="M 29.53,31.64 L 54.84,31.64 L 46.41,46.83 L 27.42,46.83 Z"
+        android:fillColor="#E11D48" />
+    <path
+        android:pathData="M 54.84,31.64 L 80.58,31.64 L 65.39,46.83 L 46.41,46.83 Z"
+        android:fillColor="#FF2E63" />
+    <path
+        android:pathData="M 51.68,31.64 L 58.01,31.64 L 49.57,46.83 L 43.24,46.83 Z"
+        android:fillColor="#FDA4AF" />
+
+    <!-- Center Diagonal -->
+    <path
+        android:pathData="M 80.58,31.64 L 80.58,46.83 L 40.08,76.36 L 27.42,76.36 L 27.42,61.17 L 67.92,31.64 Z"
+        android:fillColor="#4F46E5" />
+    <path
+        android:pathData="M 74.25,33.75 L 78.05,45.35 L 42.19,74.88 L 30.59,64.34 Z"
+        android:fillColor="#7C3AED" />
+    <path
+        android:pathData="M 69.61,36.91 L 73.83,41.13 L 46.41,71.72 L 36.91,67.50 Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Bottom Play Wing -->
+    <path
+        android:pathData="M 42.61,61.17 L 71.72,61.17 L 80.58,68.77 L 71.72,76.36 L 27.42,76.36 L 36.28,68.77 Z"
+        android:fillColor="#0891B2" />
+    <path
+        android:pathData="M 46.41,62.86 L 72.77,62.86 L 79.73,68.77 L 72.77,74.67 L 33.75,74.67 L 41.13,68.77 Z"
+        android:fillColor="#06B6D4" />
+    <path
+        android:pathData="M 55.90,64.97 L 74.88,68.77 L 55.90,72.56 Z"
+        android:fillColor="#FFFFFF" />
+</vector>

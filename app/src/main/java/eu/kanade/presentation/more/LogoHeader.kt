@@ -1,0 +1,47 @@
+package eu.kanade.presentation.more
+
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import eu.kanade.tachiyomi.R
+import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.i18n.stringResource
+
+@Composable
+fun LogoHeader() {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.ic_ani),
+            contentDescription = null,
+            tint = Color.Unspecified,
+            modifier = Modifier
+                .padding(top = 40.dp)
+                .size(72.dp),
+        )
+
+        Text(
+            text = stringResource(MR.strings.app_name),
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = 12.dp, bottom = 32.dp),
+        )
+
+        HorizontalDivider()
+    }
+}
