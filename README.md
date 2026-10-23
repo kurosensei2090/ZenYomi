@@ -5,17 +5,17 @@
 # ZenYomi (全読み)
 
 ### The Ultimate Unified Anime Streaming & Manga Reading Application for Android
-*Taking the best of Tachiyomi and Aniyomi into one next-generation powerhouse.*
+*Taking the best of Tachiyomi, Mihon, and Aniyomi into one next-generation powerhouse.*
 
 </div>
 
 ## Overview
 
-**ZenYomi** (derived from Japanese **全** "Zen" meaning All/Omni/Universal and **読み** "Yomi" meaning Reading/Media Experience) brings together the full feature set of both **Tachiyomi** (the premier manga reader) and **Aniyomi** (the anime player and extension powerhouse) into a single, high-performance, modern Android application.
+**ZenYomi** (derived from Japanese **全** "Zen" meaning All/Omni/Universal and **読み** "Yomi" meaning Reading/Media Experience) brings together the best features and foundation of **Tachiyomi** and **Mihon** (the premier Android manga readers) alongside **Aniyomi** (the anime player and media streaming powerhouse) into a single, high-performance, modern Android application.
 
 ## Key Features
 
-### 📖 Complete Manga Reader (Tachiyomi Foundation)
+### 📖 Complete Manga Reader (Tachiyomi & Mihon Foundation)
 - **Multi-Mode Reader**: Left-to-Right, Right-to-Left (traditional Japanese manga), Vertical, and Webtoon continuous scrolling with seamless page stitching.
 - **Visual Enhancements**: Automatic border cropping, custom background colors, split dual-page spread in landscape, color filters (inverted, grayscale, sepia, AMOLED black).
 - **Offline Reading**: Batch download chapters for offline reading with background download manager.
@@ -48,3 +48,11 @@
 - Pitch Black AMOLED Dark Mode for battery saving.
 - Biometric & PIN App Lock for privacy.
 - Automated JSON/Protobuf Backup & Restore across devices.
+
+## Acknowledgements & Inspirations
+
+ZenYomi stands on the shoulders of giants. Special thanks and deep appreciation to the open-source projects that inspired and paved the way:
+- [**Tachiyomi**](https://github.com/tachiyomiorg) — The original pioneer in open-source manga reading for Android.
+- [**Mihon**](https://github.com/mihonapp/mihon) — The community successor keeping the modern Android manga reading experience alive and thriving.
+- [**Aniyomi**](https://github.com/aniyomiorg/aniyomi) — The visionary anime player and media streaming fork.
+
