@@ -56,3 +56,10 @@ ZenYomi stands on the shoulders of giants. Special thanks and deep appreciation 
 - [**Mihon**](https://github.com/mihonapp/mihon) — The community successor keeping the modern Android manga reading experience alive and thriving.
 - [**Aniyomi**](https://github.com/aniyomiorg/aniyomi) — The visionary anime player and media streaming fork.
 
+## Disclaimer
+
+- **Content & Hosting**: ZenYomi is an independent open-source reader utility and media player. It does **not** host, store, index, or distribute any media files, video streams, or manga chapters on its servers or within its source code.
+- **Third-Party Extensions**: All media sources and extensions are developed, maintained, and hosted by independent third parties. ZenYomi is not affiliated with, nor does it endorse or control, any content provider or third-party extension repository.
+- **Copyright & Compliance**: All media accessed through user-configured extensions remains the copyrighted property of their respective owners and publishers. Users are solely responsible for ensuring that their use of external sources complies with their local copyright and intellectual property laws.
+
+
