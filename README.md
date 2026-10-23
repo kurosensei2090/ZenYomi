@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="logo.png" width="160" alt="ZenYomi Logo" />
+
 # ZenYomi (全読み)
 
 ### The Ultimate Unified Anime Streaming & Manga Reading Application for Android
