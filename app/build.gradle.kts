@@ -44,10 +44,13 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = rootProject.file("zenyomi.keystore")
-            storePassword = "zenyomiapp"
-            keyAlias = "zenyomi"
-            keyPassword = "zenyomiapp"
+            val keyFile = rootProject.file("zenyomi.keystore")
+            if (keyFile.exists()) {
+                storeFile = keyFile
+                storePassword = "zenyomiapp"
+                keyAlias = "zenyomi"
+                keyPassword = "zenyomiapp"
+            }
         }
     }
 
