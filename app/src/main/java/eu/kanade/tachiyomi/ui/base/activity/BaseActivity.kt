@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.ui.base.delegate.SecureActivityDelegateImpl
 import eu.kanade.tachiyomi.ui.base.delegate.ThemingDelegate
 import eu.kanade.tachiyomi.ui.base.delegate.ThemingDelegateImpl
 import eu.kanade.tachiyomi.util.system.prepareTabletUiContext
+import eu.kanade.tachiyomi.util.system.setHighRefreshRate
 
 open class BaseActivity :
     AppCompatActivity(),
@@ -21,5 +22,12 @@ open class BaseActivity :
     override fun onCreate(savedInstanceState: Bundle?) {
         applyAppTheme(this)
         super.onCreate(savedInstanceState)
+        setHighRefreshRate()
+        window?.decorView?.post { setHighRefreshRate() }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        setHighRefreshRate()
     }
 }

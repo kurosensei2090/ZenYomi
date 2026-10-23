@@ -79,16 +79,23 @@ fun Activity.setHighRefreshRate() {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
         val window = window ?: return
         val display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            display
+            display ?: windowManager.defaultDisplay
         } else {
             @Suppress("DEPRECATION")
             windowManager.defaultDisplay
         } ?: return
         val modes = display.supportedModes ?: return
-        val maxMode = modes.maxByOrNull { it.refreshRate }
+        val currentMode = display.mode
+        val maxMode = modes
+            .filter { it.physicalWidth == currentMode.physicalWidth && it.physicalHeight == currentMode.physicalHeight }
+            .maxByOrNull { it.refreshRate }
+            ?: modes.maxByOrNull { it.refreshRate }
         if (maxMode != null && maxMode.refreshRate > 60f) {
             val params = window.attributes
             params.preferredDisplayModeId = maxMode.modeId
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                params.preferredRefreshRate = maxMode.refreshRate
+            }
             window.attributes = params
         }
     }

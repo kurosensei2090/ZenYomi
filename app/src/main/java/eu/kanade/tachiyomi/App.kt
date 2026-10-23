@@ -226,22 +226,6 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
         SecureActivityDelegate.onApplicationStopped()
     }
 
-    override fun getPackageName(): String {
-        try {
-            // Override the value passed as X-Requested-With in WebView requests
-            val stackTrace = Thread.currentThread().stackTrace
-            val isChromiumCall = stackTrace.any { trace ->
-                trace.className.lowercase() in setOf("org.chromium.base.buildinfo", "org.chromium.base.apkinfo") &&
-                    trace.methodName.lowercase() in setOf("getall", "getpackagename", "<init>")
-            }
-
-            if (isChromiumCall) return WebViewUtil.spoofedPackageName(applicationContext)
-        } catch (_: Exception) {
-        }
-
-        return super.getPackageName()
-    }
-
     private fun setupNotificationChannels() {
         try {
             Notifications.createChannels(this)
