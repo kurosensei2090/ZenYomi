@@ -34,11 +34,6 @@
 - **Smart Features**: AniSkip integration (auto-skip video openings and endings), Picture-in-Picture (PiP), and background audio playback.
 - **Episode Downloads**: Download video streams directly for offline viewing.
 
-### 🌐 Pluggable Source & Extension System
-- **Dual Extension Support**: Compatible with both content extension repositories and video/media extension repositories.
-- **Source Extractors**: Automatically extracts and streams video links from major media hosts.
-- **Migration Assistant**: Easily migrate content and media titles between different sources when a source goes offline.
-
 ### 📊 Universal Tracking & Sync
 - **Tracking Services**: Full bi-directional sync with AniList, MyAnimeList (MAL), Kitsu, Shikimori, and Bangumi.
 - Automatically marks chapters read and video episodes watched as you finish them.
