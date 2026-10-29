@@ -64,21 +64,14 @@ import tachiyomi.i18n.aniyomi.AYMR
 @Composable
 fun Screen.csExtensionsTab(): TabContent {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val manager = remember { CloudStreamManager.getInstance(context) }
-
-    val repos by manager.repositoriesFlow.collectAsState()
-    val plugins by manager.availablePluginsFlow.collectAsState()
-    val isLoading by manager.isLoadingFlow.collectAsState()
-    val statusMessage by manager.statusMessageFlow.collectAsState()
+    val badgePlugins by manager.availablePluginsFlow.collectAsState()
 
     var showAddDialog by remember { mutableStateOf(false) }
-    var searchQuery by remember { mutableStateOf("") }
-    var installingInternalName by remember { mutableStateOf<String?>(null) }
 
     return TabContent(
         titleRes = AYMR.strings.label_cs_extensions,
-        badgeNumber = if (plugins.isNotEmpty()) plugins.count { !it.isInstalled } else null,
+        badgeNumber = if (badgePlugins.isNotEmpty()) badgePlugins.count { !it.isInstalled } else null,
         actions = persistentListOf(
             AppBar.Action(
                 title = "Add Repository",
@@ -92,6 +85,15 @@ fun Screen.csExtensionsTab(): TabContent {
             ),
         ),
         content = { contentPadding, _ ->
+            val scope = rememberCoroutineScope()
+            val repos by manager.repositoriesFlow.collectAsState()
+            val plugins by manager.availablePluginsFlow.collectAsState()
+            val isLoading by manager.isLoadingFlow.collectAsState()
+            val statusMessage by manager.statusMessageFlow.collectAsState()
+
+            var searchQuery by remember { mutableStateOf("") }
+            var installingInternalName by remember { mutableStateOf<String?>(null) }
+
             val filteredPlugins = if (searchQuery.isBlank()) {
                 plugins
             } else {

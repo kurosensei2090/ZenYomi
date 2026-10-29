@@ -59,13 +59,11 @@ fun Screen.csSourcesTab(): TabContent {
     val navigator = LocalNavigator.currentOrThrow
     val context = LocalContext.current
     val manager = remember { CloudStreamManager.getInstance(context) }
-    val sources by manager.installedSourcesFlow.collectAsState()
-    val isLoading by manager.isLoadingFlow.collectAsState()
-    val lastError by manager.lastErrorFlow.collectAsState()
+    val badgeSources by manager.installedSourcesFlow.collectAsState()
 
     return TabContent(
         titleRes = AYMR.strings.label_cs_sources,
-        badgeNumber = if (sources.isNotEmpty()) sources.size else null,
+        badgeNumber = if (badgeSources.isNotEmpty()) badgeSources.size else null,
         actions = persistentListOf(
             AppBar.Action(
                 title = stringResource(MR.strings.action_global_search),
@@ -79,6 +77,10 @@ fun Screen.csSourcesTab(): TabContent {
             ),
         ),
         content = { contentPadding, _ ->
+            val sources by manager.installedSourcesFlow.collectAsState()
+            val isLoading by manager.isLoadingFlow.collectAsState()
+            val lastError by manager.lastErrorFlow.collectAsState()
+
             PullRefresh(
                 refreshing = isLoading,
                 enabled = true,

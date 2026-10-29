@@ -58,6 +58,7 @@ class CloudStreamManager(
 ) {
     companion object {
         private const val PREF_REPOS = "zenyomi.cloudstream.repos"
+        private const val PREF_PLUGIN_REPOS = "zenyomi.cloudstream.plugin_repos_map"
         private const val PLUGINS_DIR = "cloudstream_plugins"
         private const val USER_AGENT =
             "Mozilla/5.0 (Linux; Android 14; ZenYomi) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
@@ -139,6 +140,38 @@ class CloudStreamManager(
         _repositoriesFlow.value = repos
     }
 
+    private fun getPluginRepoMap(): MutableMap<String, String> {
+        val raw = prefs.getString(PREF_PLUGIN_REPOS, null) ?: return mutableMapOf()
+        return try {
+            json.decodeFromString<Map<String, String>>(raw).toMutableMap()
+        } catch (_: Exception) {
+            mutableMapOf()
+        }
+    }
+
+    private fun savePluginRepoMap(map: Map<String, String>) {
+        prefs.edit().putString(PREF_PLUGIN_REPOS, json.encodeToString(map)).apply()
+    }
+
+    private fun associatePluginWithRepo(pluginName: String, repoUrl: String) {
+        if (repoUrl.isBlank()) return
+        val map = getPluginRepoMap()
+        map[pluginName] = repoUrl
+        savePluginRepoMap(map)
+    }
+
+    private fun removePluginRepoAssociation(pluginName: String) {
+        val map = getPluginRepoMap()
+        if (map.remove(pluginName) != null) {
+            savePluginRepoMap(map)
+        }
+    }
+
+    private fun getPluginsForRepo(repoUrl: String): List<String> {
+        val map = getPluginRepoMap()
+        return map.filter { it.value.equals(repoUrl, ignoreCase = true) }.map { it.key }
+    }
+
     fun addRepository(url: String, name: String = "") {
         val normalized = normalizeRepoUrl(url)
         if (normalized.isBlank()) return
@@ -154,10 +187,50 @@ class CloudStreamManager(
     }
 
     fun removeRepository(url: String) {
-        val current = _repositoriesFlow.value.toMutableList()
-        current.removeAll { it.url == url }
-        saveRepositories(current)
-        refreshRepositories()
+        scope.launch(Dispatchers.IO) {
+            val current = _repositoriesFlow.value.toMutableList()
+            current.removeAll { it.url.equals(url, ignoreCase = true) }
+            saveRepositories(current)
+
+            // Find all plugins belonging to this repository and delete their downloaded files
+            val repoPlugins = getPluginsForRepo(url)
+            val availableFromRepo = _availablePluginsFlow.value.filter { it.repoUrl.equals(url, ignoreCase = true) }
+            val namesToDelete = (repoPlugins + availableFromRepo.map { it.internalName } + availableFromRepo.map { it.name }).toSet()
+
+            for (name in namesToDelete) {
+                val safeName = name.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                val cs3File = File(pluginsFolder, "$safeName.cs3")
+                if (cs3File.exists()) {
+                    cs3File.setWritable(true)
+                    cs3File.delete()
+                }
+                val rawFile = File(pluginsFolder, "$name.cs3")
+                if (rawFile.exists()) {
+                    rawFile.setWritable(true)
+                    rawFile.delete()
+                }
+                val jarFile = File(context.codeCacheDir, "$safeName.jar")
+                if (jarFile.exists()) {
+                    jarFile.setWritable(true)
+                    jarFile.delete()
+                }
+                removePluginRepoAssociation(name)
+                removePluginRepoAssociation(safeName)
+            }
+
+            // Immediately unload sources associated with this repository
+            val remainingSources = _installedSourcesFlow.value.filterNot { csSource ->
+                namesToDelete.any { name ->
+                    csSource.pluginName.equals(name, ignoreCase = true) ||
+                        csSource.api.name.equals(name, ignoreCase = true)
+                }
+            }
+            _installedSourcesFlow.value = remainingSources
+
+            // Re-sync installed sources from disk and refresh available plugins
+            loadInstalledPlugins()
+            refreshRepositories()
+        }
     }
 
     fun refreshRepositories() {
@@ -359,13 +432,11 @@ class CloudStreamManager(
 
     suspend fun installPlugin(plugin: CloudStreamPluginItem): Boolean = withContext(Dispatchers.IO) {
         try {
-            val targetFile = File(pluginsFolder, "${plugin.internalName}.cs3")
+            val safeName = plugin.internalName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+            val targetFile = File(pluginsFolder, "$safeName.cs3")
             if (targetFile.exists()) {
                 targetFile.setWritable(true)
                 targetFile.delete()
-            }
-            if (targetFile.exists()) {
-                targetFile.setWritable(true)
             }
             val request = Request.Builder()
                 .url(plugin.url)
@@ -379,33 +450,42 @@ class CloudStreamManager(
                 return@withContext false
             }
             val bytes = response.body.bytes()
+            if (bytes.isEmpty()) {
+                _lastErrorFlow.value = "Downloaded plugin ${plugin.name} was empty"
+                return@withContext false
+            }
             FileOutputStream(targetFile).use { it.write(bytes) }
-            targetFile.setReadOnly()
+            try {
+                targetFile.setReadOnly()
+            } catch (_: Throwable) {}
 
             val newSources = loadSinglePluginFile(targetFile)
             if (newSources.isEmpty()) {
                 targetFile.setWritable(true)
                 targetFile.delete()
-                val safeName = plugin.internalName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
                 val jar = File(context.codeCacheDir, "$safeName.jar")
                 if (jar.exists()) {
                     jar.setWritable(true)
                     jar.delete()
                 }
-                val dex = File(context.codeCacheDir, "$safeName.dex")
-                if (dex.exists()) {
-                    dex.setWritable(true)
-                    dex.delete()
-                }
-                val errMsg = _lastErrorFlow.value ?: "No sources could be loaded from ${plugin.name}"
+                val errMsg = _lastErrorFlow.value ?: "No providers found in ${plugin.name}"
                 logcat(LogPriority.WARN) { errMsg }
                 _lastErrorFlow.value = errMsg
                 refreshRepositories()
                 return@withContext false
             }
 
+            associatePluginWithRepo(safeName, plugin.repoUrl)
+            if (safeName != plugin.internalName) {
+                associatePluginWithRepo(plugin.internalName, plugin.repoUrl)
+            }
+
             val current = _installedSourcesFlow.value.toMutableList()
-            current.removeAll { it.pluginName == plugin.name || it.pluginName == plugin.internalName }
+            current.removeAll {
+                it.pluginName == plugin.name ||
+                    it.pluginName == plugin.internalName ||
+                    it.pluginName == safeName
+            }
             current.addAll(newSources)
             _installedSourcesFlow.value = current.distinctBy { it.id }
 
@@ -420,23 +500,32 @@ class CloudStreamManager(
     }
 
     suspend fun uninstallPlugin(internalName: String) = withContext(Dispatchers.IO) {
-        val targetFile = File(pluginsFolder, "$internalName.cs3")
+        val safeName = internalName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+        val targetFile = File(pluginsFolder, "$safeName.cs3")
         if (targetFile.exists()) {
             targetFile.setWritable(true)
             targetFile.delete()
         }
-        val jarFile = File(context.codeCacheDir, "$internalName.jar")
+        val rawFile = File(pluginsFolder, "$internalName.cs3")
+        if (rawFile.exists()) {
+            rawFile.setWritable(true)
+            rawFile.delete()
+        }
+        val jarFile = File(context.codeCacheDir, "$safeName.jar")
         if (jarFile.exists()) {
             jarFile.setWritable(true)
             jarFile.delete()
         }
-        val dexFile = File(context.codeCacheDir, "$internalName.dex")
-        if (dexFile.exists()) {
-            dexFile.setWritable(true)
-            dexFile.delete()
-        }
+
+        removePluginRepoAssociation(internalName)
+        removePluginRepoAssociation(safeName)
+
         val currentSources = _installedSourcesFlow.value.toMutableList()
-        currentSources.removeAll { it.pluginName == internalName || it.api.name == internalName }
+        currentSources.removeAll {
+            it.pluginName.equals(internalName, ignoreCase = true) ||
+                it.pluginName.equals(safeName, ignoreCase = true) ||
+                it.api.name.equals(internalName, ignoreCase = true)
+        }
         _installedSourcesFlow.value = currentSources
         refreshRepositories()
     }
@@ -454,7 +543,7 @@ class CloudStreamManager(
     }
 
     fun loadInstalledPlugins() {
-        val cs3Files = pluginsFolder.listFiles { file -> file.extension == "cs3" } ?: return
+        val cs3Files = pluginsFolder.listFiles { file -> file.extension.equals("cs3", ignoreCase = true) } ?: return
         val allSources = mutableListOf<CloudStreamAnimeSource>()
         for (file in cs3Files) {
             val sources = loadSinglePluginFile(file)
@@ -469,82 +558,83 @@ class CloudStreamManager(
     private fun loadSinglePluginFile(file: File): List<CloudStreamAnimeSource> {
         val sources = mutableListOf<CloudStreamAnimeSource>()
         try {
-            file.setReadOnly()
-            val zip = ZipFile(file)
-            val manifestEntry = zip.entries().asSequence().find {
-                it.name.equals("manifest.json", ignoreCase = true) || it.name.endsWith("/manifest.json", ignoreCase = true)
+            try {
+                file.setReadOnly()
+            } catch (_: Throwable) {}
+
+            val parentLoader = context.classLoader ?: javaClass.classLoader
+            val loader = try {
+                dalvik.system.PathClassLoader(file.absolutePath, parentLoader)
+            } catch (t: Throwable) {
+                logcat(LogPriority.WARN, t) { "Direct PathClassLoader failed for ${file.name}, trying jar copy" }
+                null
             } ?: run {
-                _lastErrorFlow.value = "manifest.json missing in ${file.name}"
+                try {
+                    val safeName = file.nameWithoutExtension.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                    val jarFile = File(context.codeCacheDir, "$safeName.jar")
+                    if (!jarFile.exists() || jarFile.length() != file.length()) {
+                        jarFile.setWritable(true)
+                        file.inputStream().use { input ->
+                            jarFile.outputStream().use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                        try {
+                            jarFile.setReadOnly()
+                        } catch (_: Throwable) {}
+                    }
+                    dalvik.system.PathClassLoader(jarFile.absolutePath, parentLoader)
+                } catch (_: Throwable) {
+                    null
+                }
+            } ?: run {
+                val err = "Failed to create ClassLoader for ${file.name}"
+                _lastErrorFlow.value = err
                 return emptyList()
             }
 
-            val manifestText = zip.getInputStream(manifestEntry).bufferedReader().use { it.readText() }
+            var manifestText: String? = null
+            try {
+                loader.getResourceAsStream("manifest.json")?.bufferedReader()?.use {
+                    manifestText = it.readText()
+                }
+            } catch (_: Throwable) {}
+
+            if (manifestText.isNullOrBlank()) {
+                try {
+                    ZipFile(file).use { zip ->
+                        val entry = zip.entries().asSequence().find {
+                            it.name.equals("manifest.json", ignoreCase = true) || it.name.endsWith("/manifest.json", ignoreCase = true)
+                        }
+                        if (entry != null) {
+                            manifestText = zip.getInputStream(entry).bufferedReader().use { it.readText() }
+                        }
+                    }
+                } catch (_: Throwable) {}
+            }
+
+            if (manifestText.isNullOrBlank()) {
+                val err = "manifest.json missing in ${file.name}"
+                _lastErrorFlow.value = err
+                return emptyList()
+            }
+
             val manifestJson = JSONObject(manifestText)
             val pluginClassName = manifestJson.optString("pluginClassName", "").trim()
             val pluginVersion = manifestJson.optInt("version", 1)
             val pluginName = manifestJson.optString("name", file.nameWithoutExtension)
+            val requiresResources = manifestJson.optBoolean("requiresResources", false)
 
             if (pluginClassName.isBlank()) {
                 _lastErrorFlow.value = "pluginClassName empty in manifest of ${file.name}"
                 return emptyList()
             }
 
-            // 1. Prepare .jar file copy in codeCacheDir so DexPathList matches JAR_SUFFIX
-            val jarFile = File(context.codeCacheDir, "${file.nameWithoutExtension}.jar")
-            if (jarFile.exists()) {
-                jarFile.setWritable(true)
-                jarFile.delete()
-            }
-            if (jarFile.exists()) {
-                jarFile.setWritable(true)
-            }
-            file.inputStream().use { input ->
-                jarFile.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-            jarFile.setReadOnly()
-
-            // 2. Also extract classes.dex to .dex file in codeCacheDir
-            val dexEntry = zip.entries().asSequence().find {
-                it.name.equals("classes.dex", ignoreCase = true) || it.name.endsWith("/classes.dex", ignoreCase = true)
-            }
-            val dexFile = File(context.codeCacheDir, "${file.nameWithoutExtension}.dex")
-            if (dexEntry != null) {
-                if (dexFile.exists()) {
-                    dexFile.setWritable(true)
-                    dexFile.delete()
-                }
-                if (dexFile.exists()) {
-                    dexFile.setWritable(true)
-                }
-                dexFile.outputStream().use { out ->
-                    zip.getInputStream(dexEntry).use { it.copyTo(out) }
-                }
-                dexFile.setReadOnly()
-            }
-
-            val parentLoader = context.classLoader ?: javaClass.classLoader
-            val classLoaders = listOfNotNull(
-                try { dalvik.system.PathClassLoader(jarFile.absolutePath, parentLoader) } catch (_: Throwable) { null },
-                try { dalvik.system.PathClassLoader(file.absolutePath, parentLoader) } catch (_: Throwable) { null },
-                if (dexEntry != null) try { dalvik.system.PathClassLoader(dexFile.absolutePath, parentLoader) } catch (_: Throwable) { null } else null,
-            )
-
-            var clazz: Class<*>? = null
-            var lastClassError: Throwable? = null
-            for (loader in classLoaders) {
-                try {
-                    clazz = loader.loadClass(pluginClassName)
-                    if (clazz != null) break
-                } catch (t: Throwable) {
-                    lastClassError = t
-                }
-            }
-
-            if (clazz == null) {
-                val errMsg = "Failed to load class $pluginClassName: ${lastClassError?.message}"
-                logcat(LogPriority.ERROR, lastClassError) { errMsg }
+            val clazz = try {
+                loader.loadClass(pluginClassName)
+            } catch (t: Throwable) {
+                val errMsg = "Failed to load class $pluginClassName: ${t::class.java.simpleName}: ${t.message}"
+                logcat(LogPriority.ERROR, t) { errMsg }
                 _lastErrorFlow.value = errMsg
                 return emptyList()
             }
@@ -575,31 +665,56 @@ class CloudStreamManager(
                 return emptyList()
             }
 
-            try {
-                var loaded = false
+            if (requiresResources) {
                 try {
-                    val m = clazz.getMethod("load")
-                    m.isAccessible = true
-                    m.invoke(instance)
-                    loaded = true
-                } catch (_: NoSuchMethodException) {}
+                    val assets = android.content.res.AssetManager::class.java.getDeclaredConstructor().newInstance()
+                    val addAssetPath = android.content.res.AssetManager::class.java.getMethod("addAssetPath", String::class.java)
+                    addAssetPath.invoke(assets, file.absolutePath)
+                    val res = android.content.res.Resources(assets, context.resources.displayMetrics, context.resources.configuration)
+                    if (instance is com.lagradost.cloudstream3.plugins.Plugin) {
+                        instance.resources = res
+                    } else {
+                        try {
+                            val f = clazz.getDeclaredField("resources")
+                            f.isAccessible = true
+                            f.set(instance, res)
+                        } catch (_: Throwable) {}
+                    }
+                } catch (t: Throwable) {
+                    logcat(LogPriority.WARN, t) { "Failed to setup resources for $pluginName" }
+                }
+            }
 
-                if (!loaded) {
+            try {
+                if (instance is com.lagradost.cloudstream3.plugins.Plugin) {
+                    instance.load(context)
+                } else if (instance is com.lagradost.cloudstream3.plugins.BasePlugin) {
+                    instance.load()
+                } else {
                     try {
                         val m = clazz.getMethod("load", Context::class.java)
                         m.isAccessible = true
                         m.invoke(instance, context)
-                        loaded = true
-                    } catch (_: NoSuchMethodException) {}
-                }
-
-                if (!loaded && instance is com.lagradost.cloudstream3.plugins.BasePlugin) {
-                    instance.load()
+                    } catch (_: NoSuchMethodException) {
+                        try {
+                            val m = clazz.getMethod("load")
+                            m.isAccessible = true
+                            m.invoke(instance)
+                        } catch (_: NoSuchMethodException) {}
+                    }
                 }
             } catch (t: Throwable) {
                 val cause = t.cause ?: t
                 logcat(LogPriority.WARN, cause) { "Error calling load() on $pluginName: ${cause.message}" }
                 _lastErrorFlow.value = "Error during plugin.load(): ${cause::class.java.simpleName}: ${cause.message}"
+            }
+
+            if (instance is com.lagradost.cloudstream3.plugins.BasePlugin) {
+                for (api in instance.registeredAPIs) {
+                    if (sources.none { it.api.name == api.name }) {
+                        sources.add(CloudStreamAnimeSource(api, pluginName = pluginName, pluginVersion = pluginVersion))
+                    }
+                }
             }
 
             try {
@@ -620,14 +735,6 @@ class CloudStreamManager(
                     }
                 }
             } catch (_: Throwable) {}
-
-            if (instance is com.lagradost.cloudstream3.plugins.BasePlugin) {
-                for (api in instance.registeredAPIs) {
-                    if (sources.none { it.api.name == api.name }) {
-                        sources.add(CloudStreamAnimeSource(api, pluginName = pluginName, pluginVersion = pluginVersion))
-                    }
-                }
-            }
 
             for (api in com.lagradost.cloudstream3.APIHolder.allProviders) {
                 if (sources.none { it.api.name == api.name }) {
