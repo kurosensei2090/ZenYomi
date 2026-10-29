@@ -42,6 +42,8 @@ object SettingsBrowseScreen : SearchableSettings {
 
         val mangaReposCount by getMangaExtensionRepoCount.subscribe().collectAsState(0)
         val animeReposCount by getExtensionStoreCountAsFlow().collectAsState(0)
+        val csManager = remember { eu.kanade.tachiyomi.extension.anime.cloudstream.CloudStreamManager.getInstance(context) }
+        val csRepos by csManager.repositoriesFlow.collectAsState()
 
         return listOf(
             Preference.PreferenceGroup(
@@ -75,6 +77,13 @@ object SettingsBrowseScreen : SearchableSettings {
                         ),
                         onClick = {
                             navigator.push(MangaExtensionReposScreen())
+                        },
+                    ),
+                    Preference.PreferenceItem.TextPreference(
+                        title = "CloudStream Repositories",
+                        subtitle = "${csRepos.size} repositories",
+                        onClick = {
+                            navigator.push(eu.kanade.presentation.more.settings.screen.browse.CloudStreamReposScreen())
                         },
                     ),
                 ),

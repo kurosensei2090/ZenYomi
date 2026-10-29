@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -45,30 +47,38 @@ class AndroidAnimeSourceManager(
     override val sources: Flow<List<AnimeSource>> = sourcesMapFlow.map { it.values.toList() }
 
     init {
+        val cloudStreamManager = eu.kanade.tachiyomi.extension.anime.cloudstream.CloudStreamManager.getInstance(context)
+
         scope.launch {
-            extensionManager.installedExtensionsFlow
-                .collectLatest { extensions ->
-                    val mutableMap = ConcurrentHashMap<Long, AnimeSource>(
-                        mapOf(
-                            LocalAnimeSource.ID to LocalAnimeSource(
-                                context,
-                                Injekt.get(),
-                                Injekt.get(),
-                                Injekt.get(),
-                                Injekt.get(),
-                                Injekt.get(),
-                            ),
+            combine(
+                extensionManager.installedExtensionsFlow,
+                cloudStreamManager.installedSourcesFlow,
+            ) { extensions, csSources ->
+                val mutableMap = ConcurrentHashMap<Long, AnimeSource>(
+                    mapOf(
+                        LocalAnimeSource.ID to LocalAnimeSource(
+                            context,
+                            Injekt.get(),
+                            Injekt.get(),
+                            Injekt.get(),
+                            Injekt.get(),
+                            Injekt.get(),
                         ),
-                    )
-                    extensions.forEach { extension ->
-                        extension.sources.forEach {
-                            mutableMap[it.id] = it
-                            registerStubSource(StubAnimeSource.from(it))
-                        }
+                    ),
+                )
+                extensions.forEach { extension ->
+                    extension.sources.forEach {
+                        mutableMap[it.id] = it
+                        registerStubSource(StubAnimeSource.from(it))
                     }
-                    sourcesMapFlow.value = mutableMap
-                    _isInitialized.value = true
                 }
+                csSources.forEach { csSource ->
+                    mutableMap[csSource.id] = csSource
+                    registerStubSource(StubAnimeSource.from(csSource))
+                }
+                sourcesMapFlow.value = mutableMap
+                _isInitialized.value = true
+            }.collect()
         }
 
         scope.launch {
