@@ -28,6 +28,7 @@ import tachiyomi.domain.source.anime.model.AnimeSource
 import tachiyomi.domain.source.anime.model.Pin
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.ScrollbarLazyColumn
+import tachiyomi.presentation.core.components.material.PullRefresh
 import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.components.material.topSmallPaddingValues
@@ -45,46 +46,55 @@ fun AnimeSourcesScreen(
     onClickItem: (AnimeSource, Listing) -> Unit,
     onClickPin: (AnimeSource) -> Unit,
     onLongClickItem: (AnimeSource) -> Unit,
+    isRefreshing: Boolean = false,
+    onRefresh: () -> Unit = {},
 ) {
-    when {
-        state.isLoading -> LoadingScreen(Modifier.padding(contentPadding))
-        state.isEmpty -> EmptyScreen(
-            stringRes = MR.strings.source_empty_screen,
-            modifier = Modifier.padding(contentPadding),
-        )
-        else -> {
-            ScrollbarLazyColumn(
-                contentPadding = contentPadding + topSmallPaddingValues,
-            ) {
-                items(
-                    items = state.items,
-                    contentType = {
-                        when (it) {
-                            is AnimeSourceUiModel.Header -> "header"
-                            is AnimeSourceUiModel.Item -> "item"
-                        }
-                    },
-                    key = {
-                        when (it) {
-                            is AnimeSourceUiModel.Header -> "header-${it.language}"
-                            is AnimeSourceUiModel.Item -> "source-${it.source.key()}"
-                        }
-                    },
-                ) { model ->
-                    when (model) {
-                        is AnimeSourceUiModel.Header -> {
-                            AnimeSourceHeader(
+    PullRefresh(
+        refreshing = isRefreshing,
+        enabled = true,
+        onRefresh = onRefresh,
+        indicatorPadding = contentPadding,
+    ) {
+        when {
+            state.isLoading -> LoadingScreen(Modifier.padding(contentPadding))
+            state.isEmpty -> EmptyScreen(
+                stringRes = MR.strings.source_empty_screen,
+                modifier = Modifier.padding(contentPadding),
+            )
+            else -> {
+                ScrollbarLazyColumn(
+                    contentPadding = contentPadding + topSmallPaddingValues,
+                ) {
+                    items(
+                        items = state.items,
+                        contentType = {
+                            when (it) {
+                                is AnimeSourceUiModel.Header -> "header"
+                                is AnimeSourceUiModel.Item -> "item"
+                            }
+                        },
+                        key = {
+                            when (it) {
+                                is AnimeSourceUiModel.Header -> "header-${it.language}"
+                                is AnimeSourceUiModel.Item -> "source-${it.source.key()}"
+                            }
+                        },
+                    ) { model ->
+                        when (model) {
+                            is AnimeSourceUiModel.Header -> {
+                                AnimeSourceHeader(
+                                    modifier = Modifier,
+                                    language = model.language,
+                                )
+                            }
+                            is AnimeSourceUiModel.Item -> AnimeSourceItem(
                                 modifier = Modifier,
-                                language = model.language,
+                                source = model.source,
+                                onClickItem = onClickItem,
+                                onLongClickItem = onLongClickItem,
+                                onClickPin = onClickPin,
                             )
                         }
-                        is AnimeSourceUiModel.Item -> AnimeSourceItem(
-                            modifier = Modifier,
-                            source = model.source,
-                            onClickItem = onClickItem,
-                            onLongClickItem = onLongClickItem,
-                            onClickPin = onClickPin,
-                        )
                     }
                 }
             }

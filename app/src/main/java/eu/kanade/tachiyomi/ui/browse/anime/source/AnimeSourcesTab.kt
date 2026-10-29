@@ -45,6 +45,7 @@ fun Screen.animeSourcesTab(): TabContent {
         content = { contentPadding, snackbarHostState ->
             val screenModel = rememberScreenModel { AnimeSourcesScreenModel() }
             val state by screenModel.state.collectAsState()
+            val isRefreshing by screenModel.isRefreshing.collectAsState()
 
             AnimeSourcesScreen(
                 state = state,
@@ -54,6 +55,8 @@ fun Screen.animeSourcesTab(): TabContent {
                 },
                 onClickPin = screenModel::togglePin,
                 onLongClickItem = screenModel::showSourceDialog,
+                isRefreshing = isRefreshing,
+                onRefresh = screenModel::refresh,
             )
 
             state.dialog?.let { dialog ->

@@ -109,6 +109,7 @@ class CloudStreamManager(
     val statusMessageFlow: StateFlow<String?> = _statusMessageFlow.asStateFlow()
 
     init {
+        com.lagradost.cloudstream3.AcraApplication.context = context.applicationContext
         loadSavedRepositories()
         scope.launch {
             loadInstalledPlugins()
@@ -160,31 +161,35 @@ class CloudStreamManager(
         scope.launch {
             _isLoadingFlow.value = true
             _statusMessageFlow.value = "Fetching repository plugins..."
-            val pluginsList = mutableListOf<CloudStreamPluginItem>()
-            val repos = _repositoriesFlow.value
+            try {
+                val pluginsList = mutableListOf<CloudStreamPluginItem>()
+                val repos = _repositoriesFlow.value
 
-            for (repo in repos) {
-                try {
-                    val pluginUrls = resolvePluginUrls(repo.url)
-                    for (pluginListUrl in pluginUrls) {
-                        val items = fetchPluginList(pluginListUrl, repo.url)
-                        pluginsList.addAll(items)
+                for (repo in repos) {
+                    try {
+                        val pluginUrls = resolvePluginUrls(repo.url)
+                        for (pluginListUrl in pluginUrls) {
+                            val items = fetchPluginList(pluginListUrl, repo.url)
+                            pluginsList.addAll(items)
+                        }
+                    } catch (e: Exception) {
+                        logcat(LogPriority.ERROR, e) { "Failed to fetch CloudStream repo: ${repo.url}" }
                     }
-                } catch (e: Exception) {
-                    logcat(LogPriority.ERROR, e) { "Failed to fetch CloudStream repo: ${repo.url}" }
                 }
-            }
 
-            val installedNames = pluginsFolder.listFiles { file -> file.extension == "cs3" }
-                ?.map { it.nameWithoutExtension }
-                ?.toSet() ?: emptySet()
+                val installedNames = pluginsFolder.listFiles { file -> file.extension == "cs3" }
+                    ?.map { it.nameWithoutExtension }
+                    ?.toSet() ?: emptySet()
 
-            val marked = pluginsList.distinctBy { "${it.repoUrl}_${it.internalName}" }.map { item ->
-                item.copy(isInstalled = installedNames.contains(item.internalName))
+                val marked = pluginsList.distinctBy { "${it.repoUrl}_${it.internalName}" }.map { item ->
+                    item.copy(isInstalled = installedNames.contains(item.internalName))
+                }
+                _availablePluginsFlow.value = marked
+            } finally {
+                kotlinx.coroutines.delay(500)
+                _statusMessageFlow.value = null
+                _isLoadingFlow.value = false
             }
-            _availablePluginsFlow.value = marked
-            _statusMessageFlow.value = null
-            _isLoadingFlow.value = false
         }
     }
 
@@ -339,11 +344,15 @@ class CloudStreamManager(
         }
     }
 
-    suspend fun installPlugin(plugin: CloudStreamPluginItem) = withContext(Dispatchers.IO) {
+    suspend fun installPlugin(plugin: CloudStreamPluginItem): Boolean = withContext(Dispatchers.IO) {
         try {
             val targetFile = File(pluginsFolder, "${plugin.internalName}.cs3")
             if (targetFile.exists()) {
+                targetFile.setWritable(true)
                 targetFile.delete()
+            }
+            if (targetFile.exists()) {
+                targetFile.setWritable(true)
             }
             val request = Request.Builder()
                 .url(plugin.url)
@@ -352,26 +361,35 @@ class CloudStreamManager(
             val response = client.newCall(request).execute()
             if (!response.isSuccessful) {
                 logcat(LogPriority.ERROR) { "HTTP ${response.code} downloading plugin from ${plugin.url}" }
-                return@withContext
+                return@withContext false
             }
             val bytes = response.body.bytes()
             FileOutputStream(targetFile).use { it.write(bytes) }
             targetFile.setReadOnly()
 
-            loadSinglePluginFile(targetFile)
+            val newSources = loadSinglePluginFile(targetFile)
+            val current = _installedSourcesFlow.value.toMutableList()
+            current.removeAll { it.pluginName == plugin.name || it.pluginName == plugin.internalName }
+            current.addAll(newSources)
+            _installedSourcesFlow.value = current.distinctBy { it.id }
+
             refreshRepositories()
+            return@withContext true
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e) { "Failed to install CloudStream plugin ${plugin.name}" }
+            return@withContext false
         }
     }
 
     suspend fun uninstallPlugin(internalName: String) = withContext(Dispatchers.IO) {
         val targetFile = File(pluginsFolder, "$internalName.cs3")
         if (targetFile.exists()) {
+            targetFile.setWritable(true)
             targetFile.delete()
         }
         val dexFile = File(context.codeCacheDir, "$internalName.dex")
         if (dexFile.exists()) {
+            dexFile.setWritable(true)
             dexFile.delete()
         }
         val currentSources = _installedSourcesFlow.value.toMutableList()
@@ -383,35 +401,53 @@ class CloudStreamManager(
     fun reloadInstalledPlugins() {
         scope.launch {
             _isLoadingFlow.value = true
-            loadInstalledPlugins()
-            _isLoadingFlow.value = false
+            try {
+                loadInstalledPlugins()
+            } finally {
+                kotlinx.coroutines.delay(500)
+                _isLoadingFlow.value = false
+            }
         }
     }
 
     fun loadInstalledPlugins() {
         val cs3Files = pluginsFolder.listFiles { file -> file.extension == "cs3" } ?: return
+        val allSources = mutableListOf<CloudStreamAnimeSource>()
         for (file in cs3Files) {
-            file.setReadOnly()
-            loadSinglePluginFile(file)
+            val sources = loadSinglePluginFile(file)
+            allSources.addAll(sources)
         }
+        _installedSourcesFlow.value = allSources.distinctBy { it.id }
     }
 
-    private fun loadSinglePluginFile(file: File) {
+    private fun loadSinglePluginFile(file: File): List<CloudStreamAnimeSource> {
+        val sources = mutableListOf<CloudStreamAnimeSource>()
         try {
+            file.setReadOnly()
             val zip = ZipFile(file)
-            val manifestEntry = zip.getEntry("manifest.json") ?: return
+            val manifestEntry = zip.entries().asSequence().find {
+                it.name.equals("manifest.json", ignoreCase = true) || it.name.endsWith("/manifest.json", ignoreCase = true)
+            } ?: return emptyList()
+
             val manifestText = zip.getInputStream(manifestEntry).bufferedReader().use { it.readText() }
             val manifestJson = JSONObject(manifestText)
-            val pluginClassName = manifestJson.optString("pluginClassName", "")
+            val pluginClassName = manifestJson.optString("pluginClassName", "").trim()
             val pluginVersion = manifestJson.optInt("version", 1)
             val pluginName = manifestJson.optString("name", file.nameWithoutExtension)
 
-            if (pluginClassName.isBlank()) return
+            if (pluginClassName.isBlank()) return emptyList()
 
-            val dexEntry = zip.getEntry("classes.dex") ?: return
+            val dexEntry = zip.entries().asSequence().find {
+                it.name.equals("classes.dex", ignoreCase = true) || it.name.endsWith("/classes.dex", ignoreCase = true)
+            } ?: return emptyList()
+
             val dexFile = File(context.codeCacheDir, "${file.nameWithoutExtension}.dex")
             if (dexFile.exists()) {
+                dexFile.setWritable(true)
                 dexFile.delete()
+            }
+            if (dexFile.exists()) {
+                dexFile.setWritable(true)
             }
             dexFile.outputStream().use { out ->
                 zip.getInputStream(dexEntry).use { it.copyTo(out) }
@@ -424,11 +460,25 @@ class CloudStreamManager(
             )
 
             val clazz = pathClassLoader.loadClass(pluginClassName)
-            val instance = clazz.getDeclaredConstructor().newInstance()
+            val constructor = try {
+                clazz.getDeclaredConstructor()
+            } catch (_: NoSuchMethodException) {
+                try {
+                    clazz.getDeclaredConstructor(Context::class.java)
+                } catch (_: NoSuchMethodException) {
+                    clazz.constructors.firstOrNull() ?: return emptyList()
+                }
+            }
+            constructor.isAccessible = true
+            val instance = if (constructor.parameterTypes.isEmpty()) {
+                constructor.newInstance()
+            } else if (constructor.parameterTypes.size == 1 && constructor.parameterTypes[0] == Context::class.java) {
+                constructor.newInstance(context)
+            } else {
+                constructor.newInstance()
+            }
 
-            val sources = mutableListOf<CloudStreamAnimeSource>()
-
-            if (instance is Plugin) {
+            if (instance is com.lagradost.cloudstream3.plugins.BasePlugin) {
                 try {
                     instance.load(context)
                 } catch (_: NoSuchMethodError) {
@@ -474,27 +524,38 @@ class CloudStreamManager(
                 sources.add(CloudStreamAnimeSource(instance, pluginName = pluginName, pluginVersion = pluginVersion))
             }
 
+            for (api in com.lagradost.cloudstream3.APIHolder.allProviders) {
+                if (sources.none { it.api.name == api.name }) {
+                    sources.add(CloudStreamAnimeSource(api, pluginName = pluginName, pluginVersion = pluginVersion))
+                }
+            }
+
             if (sources.isEmpty()) {
-                for (field in clazz.declaredFields) {
-                    try {
-                        field.isAccessible = true
-                        val obj = field.get(instance)
-                        if (obj is MainAPI) {
-                            sources.add(CloudStreamAnimeSource(obj, pluginName = pluginName, pluginVersion = pluginVersion))
-                        }
-                    } catch (_: Throwable) {}
+                var currClass: Class<*>? = clazz
+                while (currClass != null && currClass != Any::class.java) {
+                    for (field in currClass.declaredFields) {
+                        try {
+                            field.isAccessible = true
+                            val obj = field.get(instance)
+                            if (obj is MainAPI) {
+                                sources.add(CloudStreamAnimeSource(obj, pluginName = pluginName, pluginVersion = pluginVersion))
+                            } else if (obj is Collection<*>) {
+                                obj.filterIsInstance<MainAPI>().forEach { api ->
+                                    sources.add(CloudStreamAnimeSource(api, pluginName = pluginName, pluginVersion = pluginVersion))
+                                }
+                            }
+                        } catch (_: Throwable) {}
+                    }
+                    currClass = currClass.superclass
                 }
             }
 
             if (sources.isNotEmpty()) {
-                val current = _installedSourcesFlow.value.toMutableList()
-                current.removeAll { it.pluginName == pluginName }
-                current.addAll(sources)
-                _installedSourcesFlow.value = current
                 logcat(LogPriority.INFO) { "Loaded ${sources.size} CloudStream sources from $pluginName" }
             }
         } catch (e: Throwable) {
             logcat(LogPriority.ERROR, e) { "Failed to load CloudStream plugin from ${file.name}" }
         }
+        return sources
     }
 }

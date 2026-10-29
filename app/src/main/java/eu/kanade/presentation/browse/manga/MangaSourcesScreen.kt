@@ -29,6 +29,7 @@ import tachiyomi.domain.source.manga.model.Source
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.ScrollbarLazyColumn
+import tachiyomi.presentation.core.components.material.PullRefresh
 import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.components.material.topSmallPaddingValues
@@ -46,46 +47,55 @@ fun MangaSourcesScreen(
     onClickItem: (Source, Listing) -> Unit,
     onClickPin: (Source) -> Unit,
     onLongClickItem: (Source) -> Unit,
+    isRefreshing: Boolean = false,
+    onRefresh: () -> Unit = {},
 ) {
-    when {
-        state.isLoading -> LoadingScreen(Modifier.padding(contentPadding))
-        state.isEmpty -> EmptyScreen(
-            stringRes = MR.strings.source_empty_screen,
-            modifier = Modifier.padding(contentPadding),
-        )
-        else -> {
-            ScrollbarLazyColumn(
-                contentPadding = contentPadding + topSmallPaddingValues,
-            ) {
-                items(
-                    items = state.items,
-                    contentType = {
-                        when (it) {
-                            is MangaSourceUiModel.Header -> "header"
-                            is MangaSourceUiModel.Item -> "item"
-                        }
-                    },
-                    key = {
-                        when (it) {
-                            is MangaSourceUiModel.Header -> "header-${it.language}"
-                            is MangaSourceUiModel.Item -> "source-${it.source.key()}"
-                        }
-                    },
-                ) { model ->
-                    when (model) {
-                        is MangaSourceUiModel.Header -> {
-                            SourceHeader(
+    PullRefresh(
+        refreshing = isRefreshing,
+        enabled = true,
+        onRefresh = onRefresh,
+        indicatorPadding = contentPadding,
+    ) {
+        when {
+            state.isLoading -> LoadingScreen(Modifier.padding(contentPadding))
+            state.isEmpty -> EmptyScreen(
+                stringRes = MR.strings.source_empty_screen,
+                modifier = Modifier.padding(contentPadding),
+            )
+            else -> {
+                ScrollbarLazyColumn(
+                    contentPadding = contentPadding + topSmallPaddingValues,
+                ) {
+                    items(
+                        items = state.items,
+                        contentType = {
+                            when (it) {
+                                is MangaSourceUiModel.Header -> "header"
+                                is MangaSourceUiModel.Item -> "item"
+                            }
+                        },
+                        key = {
+                            when (it) {
+                                is MangaSourceUiModel.Header -> "header-${it.language}"
+                                is MangaSourceUiModel.Item -> "source-${it.source.key()}"
+                            }
+                        },
+                    ) { model ->
+                        when (model) {
+                            is MangaSourceUiModel.Header -> {
+                                SourceHeader(
+                                    modifier = Modifier,
+                                    language = model.language,
+                                )
+                            }
+                            is MangaSourceUiModel.Item -> SourceItem(
                                 modifier = Modifier,
-                                language = model.language,
+                                source = model.source,
+                                onClickItem = onClickItem,
+                                onLongClickItem = onLongClickItem,
+                                onClickPin = onClickPin,
                             )
                         }
-                        is MangaSourceUiModel.Item -> SourceItem(
-                            modifier = Modifier,
-                            source = model.source,
-                            onClickItem = onClickItem,
-                            onLongClickItem = onLongClickItem,
-                            onClickPin = onClickPin,
-                        )
                     }
                 }
             }

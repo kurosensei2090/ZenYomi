@@ -17,6 +17,10 @@ import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.launchIn
@@ -45,6 +49,22 @@ class MangaSourcesScreenModel(
 
     private val _events = Channel<Event>(Int.MAX_VALUE)
     val events = _events.receiveAsFlow()
+
+    private val extensionManager: eu.kanade.tachiyomi.extension.manga.MangaExtensionManager = Injekt.get()
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
+    fun refresh() {
+        screenModelScope.launchIO {
+            _isRefreshing.value = true
+            try {
+                extensionManager.findAvailableExtensions()
+            } finally {
+                delay(400)
+                _isRefreshing.value = false
+            }
+        }
+    }
 
     init {
         screenModelScope.launchIO {

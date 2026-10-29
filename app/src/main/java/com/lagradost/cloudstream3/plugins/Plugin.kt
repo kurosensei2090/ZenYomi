@@ -1,7 +1,9 @@
 package com.lagradost.cloudstream3.plugins
 
 import android.content.Context
+import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.MainAPI
+import com.lagradost.cloudstream3.utils.ExtractorApi
 
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.RUNTIME)
@@ -17,8 +19,10 @@ open class BasePlugin {
 
     fun registerMainAPI(api: MainAPI) {
         registeredAPIs.add(api)
+        APIHolder.addPlugin(api)
     }
 
+    fun registerExtractorAPI(api: ExtractorApi) {}
     fun registerExtractorAPI(api: Any) {}
 }
 

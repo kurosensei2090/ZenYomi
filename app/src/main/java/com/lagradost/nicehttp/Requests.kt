@@ -38,6 +38,18 @@ class NiceResponse(
     val document: Document by lazy {
         Jsoup.parse(text, url)
     }
+
+    inline fun <reified T> parsed(): T {
+        return com.lagradost.cloudstream3.utils.csJson.decodeFromString<T>(text)
+    }
+
+    inline fun <reified T> parsedSafe(): T? {
+        return try {
+            com.lagradost.cloudstream3.utils.csJson.decodeFromString<T>(text)
+        } catch (_: Exception) {
+            null
+        }
+    }
 }
 
 /**

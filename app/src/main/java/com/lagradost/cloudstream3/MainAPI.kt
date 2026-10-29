@@ -3,15 +3,14 @@ package com.lagradost.cloudstream3
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.nicehttp.Requests
 
-
 abstract class MainAPI {
     open var mainUrl: String = ""
     open var name: String = ""
-    open var supportedTypes: Set<TvType> = setOf(TvType.Anime, TvType.Movie, TvType.TvSeries)
+    open val supportedTypes: Set<TvType> = setOf(TvType.Anime, TvType.Movie, TvType.TvSeries)
     open var lang: String = "en"
-    open var hasMainPage: Boolean = false
-    open var hasQuickSearch: Boolean = false
-    open var hasDownloadSupport: Boolean = true
+    open val hasMainPage: Boolean = false
+    open val hasQuickSearch: Boolean = false
+    open val hasDownloadSupport: Boolean = true
 
     val app: Requests get() = com.lagradost.cloudstream3.app
 
@@ -97,11 +96,78 @@ abstract class MainAPI {
         return res
     }
 
+    fun newMovieLoadResponse(
+        name: String,
+        url: String,
+        type: TvType = TvType.Movie,
+        dataUrl: String = url,
+        builder: MovieLoadResponse.() -> Unit = {},
+    ): MovieLoadResponse {
+        val res = MovieLoadResponse(
+            name = name,
+            url = fixUrl(url),
+            apiName = this.name,
+            type = type,
+            dataUrl = fixUrl(dataUrl),
+        )
+        builder(res)
+        return res
+    }
+
+    fun newAnimeLoadResponse(
+        name: String,
+        url: String,
+        type: TvType = TvType.Anime,
+        builder: AnimeLoadResponse.() -> Unit = {},
+    ): AnimeLoadResponse {
+        val res = AnimeLoadResponse(
+            name = name,
+            url = fixUrl(url),
+            apiName = this.name,
+            type = type,
+        )
+        builder(res)
+        return res
+    }
+
+    fun newTvSeriesLoadResponse(
+        name: String,
+        url: String,
+        type: TvType = TvType.TvSeries,
+        episodes: List<Episode> = emptyList(),
+        builder: TvSeriesLoadResponse.() -> Unit = {},
+    ): TvSeriesLoadResponse {
+        val res = TvSeriesLoadResponse(
+            name = name,
+            url = fixUrl(url),
+            apiName = this.name,
+            type = type,
+            episodes = episodes,
+        )
+        builder(res)
+        return res
+    }
+
+    fun newHomePageResponse(
+        items: List<HomePageList>,
+        hasNext: Boolean = false,
+    ): HomePageResponse {
+        return HomePageResponse(items = items, hasNext = hasNext)
+    }
+
+    fun newHomePageResponse(
+        item: HomePageList,
+        hasNext: Boolean = false,
+    ): HomePageResponse {
+        return HomePageResponse(items = listOf(item), hasNext = hasNext)
+    }
+
     fun newEpisode(
         data: String,
         builder: Episode.() -> Unit = {},
     ): Episode {
         val ep = Episode(data = fixUrl(data))
+        builder(ep)
         return ep
     }
 }

@@ -106,21 +106,19 @@ fun Screen.csExtensionsTab(): TabContent {
                 onRefresh = { manager.refreshRepositories() },
                 indicatorPadding = contentPadding,
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(contentPadding),
-                ) {
-                    AnimatedVisibility(visible = isLoading) {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    }
-
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(horizontal = 16.dp),
+                    contentPadding = contentPadding,
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
+                    if (isLoading) {
+                        item {
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+
                     item {
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
@@ -368,7 +366,6 @@ fun Screen.csExtensionsTab(): TabContent {
                         Spacer(modifier = Modifier.height(32.dp))
                     }
                 }
-            }
             }
 
             if (showAddDialog) {
