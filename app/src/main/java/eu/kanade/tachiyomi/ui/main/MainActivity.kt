@@ -163,6 +163,7 @@ class MainActivity : BaseActivity() {
         val splashScreen = if (isLaunch) installSplashScreen() else null
 
         super.onCreate(savedInstanceState)
+        com.lagradost.cloudstream3.CommonActivity.activity = this
         setHighRefreshRate()
 
         val didMigration = Migrator.awaitAndRelease()

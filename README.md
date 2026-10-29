@@ -21,18 +21,26 @@
 - **Offline Reading**: Batch download chapters for offline reading with background download manager.
 - **Local Content Support**: Read local archives (ZIP, CBZ, CBR, EPUB) and image folders.
 
-### 🎬 Advanced Video Player (Aniyomi Media Engine)
-- **High-Performance Player Backend**: Built on Media3 / ExoPlayer with hardware decoding.
+### 🎬 Advanced Video Player (mpv Backend & Media Engine)
+- **High-Performance Player Backend**: Built on MPV (`mpvKt`) with hardware decoding and smooth up to 120Hz display refresh rate.
 - **Intuitive Gesture Controls**:
+  - **Long-Press to Speed Up (2.0x)**: Press and hold anywhere on the screen during playback to temporarily boost speed with on-screen HUD badge and haptic feedback.
   - Vertical swipe left: Screen brightness control
-  - Vertical swipe right: Audio volume control
+  - Vertical swipe right: Audio volume control (with volume boost cap)
   - Horizontal swipe: Smooth seeking
-  - Double tap left/right: 10s fast forward and rewind
+  - Double tap left/right: Configurable fast forward and rewind
   - Pinch-to-zoom: Aspect ratio modes (Fit, Stretch, Crop, 16:9, Original)
 - **Audio & Subtitle Controls**: Multi-audio track switching (Dub/Sub) and styled subtitles (internal ASS/SSA/SRT/VTT and external subtitle tracks).
 - **Stream Quality**: Direct quality selector (1080p, 720p, 480p, 360p, Auto).
 - **Smart Features**: AniSkip integration (auto-skip video openings and endings), Picture-in-Picture (PiP), and background audio playback.
 - **Episode Downloads**: Download video streams directly for offline viewing.
+
+### 🔌 Native CloudStream 3 (.cs3) & Extension Ecosystem
+- **CloudStream 3 Plugin Support**: Direct integration with `.cs3` plugins and repositories without needing separate APK installations.
+- **Isolated Browsing Tabs**: Dedicated **CS Sources** and **CS Extensions** tabs keep CloudStream providers organized and cleanly separated.
+- **Built-in Stream Extractors**: Integrated HLS `.m3u8` playlist resolution, direct `.mp4`, Dean Edwards JavaScript unpacker (`JsUnpacker`), and web video scrapers (StreamTape, StreamWish, VidStack).
+- **Customizable Browse Views**: Tailor your Browse screen for an Anime-only, Manga-only, or CloudStream-only experience by toggling tabs under *Settings → Browse*.
+- **Pull-to-Refresh**: Seamless swipe-down-to-refresh across all sources and extension stores.
 
 ### 📊 Universal Tracking & Sync
 - **Tracking Services**: Full bi-directional sync with AniList, MyAnimeList (MAL), Kitsu, Shikimori, and Bangumi.

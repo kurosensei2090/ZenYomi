@@ -85,6 +85,8 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
         super<Application>.onCreate()
         patchInjekt()
 
+        com.lagradost.cloudstream3.AcraApplication.context = this
+
         GlobalExceptionHandler.initialize(applicationContext, CrashActivity::class.java)
 
         // TLS 1.3 support for Android < 10
