@@ -8,11 +8,26 @@ abstract class MainAPI {
     open var name: String = ""
     open val supportedTypes: Set<TvType> = setOf(TvType.Anime, TvType.Movie, TvType.TvSeries)
     open var lang: String = "en"
-    open val hasMainPage: Boolean = false
+    open val mainPage: List<MainPageData> = emptyList()
+    open val hasMainPage: Boolean get() = mainPage.isNotEmpty()
     open val hasQuickSearch: Boolean = false
     open val hasDownloadSupport: Boolean = true
 
     val app: Requests get() = com.lagradost.cloudstream3.app
+
+    open fun fixUrl(url: String): String {
+        return when {
+            url.startsWith("http://") || url.startsWith("https://") -> url
+            url.startsWith("//") -> "https:$url"
+            url.startsWith("/") -> "$mainUrl$url"
+            else -> "$mainUrl/$url"
+        }
+    }
+
+    open fun fixUrlNull(url: String?): String? {
+        if (url == null) return null
+        return fixUrl(url)
+    }
 
     open suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
         return null
@@ -139,6 +154,36 @@ abstract class MainAPI {
         )
         builder(res)
         return res
+    }
+
+    fun newHomePageResponse(
+        name: String,
+        items: List<SearchResponse>,
+        hasNext: Boolean = false,
+    ): HomePageResponse {
+        return HomePageResponse(items = listOf(HomePageList(name = name, list = items)), hasNext = hasNext)
+    }
+
+    fun newHomePageResponse(
+        data: MainPageRequest,
+        list: List<SearchResponse>,
+        hasNext: Boolean = false,
+    ): HomePageResponse {
+        return HomePageResponse(
+            items = listOf(HomePageList(name = data.name, list = list, isHorizontalImages = data.horizontalImages)),
+            hasNext = hasNext,
+        )
+    }
+
+    fun newHomePageResponse(
+        data: MainPageData,
+        list: List<SearchResponse>,
+        hasNext: Boolean = false,
+    ): HomePageResponse {
+        return HomePageResponse(
+            items = listOf(HomePageList(name = data.name, list = list, isHorizontalImages = data.horizontalImages)),
+            hasNext = hasNext,
+        )
     }
 
     fun newHomePageResponse(

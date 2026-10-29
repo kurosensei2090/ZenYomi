@@ -582,6 +582,9 @@ class CloudStreamManager(
         }
 
         val cs3Files = pluginsFolder.listFiles { file -> file.extension.equals("cs3", ignoreCase = true) } ?: return
+        com.lagradost.cloudstream3.APIHolder.allProviders.clear()
+        com.lagradost.cloudstream3.APIHolder.apis.clear()
+        com.lagradost.cloudstream3.APIHolder.apiMap.clear()
         val allSources = mutableListOf<CloudStreamAnimeSource>()
         for (file in cs3Files) {
             val sources = loadSinglePluginFile(file)
@@ -723,6 +726,8 @@ class CloudStreamManager(
                 }
             }
 
+            val apisBefore = com.lagradost.cloudstream3.APIHolder.allProviders.toList()
+
             try {
                 if (instance is com.lagradost.cloudstream3.plugins.Plugin) {
                     instance.load(context)
@@ -774,7 +779,10 @@ class CloudStreamManager(
                 }
             } catch (_: Throwable) {}
 
-            for (api in com.lagradost.cloudstream3.APIHolder.allProviders) {
+            val newApis = com.lagradost.cloudstream3.APIHolder.allProviders.filter { afterApi ->
+                apisBefore.none { it.name.equals(afterApi.name, ignoreCase = true) }
+            }
+            for (api in newApis) {
                 if (sources.none { it.api.name == api.name }) {
                     sources.add(CloudStreamAnimeSource(api, pluginName = pluginName, pluginVersion = pluginVersion))
                 }

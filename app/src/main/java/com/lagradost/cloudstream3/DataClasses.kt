@@ -258,4 +258,5 @@ data class HomePageResponse(
 
 data class SearchResponseList(
     val list: List<SearchResponse>,
+    val hasNext: Boolean = false,
 )

@@ -50,22 +50,49 @@ class CloudStreamAnimeSource(
     }
 
     override suspend fun getPopularAnime(page: Int): AnimesPage {
-        val home = if (api.hasMainPage) {
-            try {
-                api.getMainPage(page, MainPageRequest("Home", baseUrl))
-            } catch (e: Throwable) {
-                null
-            }
-        } else null
+        val list = mutableListOf<SearchResponse>()
+        var hasNext = false
 
-        val list = home?.items?.flatMap { it.list } ?: try {
-            api.search("") ?: emptyList()
-        } catch (e: Throwable) {
-            emptyList()
+        val mainPages = api.mainPage
+        if (mainPages.isNotEmpty()) {
+            for (mp in mainPages) {
+                try {
+                    val resp = api.getMainPage(page, MainPageRequest(mp.name, mp.data, mp.horizontalImages))
+                    resp?.items?.forEach { hpList ->
+                        list.addAll(hpList.list)
+                    }
+                    if (resp?.hasNext == true) {
+                        hasNext = true
+                    }
+                } catch (e: Throwable) {
+                    logcat(LogPriority.WARN, e) { "Failed to load main page row ${mp.name} for ${api.name}" }
+                }
+            }
+        } else if (api.hasMainPage) {
+            try {
+                val resp = api.getMainPage(page, MainPageRequest("Home", baseUrl))
+                resp?.items?.forEach { hpList ->
+                    list.addAll(hpList.list)
+                }
+                hasNext = resp?.hasNext ?: false
+            } catch (e: Throwable) {
+                logcat(LogPriority.WARN, e) { "Failed to load Home main page for ${api.name}" }
+            }
         }
 
-        val animes = list.map { it.toSAnime() }
-        return AnimesPage(animes, hasNextPage = home?.hasNext ?: false)
+        if (list.isEmpty()) {
+            try {
+                val searchResults = api.search("") ?: api.quickSearch("")
+                if (!searchResults.isNullOrEmpty()) {
+                    list.addAll(searchResults)
+                }
+            } catch (e: Throwable) {
+                logcat(LogPriority.WARN, e) { "Failed fallback search for ${api.name}" }
+            }
+        }
+
+        val animes = list.distinctBy { it.url }.map { it.toSAnime() }
+        return AnimesPage(animes, hasNextPage = hasNext)
     }
 
     override fun latestUpdatesRequest(page: Int): Request = popularAnimeRequest(page)
@@ -77,6 +104,9 @@ class CloudStreamAnimeSource(
     override fun searchAnimeParse(response: Response): AnimesPage = popularAnimeParse(response)
 
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
+        if (query.isBlank()) {
+            return getPopularAnime(page)
+        }
         val results = try {
             api.search(query) ?: emptyList()
         } catch (e: Throwable) {

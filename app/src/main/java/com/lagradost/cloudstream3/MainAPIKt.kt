@@ -39,14 +39,14 @@ fun AnimeSearchResponse.addSub(episodes: Int?) {
 }
 
 fun AnimeSearchResponse.addDubStatus(
-    isDub: Boolean,
-    isSub: Boolean,
+    dubExist: Boolean,
+    subExist: Boolean,
     dubEpisodes: Int? = null,
     subEpisodes: Int? = null,
 ) {
     val set = mutableSetOf<String>()
-    if (isDub) set.add("dub")
-    if (isSub) set.add("sub")
+    if (dubExist) set.add("dub")
+    if (subExist) set.add("sub")
     this.dubStatus = set
     if (dubEpisodes != null) this.dub = dubEpisodes
     if (subEpisodes != null) this.sub = subEpisodes
@@ -100,6 +100,14 @@ fun getQualityFromString(string: String?): SearchQuality? {
     }
 }
 
+fun mainPage(url: String, name: String, horizontalImages: Boolean = false): MainPageData {
+    return MainPageData(name = name, data = url, horizontalImages = horizontalImages)
+}
+
+fun mainPageOf(vararg elements: MainPageData): List<MainPageData> {
+    return elements.toList()
+}
+
 fun mainPageOf(vararg pairs: Pair<String, String>): List<MainPageData> {
     return pairs.map { MainPageData(name = it.second, data = it.first) }
 }
@@ -116,6 +124,35 @@ fun newHomePageResponse(
     hasNext: Boolean = false,
 ): HomePageResponse {
     return HomePageResponse(items = listOf(HomePageList(name = name, list = items)), hasNext = hasNext)
+}
+
+fun newHomePageResponse(
+    data: MainPageRequest,
+    list: List<SearchResponse>,
+    hasNext: Boolean = false,
+): HomePageResponse {
+    return HomePageResponse(
+        items = listOf(HomePageList(name = data.name, list = list, isHorizontalImages = data.horizontalImages)),
+        hasNext = hasNext,
+    )
+}
+
+fun newHomePageResponse(
+    data: MainPageData,
+    list: List<SearchResponse>,
+    hasNext: Boolean = false,
+): HomePageResponse {
+    return HomePageResponse(
+        items = listOf(HomePageList(name = data.name, list = list, isHorizontalImages = data.horizontalImages)),
+        hasNext = hasNext,
+    )
+}
+
+fun newSearchResponseList(
+    list: List<SearchResponse>,
+    hasNext: Boolean = false,
+): SearchResponseList {
+    return SearchResponseList(list = list, hasNext = hasNext)
 }
 
 fun newHomePageResponse(

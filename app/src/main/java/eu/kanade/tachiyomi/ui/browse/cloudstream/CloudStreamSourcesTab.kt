@@ -186,7 +186,12 @@ fun Screen.csSourcesTab(): TabContent {
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
-                                        navigator.push(BrowseAnimeSourceScreen(source.id, null))
+                                        navigator.push(
+                                            BrowseAnimeSourceScreen(
+                                                source.id,
+                                                tachiyomi.domain.source.anime.interactor.GetRemoteAnime.QUERY_POPULAR,
+                                            ),
+                                        )
                                     },
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
@@ -239,7 +244,14 @@ fun Screen.csSourcesTab(): TabContent {
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
                                         SuggestionChip(
-                                            onClick = { navigator.push(BrowseAnimeSourceScreen(source.id, null)) },
+                                            onClick = {
+                                                navigator.push(
+                                                    BrowseAnimeSourceScreen(
+                                                        source.id,
+                                                        tachiyomi.domain.source.anime.interactor.GetRemoteAnime.QUERY_POPULAR,
+                                                    ),
+                                                )
+                                            },
                                             label = { Text("Browse") },
                                         )
                                         IconButton(
