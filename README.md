@@ -38,11 +38,6 @@
 - **Tracking Services**: Full bi-directional sync with AniList, MyAnimeList (MAL), Kitsu, Shikimori, and Bangumi.
 - Automatically marks chapters read and video episodes watched as you finish them.
 
-### 🌐 Native CloudStream Repository Support
-- **Dynamic Plugin Runtime**: Direct `.cs3` repository parsing and native execution via Dalvik/ART ClassLoader.
-- **Repository Management**: Add CloudStream repositories (`repo.json` / `plugins.json`), browse available extensions, and install/update with a single tap from Settings > Browse > CloudStream Repositories.
-- **Zero Play Protect Flags**: Loads providers directly within the app runtime with zero separate APK installations.
-
 ### 🎨 Modern Jetpack Compose UI
 - Material 3 & Material You dynamic color theming.
 - Pitch Black AMOLED Dark Mode for battery saving.
