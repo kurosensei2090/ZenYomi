@@ -81,3 +81,12 @@
 
 # XmlUtil
 -keep public enum nl.adaptivity.xmlutil.EventType { *; }
+
+# CloudStream 3 Plugin Ecosystem & NiceHttp
+-keep class com.lagradost.** { *; }
+-keepclassmembers class com.lagradost.** { *; }
+-keep interface com.lagradost.** { *; }
+-keep enum com.lagradost.** { *; }
+-keep @interface com.lagradost.** { *; }
+-keep class com.fasterxml.jackson.** { *; }
+-keepclassmembers class com.fasterxml.jackson.** { *; }

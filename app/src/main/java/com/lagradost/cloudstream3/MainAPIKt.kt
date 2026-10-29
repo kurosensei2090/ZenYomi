@@ -15,6 +15,8 @@ const val USER_AGENT: String =
 @Retention(AnnotationRetention.BINARY)
 annotation class UnsafeSSL
 
+open class ErrorLoadingException(message: String? = null) : Exception(message)
+
 val json: Json = Json {
     ignoreUnknownKeys = true
     isLenient = true

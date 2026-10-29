@@ -134,6 +134,19 @@ data class TvSeriesSearchResponse(
     var episodes: Int? = null,
 ) : SearchResponse
 
+data class LiveSearchResponse(
+    override var name: String,
+    override var url: String,
+    override var apiName: String,
+    override var type: TvType? = TvType.LiveStream,
+    override var posterUrl: String? = null,
+    override var year: Int? = null,
+    override var id: Int? = null,
+    override var quality: SearchQuality? = null,
+    override var score: Score? = null,
+    var lang: String? = null,
+) : SearchResponse
+
 interface LoadResponse {
     var name: String
     var url: String
@@ -267,6 +280,25 @@ data class TvSeriesLoadResponse(
     override var nextAiring: NextAiring? = null,
     override var seasonNames: List<SeasonData>? = null,
 ) : LoadResponse, EpisodeResponse
+
+data class LiveStreamLoadResponse(
+    override var name: String,
+    override var url: String,
+    override var apiName: String,
+    var dataUrl: String = url,
+    override var posterUrl: String? = null,
+    override var year: Int? = null,
+    override var plot: String? = null,
+    override var type: TvType = TvType.LiveStream,
+    override var score: Score? = null,
+    override var tags: List<String>? = null,
+    override var duration: Int? = null,
+    override var recommendations: List<SearchResponse>? = null,
+    override var actors: List<ActorData>? = null,
+    override var rating: Int? = null,
+    override var backgroundPosterUrl: String? = null,
+    override var logoUrl: String? = null,
+) : LoadResponse
 
 data class SubtitleFile(
     val lang: String,
