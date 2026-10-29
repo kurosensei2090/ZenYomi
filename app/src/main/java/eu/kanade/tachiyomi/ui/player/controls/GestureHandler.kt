@@ -41,6 +41,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -107,7 +108,10 @@ fun GestureHandler(
     val seekGesture by gesturePreferences.gestureHorizontalSeek().collectAsState()
     val preciseSeeking by gesturePreferences.playerSmoothSeek().collectAsState()
     val showSeekbar by gesturePreferences.showSeekBar().collectAsState()
+    val longPressSpeedUp by gesturePreferences.longPressSpeedUp().collectAsState()
     var isLongPressing by remember { mutableStateOf(false) }
+    var savedSpeed by remember { mutableFloatStateOf(1f) }
+    var wasPausedBeforeLongPress by remember { mutableStateOf(false) }
     val currentVolume by viewModel.currentVolume.collectAsState()
     val currentMPVVolume by viewModel.currentMPVVolume.collectAsState()
     val currentBrightness by viewModel.currentBrightness.collectAsState()
@@ -118,8 +122,7 @@ fun GestureHandler(
         modifier = modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeGestures)
-            .pointerInput(Unit) {
-                val originalSpeed = viewModel.playbackSpeed.value
+            .pointerInput(longPressSpeedUp) {
                 detectTapGestures(
                     onTap = {
                         if (controlsShown) viewModel.hideControls() else viewModel.showControls()
@@ -162,8 +165,13 @@ fun GestureHandler(
                         tryAwaitRelease()
                         if (isLongPressing) {
                             isLongPressing = false
-                            MPVLib.setPropertyDouble("speed", originalSpeed.toDouble())
-                            viewModel.playerUpdate.update { PlayerUpdates.None }
+                            if (longPressSpeedUp) {
+                                MPVLib.setPropertyDouble("speed", savedSpeed.toDouble())
+                                if (wasPausedBeforeLongPress) {
+                                    viewModel.pause()
+                                }
+                                viewModel.playerUpdate.update { PlayerUpdates.None }
+                            }
                         }
                         interactionSource.emit(PressInteraction.Release(press))
                     },
@@ -172,8 +180,19 @@ fun GestureHandler(
                         if (!isLongPressing) {
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                             isLongPressing = true
-                            viewModel.pause()
-                            viewModel.sheetShown.update { Sheets.Screenshot }
+                            if (longPressSpeedUp) {
+                                savedSpeed = viewModel.playbackSpeed.value
+                                wasPausedBeforeLongPress = viewModel.paused.value
+                                if (wasPausedBeforeLongPress) {
+                                    viewModel.unpause()
+                                }
+                                val targetSpeed = if (savedSpeed < 2.0f) 2.0 else (savedSpeed * 2.0).toDouble()
+                                MPVLib.setPropertyDouble("speed", targetSpeed)
+                                viewModel.playerUpdate.update { PlayerUpdates.DoubleSpeed }
+                            } else {
+                                viewModel.pause()
+                                viewModel.sheetShown.update { Sheets.Screenshot }
+                            }
                         }
                     },
                 )

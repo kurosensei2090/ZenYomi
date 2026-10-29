@@ -46,6 +46,7 @@ object PlayerSettingsGesturesScreen : SearchableSettings {
             getSlidersGroup(gesturePreferences = gesturePreferences),
             getSeekingGroup(gesturePreferences = gesturePreferences),
             getDoubleTapGroup(gesturePreferences = gesturePreferences),
+            getLongPressGroup(gesturePreferences = gesturePreferences),
             getMediaControlsGroup(gesturePreferences = gesturePreferences),
         )
     }
@@ -171,6 +172,22 @@ object PlayerSettingsGesturesScreen : SearchableSettings {
                 ),
                 Preference.PreferenceItem.InfoPreference(
                     title = stringResource(AYMR.strings.pref_double_tap_info),
+                ),
+            ),
+        )
+    }
+
+    @Composable
+    private fun getLongPressGroup(gesturePreferences: GesturePreferences): Preference.PreferenceGroup {
+        val longPressSpeedUp = gesturePreferences.longPressSpeedUp()
+
+        return Preference.PreferenceGroup(
+            title = "Long press",
+            preferenceItems = persistentListOf(
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = longPressSpeedUp,
+                    title = "Long press to speed up",
+                    subtitle = "Hold the screen to temporarily speed up video playback to 2x",
                 ),
             ),
         )
