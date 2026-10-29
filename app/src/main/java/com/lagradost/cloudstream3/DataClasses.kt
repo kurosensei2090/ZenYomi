@@ -33,6 +33,8 @@ enum class SearchQuality {
 enum class DubStatus {
     Dubbed,
     Subbed,
+    Dub,
+    Sub,
     Both,
     None,
 }
@@ -154,6 +156,25 @@ interface LoadResponse {
     }
 }
 
+data class NextAiring(
+    val episode: Int,
+    val unixTime: Long,
+)
+
+data class SeasonData(
+    val season: Int,
+    val name: String? = null,
+    val displaySeason: Int? = null,
+)
+
+interface EpisodeResponse {
+    var showStatus: ShowStatus?
+    var nextAiring: NextAiring?
+    var seasonNames: List<SeasonData>?
+    fun getLatestEpisodes(): Map<DubStatus, Int?> = emptyMap()
+    fun getTotalEpisodeIndex(episode: Int, season: Int): Int? = episode
+}
+
 data class Episode(
     var data: String = "",
     var name: String? = null,
@@ -164,7 +185,14 @@ data class Episode(
     var description: String? = null,
     var date: String? = null,
     var score: Score? = null,
-)
+    var runTime: Int? = null,
+) {
+    var url: String
+        get() = data
+        set(value) { data = value }
+
+    constructor(data: String) : this(data = data, name = null)
+}
 
 data class AnimeLoadResponse(
     override var name: String,
@@ -182,13 +210,22 @@ data class AnimeLoadResponse(
     override var backgroundPosterUrl: String? = null,
     override var duration: Int? = null,
     override var logoUrl: String? = null,
-    var episodes: MutableMap<String, List<Episode>> = mutableMapOf(),
+    var episodes: MutableMap<DubStatus, List<Episode>> = mutableMapOf(),
     var japName: String? = null,
     var engName: String? = null,
     var synonyms: List<String>? = null,
     var author: String? = null,
     var status: String? = null,
-) : LoadResponse
+    override var showStatus: ShowStatus? = null,
+    override var nextAiring: NextAiring? = null,
+    override var seasonNames: List<SeasonData>? = null,
+) : LoadResponse, EpisodeResponse {
+    fun addEpisodes(status: DubStatus, episodes: List<Episode>) {
+        val list = this.episodes.getOrPut(status) { mutableListOf() }.toMutableList()
+        list.addAll(episodes)
+        this.episodes[status] = list
+    }
+}
 
 data class MovieLoadResponse(
     override var name: String,
@@ -226,7 +263,10 @@ data class TvSeriesLoadResponse(
     override var duration: Int? = null,
     override var logoUrl: String? = null,
     var episodes: List<Episode> = emptyList(),
-) : LoadResponse
+    override var showStatus: ShowStatus? = null,
+    override var nextAiring: NextAiring? = null,
+    override var seasonNames: List<SeasonData>? = null,
+) : LoadResponse, EpisodeResponse
 
 data class SubtitleFile(
     val lang: String,

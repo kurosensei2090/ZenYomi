@@ -122,11 +122,12 @@ abstract class MainAPI {
         return res
     }
 
-    fun newAnimeLoadResponse(
+    suspend fun newAnimeLoadResponse(
         name: String,
         url: String,
         type: TvType = TvType.Anime,
-        builder: AnimeLoadResponse.() -> Unit = {},
+        comingSoonIfNone: Boolean = true,
+        builder: suspend AnimeLoadResponse.() -> Unit = {},
     ): AnimeLoadResponse {
         val res = AnimeLoadResponse(
             name = name,
@@ -137,6 +138,19 @@ abstract class MainAPI {
         builder(res)
         return res
     }
+
+    suspend fun newAnimeLoadResponse(
+        name: String,
+        url: String,
+        type: TvType,
+        builder: suspend AnimeLoadResponse.() -> Unit,
+    ): AnimeLoadResponse = newAnimeLoadResponse(name, url, type, true, builder)
+
+    suspend fun newAnimeLoadResponse(
+        name: String,
+        url: String,
+        builder: suspend AnimeLoadResponse.() -> Unit,
+    ): AnimeLoadResponse = newAnimeLoadResponse(name, url, TvType.Anime, true, builder)
 
     fun newTvSeriesLoadResponse(
         name: String,
@@ -205,6 +219,15 @@ abstract class MainAPI {
         builder: Episode.() -> Unit = {},
     ): Episode {
         val ep = Episode(data = fixUrl(data))
+        builder(ep)
+        return ep
+    }
+
+    fun newEpisode(
+        data: Any?,
+        builder: Episode.() -> Unit = {},
+    ): Episode {
+        val ep = Episode(data = fixUrl(data?.toString() ?: ""))
         builder(ep)
         return ep
     }

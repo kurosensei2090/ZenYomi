@@ -2,10 +2,12 @@ package eu.kanade.tachiyomi.extension.anime.cloudstream
 
 import com.lagradost.cloudstream3.AnimeLoadResponse
 import com.lagradost.cloudstream3.Episode
+import com.lagradost.cloudstream3.EpisodeResponse
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.MovieLoadResponse
 import com.lagradost.cloudstream3.SearchResponse
+import com.lagradost.cloudstream3.ShowStatus
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvSeriesLoadResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
@@ -123,6 +125,7 @@ class CloudStreamAnimeSource(
         val details = try {
             api.load(anime.url)
         } catch (e: Throwable) {
+            logcat(LogPriority.ERROR, e) { "Failed to load anime details for ${anime.title} from ${anime.url}" }
             null
         } ?: return anime
 
@@ -136,6 +139,16 @@ class CloudStreamAnimeSource(
             anime.status = when (details.status?.lowercase()) {
                 "ongoing", "releasing" -> SAnime.ONGOING
                 "completed", "finished" -> SAnime.COMPLETED
+                else -> when (details.showStatus) {
+                    ShowStatus.Ongoing -> SAnime.ONGOING
+                    ShowStatus.Completed -> SAnime.COMPLETED
+                    else -> SAnime.UNKNOWN
+                }
+            }
+        } else if (details is EpisodeResponse) {
+            anime.status = when (details.showStatus) {
+                ShowStatus.Ongoing -> SAnime.ONGOING
+                ShowStatus.Completed -> SAnime.COMPLETED
                 else -> SAnime.UNKNOWN
             }
         }
@@ -151,6 +164,7 @@ class CloudStreamAnimeSource(
         val details = try {
             api.load(anime.url)
         } catch (e: Throwable) {
+            logcat(LogPriority.ERROR, e) { "Failed to load episodes for ${anime.title} from ${anime.url}" }
             null
         } ?: return emptyList()
 
@@ -159,8 +173,17 @@ class CloudStreamAnimeSource(
         when (details) {
             is AnimeLoadResponse -> {
                 var order = 1f
-                details.episodes.values.flatten().forEach { ep ->
-                    episodes.add(ep.toSEpisode(order++))
+                val hasMultipleStatuses = details.episodes.size > 1
+                for ((status, epList) in details.episodes) {
+                    val statusSuffix = if (hasMultipleStatuses) " (${status.name})" else ""
+                    epList.forEach { ep ->
+                        val baseName = ep.name ?: "Episode ${ep.episode ?: order.toInt()}"
+                        val sEpisode = ep.toSEpisode(order++)
+                        if (hasMultipleStatuses && !baseName.contains(status.name, ignoreCase = true)) {
+                            sEpisode.name = "$baseName$statusSuffix"
+                        }
+                        episodes.add(sEpisode)
+                    }
                 }
             }
             is TvSeriesLoadResponse -> {
@@ -177,9 +200,32 @@ class CloudStreamAnimeSource(
                 }
                 episodes.add(ep)
             }
-            else -> {}
+            else -> {
+                try {
+                    for (m in details.javaClass.methods) {
+                        if (m.name.equals("getEpisodes", ignoreCase = true) && m.parameterTypes.isEmpty()) {
+                            val result = m.invoke(details)
+                            if (result is Map<*, *>) {
+                                var order = 1f
+                                result.values.filterIsInstance<List<*>>().flatten().filterIsInstance<Episode>().forEach { ep ->
+                                    episodes.add(ep.toSEpisode(order++))
+                                }
+                            } else if (result is List<*>) {
+                                var order = 1f
+                                result.filterIsInstance<Episode>().forEach { ep ->
+                                    episodes.add(ep.toSEpisode(order++))
+                                }
+                            }
+                            break
+                        }
+                    }
+                } catch (t: Throwable) {
+                    logcat(LogPriority.WARN, t) { "Reflection fallback failed for ${details.javaClass.name}" }
+                }
+            }
         }
 
+        logcat(LogPriority.INFO) { "Loaded ${episodes.size} episodes for ${anime.title} from ${api.name}" }
         return episodes.reversed()
     }
 

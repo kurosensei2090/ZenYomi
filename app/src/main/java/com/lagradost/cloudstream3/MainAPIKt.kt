@@ -53,10 +53,9 @@ fun AnimeSearchResponse.addDubStatus(
 }
 
 fun AnimeLoadResponse.addEpisodes(status: DubStatus, episodes: List<Episode>) {
-    val key = status.name.lowercase()
-    val list = this.episodes.getOrPut(key) { mutableListOf() }.toMutableList()
+    val list = this.episodes.getOrPut(status) { mutableListOf() }.toMutableList()
     list.addAll(episodes)
-    this.episodes[key] = list
+    this.episodes[status] = list
 }
 
 fun base64Decode(str: String): String {
@@ -213,6 +212,43 @@ suspend fun MainAPI.newTvSeriesLoadResponse(
     )
     builder(res)
     return res
+}
+
+@JvmOverloads
+suspend fun MainAPI.newAnimeLoadResponse(
+    name: String,
+    url: String,
+    type: TvType = TvType.Anime,
+    comingSoonIfNone: Boolean = true,
+    builder: suspend AnimeLoadResponse.() -> Unit = {},
+): AnimeLoadResponse {
+    val res = AnimeLoadResponse(
+        name = name,
+        url = fixUrl(url),
+        apiName = this.name,
+        type = type,
+    )
+    builder(res)
+    return res
+}
+
+suspend fun MainAPI.newAnimeLoadResponse(
+    name: String,
+    url: String,
+    type: TvType,
+    builder: suspend AnimeLoadResponse.() -> Unit,
+): AnimeLoadResponse = newAnimeLoadResponse(name, url, type, true, builder)
+
+suspend fun MainAPI.newAnimeLoadResponse(
+    name: String,
+    url: String,
+    builder: suspend AnimeLoadResponse.() -> Unit,
+): AnimeLoadResponse = newAnimeLoadResponse(name, url, TvType.Anime, true, builder)
+
+fun newEpisode(data: Any?, builder: Episode.() -> Unit = {}): Episode {
+    val ep = Episode(data = data?.toString() ?: "")
+    builder(ep)
+    return ep
 }
 
 fun MainAPI.newMovieSearchResponse(
