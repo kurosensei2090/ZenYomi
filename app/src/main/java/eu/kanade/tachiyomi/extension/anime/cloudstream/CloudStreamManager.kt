@@ -1,8 +1,11 @@
+@file:OptIn(com.lagradost.cloudstream3.UnsafeSSL::class)
 package eu.kanade.tachiyomi.extension.anime.cloudstream
 
 import android.content.Context
 import com.lagradost.cloudstream3.MainAPI
+import com.lagradost.cloudstream3.UnsafeSSL
 import com.lagradost.cloudstream3.plugins.Plugin
+import com.lagradost.nicehttp.ignoreAllSSLErrors
 import dalvik.system.DexClassLoader
 import eu.kanade.tachiyomi.network.NetworkHelper
 import kotlinx.coroutines.CoroutineScope
@@ -114,6 +117,12 @@ class CloudStreamManager(
 
     init {
         com.lagradost.cloudstream3.AcraApplication.context = context.applicationContext
+        try {
+            com.lagradost.cloudstream3.app.baseClient = client
+            com.lagradost.cloudstream3.insecureApp.baseClient = client.newBuilder().ignoreAllSSLErrors().build()
+        } catch (t: Throwable) {
+            logcat(LogPriority.WARN, t) { "Failed to bind baseClient to CloudStream app" }
+        }
         loadSavedRepositories()
         scope.launch {
             loadInstalledPlugins()

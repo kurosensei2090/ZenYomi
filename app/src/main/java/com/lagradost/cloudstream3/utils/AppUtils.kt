@@ -3,6 +3,7 @@ package com.lagradost.cloudstream3.utils
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.lagradost.cloudstream3.mapper
+import kotlin.reflect.KClass
 
 object AppUtils {
     var mapper: ObjectMapper = com.lagradost.cloudstream3.mapper
@@ -11,6 +12,18 @@ object AppUtils {
         mapper.writeValueAsString(value)
     } catch (_: Exception) {
         value?.toString() ?: ""
+    }
+
+    fun <T : Any> parseJson(text: String, kClass: KClass<T>): T {
+        return mapper.readValue(text, kClass.java)
+    }
+
+    fun <T : Any> tryParseJson(text: String, kClass: KClass<T>): T? {
+        return try {
+            mapper.readValue(text, kClass.java)
+        } catch (_: Exception) {
+            null
+        }
     }
 
     inline fun <reified T> parseJson(text: String): T {

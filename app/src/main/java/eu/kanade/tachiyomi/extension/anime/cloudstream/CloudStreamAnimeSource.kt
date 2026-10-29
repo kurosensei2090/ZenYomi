@@ -38,13 +38,14 @@ class CloudStreamAnimeSource(
     override val id: Long = abs(api.name.hashCode().toLong() xor 0x43534C00L)
     override val name: String = "${api.name} [CS]"
     override val lang: String = api.lang
-    override val baseUrl: String = api.mainUrl
+    override val baseUrl: String = api.mainUrl.ifBlank { "https://localhost" }
     override val supportsLatest: Boolean = api.hasMainPage
 
     override val client: OkHttpClient = api.app.baseClient
 
     override fun popularAnimeRequest(page: Int): Request {
-        return Request.Builder().url(baseUrl).build()
+        val target = if (baseUrl.startsWith("http://", ignoreCase = true) || baseUrl.startsWith("https://", ignoreCase = true)) baseUrl else "https://$baseUrl"
+        return Request.Builder().url(target).build()
     }
 
     override fun popularAnimeParse(response: Response): AnimesPage {
@@ -104,7 +105,36 @@ class CloudStreamAnimeSource(
     override fun latestUpdatesRequest(page: Int): Request = popularAnimeRequest(page)
     override fun latestUpdatesParse(response: Response): AnimesPage = popularAnimeParse(response)
 
-    override suspend fun getLatestUpdates(page: Int): AnimesPage = getPopularAnime(page)
+    override suspend fun getLatestUpdates(page: Int): AnimesPage {
+        val list = mutableListOf<SearchResponse>()
+        var hasNext = false
+
+        val mainPages = api.mainPage
+        val latestRow = mainPages.firstOrNull {
+            it.name.contains("latest", ignoreCase = true) ||
+                it.name.contains("أحدث", ignoreCase = true) ||
+                it.name.contains("جديد", ignoreCase = true) ||
+                it.name.contains("recent", ignoreCase = true) ||
+                it.data.contains("latest", ignoreCase = true) ||
+                it.data.contains("recent", ignoreCase = true)
+        }
+        if (latestRow != null) {
+            try {
+                val resp = api.getMainPage(page, MainPageRequest(latestRow.name, latestRow.data, latestRow.horizontalImages))
+                resp?.items?.forEach { hpList ->
+                    list.addAll(hpList.list)
+                }
+                hasNext = resp?.hasNext ?: false
+            } catch (e: Throwable) {
+                logcat(LogPriority.WARN, e) { "Failed to load latest row for ${api.name}" }
+            }
+        }
+        if (list.isEmpty()) {
+            return getPopularAnime(page)
+        }
+        val animes = list.distinctBy { it.url }.map { it.toSAnime() }
+        return AnimesPage(animes, hasNextPage = hasNext)
+    }
 
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request = popularAnimeRequest(page)
     override fun searchAnimeParse(response: Response): AnimesPage = popularAnimeParse(response)
@@ -291,8 +321,8 @@ class CloudStreamAnimeSource(
     private fun SearchResponse.toSAnime(): SAnime {
         val sAnime = SAnime.create()
         sAnime.title = name
-        sAnime.url = url
-        posterUrl?.let { sAnime.thumbnail_url = it }
+        sAnime.url = api.fixUrl(url)
+        posterUrl?.let { sAnime.thumbnail_url = api.fixUrl(it) }
         return sAnime
     }
 

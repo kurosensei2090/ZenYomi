@@ -274,6 +274,9 @@ dependencies {
     // HTML parser
     implementation(libs.jsoup)
 
+    // CloudStream NiceHttp
+    implementation("com.github.Blatzar:NiceHttp:0.4.18")
+
     // Disk
     implementation(libs.disklrucache)
     implementation(libs.unifile)

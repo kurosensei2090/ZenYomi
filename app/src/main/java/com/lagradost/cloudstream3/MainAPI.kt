@@ -13,7 +13,10 @@ abstract class MainAPI {
     open val hasQuickSearch: Boolean = false
     open val hasDownloadSupport: Boolean = true
 
-    val app: Requests get() = com.lagradost.cloudstream3.app
+    open val app: Requests get() = com.lagradost.cloudstream3.app
+
+    @UnsafeSSL
+    open val insecureApp: Requests get() = com.lagradost.cloudstream3.insecureApp
 
     open fun fixUrl(url: String): String {
         return when {

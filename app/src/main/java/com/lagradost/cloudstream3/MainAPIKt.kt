@@ -6,6 +6,15 @@ import com.fasterxml.jackson.databind.json.JsonMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import kotlinx.serialization.json.Json
 
+const val USER_AGENT: String =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+
+@RequiresOptIn(
+    message = "This API is unsafe and should be used with caution.",
+)
+@Retention(AnnotationRetention.BINARY)
+annotation class UnsafeSSL
+
 val json: Json = Json {
     ignoreUnknownKeys = true
     isLenient = true
