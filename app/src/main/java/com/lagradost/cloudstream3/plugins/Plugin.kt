@@ -17,13 +17,13 @@ open class BasePlugin {
     open fun load(context: Context) {}
     open fun load() {}
 
-    fun registerMainAPI(api: MainAPI) {
+    open fun registerMainAPI(api: MainAPI) {
         registeredAPIs.add(api)
         APIHolder.addPlugin(api)
     }
 
-    fun registerExtractorAPI(api: ExtractorApi) {}
-    fun registerExtractorAPI(api: Any) {}
+    open fun registerExtractorAPI(api: ExtractorApi) {}
+    open fun registerExtractorAPI(api: Any) {}
 }
 
 open class Plugin : BasePlugin()

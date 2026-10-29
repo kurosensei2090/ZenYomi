@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.ui.browse.cloudstream
 
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -55,6 +56,7 @@ import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.TabContent
 import eu.kanade.tachiyomi.extension.anime.cloudstream.CloudStreamManager
 import eu.kanade.tachiyomi.extension.anime.cloudstream.CloudStreamPluginItem
+import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.aniyomi.AYMR
@@ -333,6 +335,7 @@ fun Screen.csExtensionsTab(): TabContent {
                                             onClick = {
                                                 scope.launch {
                                                     manager.uninstallPlugin(plugin.internalName)
+                                                    context.toast("Uninstalled ${plugin.name}")
                                                 }
                                             },
                                             colors = ButtonDefaults.outlinedButtonColors(
@@ -347,7 +350,13 @@ fun Screen.csExtensionsTab(): TabContent {
                                                 scope.launch {
                                                     installingInternalName = plugin.internalName
                                                     try {
-                                                        manager.installPlugin(plugin)
+                                                        val success = manager.installPlugin(plugin)
+                                                        if (success) {
+                                                            context.toast("Installed ${plugin.name} successfully")
+                                                        } else {
+                                                            val err = manager.lastErrorFlow.value ?: "Failed to load providers from ${plugin.name}"
+                                                            context.toast(err, Toast.LENGTH_LONG)
+                                                        }
                                                     } finally {
                                                         installingInternalName = null
                                                     }

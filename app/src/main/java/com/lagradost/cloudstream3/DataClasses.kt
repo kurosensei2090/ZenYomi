@@ -10,8 +10,74 @@ enum class TvType {
     Documentary,
     LiveStream,
     NSFW,
-    Others
+    Others,
 }
+
+enum class SearchQuality {
+    Cam,
+    CamRip,
+    HdCam,
+    Telesync,
+    Telecine,
+    Workprint,
+    Sd,
+    Hdtv,
+    Dvd,
+    Hd,
+    FullHd,
+    Uhd,
+    FourK,
+    BlueRay,
+}
+
+enum class DubStatus {
+    Dubbed,
+    Subbed,
+    Both,
+    None,
+}
+
+enum class ShowStatus {
+    Completed,
+    Ongoing,
+    Upcoming,
+    None,
+}
+
+data class Score(
+    val score: Double = 0.0,
+    val maxScore: Double = 10.0,
+) {
+    companion object {
+        fun from10(score: String?): Score? {
+            val d = score?.toDoubleOrNull() ?: return null
+            return Score(d, 10.0)
+        }
+
+        fun from10(score: Double?): Score? {
+            val d = score ?: return null
+            return Score(d, 10.0)
+        }
+    }
+}
+
+data class Actor(
+    val name: String = "",
+    val image: String? = null,
+)
+
+enum class ActorRole {
+    Main,
+    Supporting,
+    Background,
+}
+
+data class ActorData(
+    val actor: Actor,
+    val role: ActorRole? = null,
+    val roleString: String? = null,
+    val voiceActor: Actor? = null,
+)
 
 interface SearchResponse {
     var name: String
@@ -21,6 +87,8 @@ interface SearchResponse {
     var posterUrl: String?
     var year: Int?
     var id: Int?
+    var quality: SearchQuality?
+    var score: Score?
 }
 
 data class AnimeSearchResponse(
@@ -31,6 +99,8 @@ data class AnimeSearchResponse(
     override var posterUrl: String? = null,
     override var year: Int? = null,
     override var id: Int? = null,
+    override var quality: SearchQuality? = null,
+    override var score: Score? = null,
     var dubStatus: Set<String>? = null,
     var episodes: Map<String, Int>? = null,
     var sub: Int? = null,
@@ -45,6 +115,8 @@ data class MovieSearchResponse(
     override var posterUrl: String? = null,
     override var year: Int? = null,
     override var id: Int? = null,
+    override var quality: SearchQuality? = null,
+    override var score: Score? = null,
 ) : SearchResponse
 
 data class TvSeriesSearchResponse(
@@ -55,6 +127,8 @@ data class TvSeriesSearchResponse(
     override var posterUrl: String? = null,
     override var year: Int? = null,
     override var id: Int? = null,
+    override var quality: SearchQuality? = null,
+    override var score: Score? = null,
     var episodes: Int? = null,
 ) : SearchResponse
 
@@ -69,17 +143,27 @@ interface LoadResponse {
     var rating: Int?
     var tags: List<String>?
     var recommendations: List<SearchResponse>?
+    var score: Score?
+    var actors: List<ActorData>?
+    var backgroundPosterUrl: String?
+    var duration: Int?
+    var logoUrl: String?
+
+    companion object {
+        fun addTMDbId(response: LoadResponse, tmdbId: String?) {}
+    }
 }
 
 data class Episode(
-    val data: String,
-    val name: String? = null,
-    val season: Int? = null,
-    val episode: Int? = null,
-    val posterUrl: String? = null,
-    val rating: Int? = null,
-    val description: String? = null,
-    val date: String? = null,
+    var data: String = "",
+    var name: String? = null,
+    var season: Int? = null,
+    var episode: Int? = null,
+    var posterUrl: String? = null,
+    var rating: Int? = null,
+    var description: String? = null,
+    var date: String? = null,
+    var score: Score? = null,
 )
 
 data class AnimeLoadResponse(
@@ -93,6 +177,11 @@ data class AnimeLoadResponse(
     override var rating: Int? = null,
     override var tags: List<String>? = null,
     override var recommendations: List<SearchResponse>? = null,
+    override var score: Score? = null,
+    override var actors: List<ActorData>? = null,
+    override var backgroundPosterUrl: String? = null,
+    override var duration: Int? = null,
+    override var logoUrl: String? = null,
     var episodes: MutableMap<String, List<Episode>> = mutableMapOf(),
     var japName: String? = null,
     var engName: String? = null,
@@ -112,6 +201,11 @@ data class MovieLoadResponse(
     override var rating: Int? = null,
     override var tags: List<String>? = null,
     override var recommendations: List<SearchResponse>? = null,
+    override var score: Score? = null,
+    override var actors: List<ActorData>? = null,
+    override var backgroundPosterUrl: String? = null,
+    override var duration: Int? = null,
+    override var logoUrl: String? = null,
     var dataUrl: String = url,
 ) : LoadResponse
 
@@ -126,12 +220,23 @@ data class TvSeriesLoadResponse(
     override var rating: Int? = null,
     override var tags: List<String>? = null,
     override var recommendations: List<SearchResponse>? = null,
+    override var score: Score? = null,
+    override var actors: List<ActorData>? = null,
+    override var backgroundPosterUrl: String? = null,
+    override var duration: Int? = null,
+    override var logoUrl: String? = null,
     var episodes: List<Episode> = emptyList(),
 ) : LoadResponse
 
 data class SubtitleFile(
     val lang: String,
     val url: String,
+)
+
+data class MainPageData(
+    val name: String,
+    val data: String,
+    val horizontalImages: Boolean = false,
 )
 
 data class MainPageRequest(

@@ -61,6 +61,7 @@ fun Screen.csSourcesTab(): TabContent {
     val manager = remember { CloudStreamManager.getInstance(context) }
     val sources by manager.installedSourcesFlow.collectAsState()
     val isLoading by manager.isLoadingFlow.collectAsState()
+    val lastError by manager.lastErrorFlow.collectAsState()
 
     return TabContent(
         titleRes = AYMR.strings.label_cs_sources,
@@ -120,6 +121,32 @@ fun Screen.csSourcesTab(): TabContent {
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
+                                if (!lastError.isNullOrBlank()) {
+                                    Card(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(bottom = 16.dp),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                                        ),
+                                        shape = RoundedCornerShape(12.dp),
+                                    ) {
+                                        Column(modifier = Modifier.padding(14.dp)) {
+                                            Text(
+                                                text = "Last Provider Notice",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = lastError ?: "",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                            )
+                                        }
+                                    }
+                                }
                                 Button(
                                     onClick = { BrowseTab.showCsExtension() },
                                 ) {

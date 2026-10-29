@@ -108,6 +108,9 @@ class CloudStreamManager(
     private val _statusMessageFlow = MutableStateFlow<String?>(null)
     val statusMessageFlow: StateFlow<String?> = _statusMessageFlow.asStateFlow()
 
+    private val _lastErrorFlow = MutableStateFlow<String?>(null)
+    val lastErrorFlow: StateFlow<String?> = _lastErrorFlow.asStateFlow()
+
     init {
         com.lagradost.cloudstream3.AcraApplication.context = context.applicationContext
         loadSavedRepositories()
@@ -323,7 +326,11 @@ class CloudStreamManager(
             for (obj in jsonObjects) {
                 val name = obj["name"]?.jsonPrimitive?.contentOrNull ?: continue
                 val internalName = obj["internalName"]?.jsonPrimitive?.contentOrNull ?: name
-                val rawUrl = obj["url"]?.jsonPrimitive?.contentOrNull ?: continue
+                val rawUrl = obj["url"]?.jsonPrimitive?.contentOrNull
+                    ?: obj["cs3Url"]?.jsonPrimitive?.contentOrNull
+                    ?: obj["downloadUrl"]?.jsonPrimitive?.contentOrNull
+                    ?: obj["jarUrl"]?.jsonPrimitive?.contentOrNull
+                    ?: continue
                 val pluginUrl = resolveUrl(url, rawUrl)
                 val iconUrl = obj["iconUrl"]?.jsonPrimitive?.contentOrNull?.let { resolveUrl(url, it) }
                 val version = obj["version"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 1
@@ -366,7 +373,9 @@ class CloudStreamManager(
                 .build()
             val response = client.newCall(request).execute()
             if (!response.isSuccessful) {
-                logcat(LogPriority.ERROR) { "HTTP ${response.code} downloading plugin from ${plugin.url}" }
+                val err = "HTTP ${response.code} downloading plugin from ${plugin.url}"
+                logcat(LogPriority.ERROR) { err }
+                _lastErrorFlow.value = err
                 return@withContext false
             }
             val bytes = response.body.bytes()
@@ -374,6 +383,27 @@ class CloudStreamManager(
             targetFile.setReadOnly()
 
             val newSources = loadSinglePluginFile(targetFile)
+            if (newSources.isEmpty()) {
+                targetFile.setWritable(true)
+                targetFile.delete()
+                val safeName = plugin.internalName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                val jar = File(context.codeCacheDir, "$safeName.jar")
+                if (jar.exists()) {
+                    jar.setWritable(true)
+                    jar.delete()
+                }
+                val dex = File(context.codeCacheDir, "$safeName.dex")
+                if (dex.exists()) {
+                    dex.setWritable(true)
+                    dex.delete()
+                }
+                val errMsg = _lastErrorFlow.value ?: "No sources could be loaded from ${plugin.name}"
+                logcat(LogPriority.WARN) { errMsg }
+                _lastErrorFlow.value = errMsg
+                refreshRepositories()
+                return@withContext false
+            }
+
             val current = _installedSourcesFlow.value.toMutableList()
             current.removeAll { it.pluginName == plugin.name || it.pluginName == plugin.internalName }
             current.addAll(newSources)
@@ -382,7 +412,9 @@ class CloudStreamManager(
             refreshRepositories()
             return@withContext true
         } catch (e: Exception) {
-            logcat(LogPriority.ERROR, e) { "Failed to install CloudStream plugin ${plugin.name}" }
+            val errMsg = "Failed to install ${plugin.name}: ${e.message}"
+            logcat(LogPriority.ERROR, e) { errMsg }
+            _lastErrorFlow.value = errMsg
             return@withContext false
         }
     }
@@ -392,6 +424,11 @@ class CloudStreamManager(
         if (targetFile.exists()) {
             targetFile.setWritable(true)
             targetFile.delete()
+        }
+        val jarFile = File(context.codeCacheDir, "$internalName.jar")
+        if (jarFile.exists()) {
+            jarFile.setWritable(true)
+            jarFile.delete()
         }
         val dexFile = File(context.codeCacheDir, "$internalName.dex")
         if (dexFile.exists()) {
@@ -424,6 +461,9 @@ class CloudStreamManager(
             allSources.addAll(sources)
         }
         _installedSourcesFlow.value = allSources.distinctBy { it.id }
+        if (allSources.isNotEmpty()) {
+            _lastErrorFlow.value = null
+        }
     }
 
     private fun loadSinglePluginFile(file: File): List<CloudStreamAnimeSource> {
@@ -433,7 +473,10 @@ class CloudStreamManager(
             val zip = ZipFile(file)
             val manifestEntry = zip.entries().asSequence().find {
                 it.name.equals("manifest.json", ignoreCase = true) || it.name.endsWith("/manifest.json", ignoreCase = true)
-            } ?: return emptyList()
+            } ?: run {
+                _lastErrorFlow.value = "manifest.json missing in ${file.name}"
+                return emptyList()
+            }
 
             val manifestText = zip.getInputStream(manifestEntry).bufferedReader().use { it.readText() }
             val manifestJson = JSONObject(manifestText)
@@ -441,31 +484,71 @@ class CloudStreamManager(
             val pluginVersion = manifestJson.optInt("version", 1)
             val pluginName = manifestJson.optString("name", file.nameWithoutExtension)
 
-            if (pluginClassName.isBlank()) return emptyList()
+            if (pluginClassName.isBlank()) {
+                _lastErrorFlow.value = "pluginClassName empty in manifest of ${file.name}"
+                return emptyList()
+            }
 
+            // 1. Prepare .jar file copy in codeCacheDir so DexPathList matches JAR_SUFFIX
+            val jarFile = File(context.codeCacheDir, "${file.nameWithoutExtension}.jar")
+            if (jarFile.exists()) {
+                jarFile.setWritable(true)
+                jarFile.delete()
+            }
+            if (jarFile.exists()) {
+                jarFile.setWritable(true)
+            }
+            file.inputStream().use { input ->
+                jarFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            jarFile.setReadOnly()
+
+            // 2. Also extract classes.dex to .dex file in codeCacheDir
             val dexEntry = zip.entries().asSequence().find {
                 it.name.equals("classes.dex", ignoreCase = true) || it.name.endsWith("/classes.dex", ignoreCase = true)
-            } ?: return emptyList()
-
+            }
             val dexFile = File(context.codeCacheDir, "${file.nameWithoutExtension}.dex")
-            if (dexFile.exists()) {
-                dexFile.setWritable(true)
-                dexFile.delete()
+            if (dexEntry != null) {
+                if (dexFile.exists()) {
+                    dexFile.setWritable(true)
+                    dexFile.delete()
+                }
+                if (dexFile.exists()) {
+                    dexFile.setWritable(true)
+                }
+                dexFile.outputStream().use { out ->
+                    zip.getInputStream(dexEntry).use { it.copyTo(out) }
+                }
+                dexFile.setReadOnly()
             }
-            if (dexFile.exists()) {
-                dexFile.setWritable(true)
-            }
-            dexFile.outputStream().use { out ->
-                zip.getInputStream(dexEntry).use { it.copyTo(out) }
-            }
-            dexFile.setReadOnly()
 
-            val pathClassLoader = dalvik.system.PathClassLoader(
-                dexFile.absolutePath,
-                javaClass.classLoader,
+            val parentLoader = context.classLoader ?: javaClass.classLoader
+            val classLoaders = listOfNotNull(
+                try { dalvik.system.PathClassLoader(jarFile.absolutePath, parentLoader) } catch (_: Throwable) { null },
+                try { dalvik.system.PathClassLoader(file.absolutePath, parentLoader) } catch (_: Throwable) { null },
+                if (dexEntry != null) try { dalvik.system.PathClassLoader(dexFile.absolutePath, parentLoader) } catch (_: Throwable) { null } else null,
             )
 
-            val clazz = pathClassLoader.loadClass(pluginClassName)
+            var clazz: Class<*>? = null
+            var lastClassError: Throwable? = null
+            for (loader in classLoaders) {
+                try {
+                    clazz = loader.loadClass(pluginClassName)
+                    if (clazz != null) break
+                } catch (t: Throwable) {
+                    lastClassError = t
+                }
+            }
+
+            if (clazz == null) {
+                val errMsg = "Failed to load class $pluginClassName: ${lastClassError?.message}"
+                logcat(LogPriority.ERROR, lastClassError) { errMsg }
+                _lastErrorFlow.value = errMsg
+                return emptyList()
+            }
+
             val constructor = try {
                 clazz.getDeclaredConstructor()
             } catch (_: NoSuchMethodException) {
@@ -476,61 +559,74 @@ class CloudStreamManager(
                 }
             }
             constructor.isAccessible = true
-            val instance = if (constructor.parameterTypes.isEmpty()) {
-                constructor.newInstance()
-            } else if (constructor.parameterTypes.size == 1 && constructor.parameterTypes[0] == Context::class.java) {
-                constructor.newInstance(context)
-            } else {
-                constructor.newInstance()
+            val instance = try {
+                if (constructor.parameterTypes.isEmpty()) {
+                    constructor.newInstance()
+                } else if (constructor.parameterTypes.size == 1 && constructor.parameterTypes[0] == Context::class.java) {
+                    constructor.newInstance(context)
+                } else {
+                    constructor.newInstance()
+                }
+            } catch (t: Throwable) {
+                val cause = t.cause ?: t
+                val errMsg = "Failed to instantiate $pluginClassName: ${cause::class.java.simpleName}: ${cause.message}"
+                logcat(LogPriority.ERROR, cause) { errMsg }
+                _lastErrorFlow.value = errMsg
+                return emptyList()
             }
 
-            if (instance is com.lagradost.cloudstream3.plugins.BasePlugin) {
+            try {
+                var loaded = false
                 try {
-                    instance.load()
-                } catch (_: NoSuchMethodError) {
+                    val m = clazz.getMethod("load")
+                    m.isAccessible = true
+                    m.invoke(instance)
+                    loaded = true
+                } catch (_: NoSuchMethodException) {}
+
+                if (!loaded) {
                     try {
-                        instance.load(context)
-                    } catch (_: Throwable) {}
-                } catch (e: Throwable) {
-                    try {
-                        instance.load(context)
-                    } catch (_: Throwable) {}
-                    logcat(LogPriority.WARN, e) { "Error in plugin.load() for $pluginName" }
-                }
-                for (api in instance.registeredAPIs) {
-                    sources.add(CloudStreamAnimeSource(api, pluginName = pluginName, pluginVersion = pluginVersion))
-                }
-            } else {
-                try {
-                    clazz.getMethod("load").invoke(instance)
-                } catch (_: NoSuchMethodException) {
-                    try {
-                        clazz.getMethod("load", Context::class.java).invoke(instance, context)
-                    } catch (_: Throwable) {}
-                } catch (e: Throwable) {
-                    logcat(LogPriority.WARN, e) { "Reflection load failed on $pluginClassName" }
+                        val m = clazz.getMethod("load", Context::class.java)
+                        m.isAccessible = true
+                        m.invoke(instance, context)
+                        loaded = true
+                    } catch (_: NoSuchMethodException) {}
                 }
 
-                var currClass: Class<*>? = clazz
-                while (currClass != null && currClass != Any::class.java) {
+                if (!loaded && instance is com.lagradost.cloudstream3.plugins.BasePlugin) {
+                    instance.load()
+                }
+            } catch (t: Throwable) {
+                val cause = t.cause ?: t
+                logcat(LogPriority.WARN, cause) { "Error calling load() on $pluginName: ${cause.message}" }
+                _lastErrorFlow.value = "Error during plugin.load(): ${cause::class.java.simpleName}: ${cause.message}"
+            }
+
+            try {
+                var c: Class<*>? = clazz
+                while (c != null && c != Any::class.java) {
                     try {
-                        val field = currClass.getDeclaredField("registeredAPIs")
+                        val field = c.getDeclaredField("registeredAPIs")
                         field.isAccessible = true
                         val list = field.get(instance) as? List<*>
                         list?.forEach { item ->
-                            if (item is MainAPI) {
+                            if (item is MainAPI && sources.none { it.api.name == item.name }) {
                                 sources.add(CloudStreamAnimeSource(item, pluginName = pluginName, pluginVersion = pluginVersion))
                             }
                         }
                         break
                     } catch (_: NoSuchFieldException) {
-                        currClass = currClass.superclass
+                        c = c.superclass
                     }
                 }
-            }
+            } catch (_: Throwable) {}
 
-            if (instance is MainAPI) {
-                sources.add(CloudStreamAnimeSource(instance, pluginName = pluginName, pluginVersion = pluginVersion))
+            if (instance is com.lagradost.cloudstream3.plugins.BasePlugin) {
+                for (api in instance.registeredAPIs) {
+                    if (sources.none { it.api.name == api.name }) {
+                        sources.add(CloudStreamAnimeSource(api, pluginName = pluginName, pluginVersion = pluginVersion))
+                    }
+                }
             }
 
             for (api in com.lagradost.cloudstream3.APIHolder.allProviders) {
@@ -539,31 +635,42 @@ class CloudStreamManager(
                 }
             }
 
-            if (sources.isEmpty()) {
-                var currClass: Class<*>? = clazz
-                while (currClass != null && currClass != Any::class.java) {
-                    for (field in currClass.declaredFields) {
+            if (instance is MainAPI && sources.none { it.api.name == instance.name }) {
+                sources.add(CloudStreamAnimeSource(instance, pluginName = pluginName, pluginVersion = pluginVersion))
+            }
+
+            try {
+                var c: Class<*>? = clazz
+                while (c != null && c != Any::class.java) {
+                    for (field in c.declaredFields) {
                         try {
                             field.isAccessible = true
                             val obj = field.get(instance)
-                            if (obj is MainAPI) {
+                            if (obj is MainAPI && sources.none { it.api.name == obj.name }) {
                                 sources.add(CloudStreamAnimeSource(obj, pluginName = pluginName, pluginVersion = pluginVersion))
                             } else if (obj is Collection<*>) {
                                 obj.filterIsInstance<MainAPI>().forEach { api ->
-                                    sources.add(CloudStreamAnimeSource(api, pluginName = pluginName, pluginVersion = pluginVersion))
+                                    if (sources.none { it.api.name == api.name }) {
+                                        sources.add(CloudStreamAnimeSource(api, pluginName = pluginName, pluginVersion = pluginVersion))
+                                    }
                                 }
                             }
                         } catch (_: Throwable) {}
                     }
-                    currClass = currClass.superclass
+                    c = c.superclass
                 }
-            }
+            } catch (_: Throwable) {}
 
             if (sources.isNotEmpty()) {
+                _lastErrorFlow.value = null
                 logcat(LogPriority.INFO) { "Loaded ${sources.size} CloudStream sources from $pluginName" }
+            } else if (_lastErrorFlow.value == null) {
+                _lastErrorFlow.value = "No MainAPI providers registered by $pluginName"
             }
         } catch (e: Throwable) {
-            logcat(LogPriority.ERROR, e) { "Failed to load CloudStream plugin from ${file.name}" }
+            val errMsg = "Failed to load ${file.name}: ${e::class.java.simpleName}: ${e.message}"
+            logcat(LogPriority.ERROR, e) { errMsg }
+            _lastErrorFlow.value = errMsg
         }
         return sources
     }

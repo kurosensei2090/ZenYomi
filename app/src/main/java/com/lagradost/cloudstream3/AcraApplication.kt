@@ -23,4 +23,12 @@ open class AcraApplication : Application() {
     }
 }
 
-typealias CloudStreamApp = AcraApplication
+class CloudStreamApp {
+    companion object {
+        var context: Context?
+            get() = AcraApplication.context
+            set(value) {
+                AcraApplication.context = value
+            }
+    }
+}
