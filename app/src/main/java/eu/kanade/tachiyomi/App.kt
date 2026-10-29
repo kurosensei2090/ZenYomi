@@ -51,6 +51,7 @@ import eu.kanade.tachiyomi.util.system.animatorDurationScale
 import eu.kanade.tachiyomi.util.system.cancelNotification
 import eu.kanade.tachiyomi.util.system.notify
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import logcat.AndroidLogcatLogger
@@ -149,13 +150,22 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
 
         setAppCompatDelegateThemeMode(Injekt.get<UiPreferences>().themeMode().get())
 
-        // Updates widget update
-        with(MangaWidgetManager(Injekt.get(), Injekt.get())) {
-            init(ProcessLifecycleOwner.get().lifecycleScope)
-        }
-
-        with(AnimeWidgetManager(Injekt.get(), Injekt.get())) {
-            init(ProcessLifecycleOwner.get().lifecycleScope)
+        // Updates widget update deferred to background thread to optimize app cold startup
+        scope.launch(Dispatchers.Default) {
+            try {
+                with(MangaWidgetManager(Injekt.get(), Injekt.get())) {
+                    init(scope)
+                }
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR, e) { "Failed to initialize MangaWidgetManager" }
+            }
+            try {
+                with(AnimeWidgetManager(Injekt.get(), Injekt.get())) {
+                    init(scope)
+                }
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR, e) { "Failed to initialize AnimeWidgetManager" }
+            }
         }
 
         if (!LogcatLogger.isInstalled && networkPreferences.verboseLogging().get()) {

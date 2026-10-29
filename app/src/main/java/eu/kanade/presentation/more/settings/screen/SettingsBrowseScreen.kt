@@ -50,6 +50,21 @@ object SettingsBrowseScreen : SearchableSettings {
                 title = stringResource(MR.strings.label_sources),
                 preferenceItems = persistentListOf(
                     Preference.PreferenceItem.SwitchPreference(
+                        preference = sourcePreferences.showAnimeInBrowse(),
+                        title = "Show Anime in Browse",
+                        subtitle = "Display Anime Sources, Extensions, and Migration in Browse",
+                    ),
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = sourcePreferences.showMangaInBrowse(),
+                        title = "Show Manga in Browse",
+                        subtitle = "Display Manga Sources, Extensions, and Migration in Browse",
+                    ),
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = sourcePreferences.showCloudStreamInBrowse(),
+                        title = "Show CloudStream in Browse",
+                        subtitle = "Display CloudStream Sources and Extensions in Browse",
+                    ),
+                    Preference.PreferenceItem.SwitchPreference(
                         preference = sourcePreferences.hideInAnimeLibraryItems(),
                         title = stringResource(AYMR.strings.pref_hide_in_anime_library_items),
                     ),

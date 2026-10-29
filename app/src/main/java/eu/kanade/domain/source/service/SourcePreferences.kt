@@ -84,6 +84,21 @@ class SourcePreferences(
         false,
     )
 
+    fun showAnimeInBrowse() = preferenceStore.getBoolean(
+        "browse_show_anime_tabs",
+        true,
+    )
+
+    fun showMangaInBrowse() = preferenceStore.getBoolean(
+        "browse_show_manga_tabs",
+        true,
+    )
+
+    fun showCloudStreamInBrowse() = preferenceStore.getBoolean(
+        "browse_show_cloudstream_tabs",
+        true,
+    )
+
     // SY -->
 
     // fun enableSourceBlacklist() = preferenceStore.getBoolean("eh_enable_source_blacklist", true)
