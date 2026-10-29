@@ -39,14 +39,7 @@ abstract class MainAPI {
         return false
     }
 
-    fun fixUrl(url: String): String {
-        return when {
-            url.startsWith("http://") || url.startsWith("https://") -> url
-            url.startsWith("//") -> "https:$url"
-            url.startsWith("/") -> "$mainUrl$url"
-            else -> "$mainUrl/$url"
-        }
-    }
+
 
     fun newAnimeSearchResponse(
         name: String,

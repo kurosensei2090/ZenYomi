@@ -53,14 +53,14 @@ class CloudStreamAnimeSource(
         val home = if (api.hasMainPage) {
             try {
                 api.getMainPage(page, MainPageRequest("Home", baseUrl))
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 null
             }
         } else null
 
         val list = home?.items?.flatMap { it.list } ?: try {
             api.search("") ?: emptyList()
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             emptyList()
         }
 
@@ -79,7 +79,7 @@ class CloudStreamAnimeSource(
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
         val results = try {
             api.search(query) ?: emptyList()
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             emptyList()
         }
         return AnimesPage(results.map { it.toSAnime() }, hasNextPage = false)
@@ -92,7 +92,7 @@ class CloudStreamAnimeSource(
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
         val details = try {
             api.load(anime.url)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             null
         } ?: return anime
 
@@ -120,7 +120,7 @@ class CloudStreamAnimeSource(
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
         val details = try {
             api.load(anime.url)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             null
         } ?: return emptyList()
 
@@ -184,7 +184,7 @@ class CloudStreamAnimeSource(
                 subtitleCallback = onSubtitle,
                 callback = onLink,
             )
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             logcat(LogPriority.ERROR, e) { "Failed to load links for ${episode.name}" }
         }
 

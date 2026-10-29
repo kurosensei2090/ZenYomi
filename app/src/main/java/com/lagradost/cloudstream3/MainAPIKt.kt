@@ -1,6 +1,7 @@
 @file:JvmName("MainAPIKt")
 package com.lagradost.cloudstream3
 
+import android.util.Base64
 import com.fasterxml.jackson.databind.json.JsonMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import kotlinx.serialization.json.Json
@@ -15,10 +16,70 @@ val mapper: JsonMapper = JsonMapper.builder()
     .addModule(KotlinModule.Builder().build())
     .build()
 
+fun MainAPI.fixUrl(url: String): String {
+    return when {
+        url.startsWith("http://") || url.startsWith("https://") -> url
+        url.startsWith("//") -> "https:$url"
+        url.startsWith("/") -> "$mainUrl$url"
+        else -> "$mainUrl/$url"
+    }
+}
+
 fun MainAPI.fixUrlNull(url: String?): String? {
     if (url == null) return null
     return fixUrl(url)
 }
+
+fun AnimeSearchResponse.addDub(episodes: Int?) {
+    this.dub = episodes
+}
+
+fun AnimeSearchResponse.addSub(episodes: Int?) {
+    this.sub = episodes
+}
+
+fun AnimeSearchResponse.addDubStatus(
+    isDub: Boolean,
+    isSub: Boolean,
+    dubEpisodes: Int? = null,
+    subEpisodes: Int? = null,
+) {
+    val set = mutableSetOf<String>()
+    if (isDub) set.add("dub")
+    if (isSub) set.add("sub")
+    this.dubStatus = set
+    if (dubEpisodes != null) this.dub = dubEpisodes
+    if (subEpisodes != null) this.sub = subEpisodes
+}
+
+fun AnimeLoadResponse.addEpisodes(status: DubStatus, episodes: List<Episode>) {
+    val key = status.name.lowercase()
+    val list = this.episodes.getOrPut(key) { mutableListOf() }.toMutableList()
+    list.addAll(episodes)
+    this.episodes[key] = list
+}
+
+fun base64Decode(str: String): String {
+    return try {
+        String(Base64.decode(str, Base64.DEFAULT), Charsets.UTF_8)
+    } catch (_: Throwable) {
+        str
+    }
+}
+
+fun base64DecodeArray(str: String): ByteArray {
+    return try {
+        Base64.decode(str, Base64.DEFAULT)
+    } catch (_: Throwable) {
+        ByteArray(0)
+    }
+}
+
+fun base64Encode(bytes: ByteArray): String {
+    return Base64.encodeToString(bytes, Base64.NO_WRAP)
+}
+
+fun fixTitle(title: String): String = title.trim()
 
 @JvmOverloads
 fun Episode.addDate(date: String?, format: String? = null) {
@@ -50,6 +111,14 @@ fun MainAPI.newEpisode(data: Any?, builder: Episode.() -> Unit = {}): Episode {
 }
 
 fun newHomePageResponse(
+    name: String,
+    items: List<SearchResponse>,
+    hasNext: Boolean = false,
+): HomePageResponse {
+    return HomePageResponse(items = listOf(HomePageList(name = name, list = items)), hasNext = hasNext)
+}
+
+fun newHomePageResponse(
     items: List<HomePageList>,
     hasNext: Boolean = false,
 ): HomePageResponse {
@@ -61,6 +130,16 @@ fun newHomePageResponse(
     hasNext: Boolean = false,
 ): HomePageResponse {
     return HomePageResponse(items = listOf(item), hasNext = hasNext)
+}
+
+suspend fun newSubtitleFile(
+    lang: String,
+    url: String,
+    builder: (suspend SubtitleFile.() -> Unit)? = null,
+): SubtitleFile {
+    val sub = SubtitleFile(lang = lang, url = url)
+    builder?.invoke(sub)
+    return sub
 }
 
 suspend fun MainAPI.newMovieLoadResponse(
