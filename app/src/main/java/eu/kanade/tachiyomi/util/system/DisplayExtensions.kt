@@ -92,11 +92,15 @@ fun Activity.setHighRefreshRate() {
             ?: modes.maxByOrNull { it.refreshRate }
         if (maxMode != null && maxMode.refreshRate > 60f) {
             val params = window.attributes
-            params.preferredDisplayModeId = maxMode.modeId
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                params.preferredRefreshRate = maxMode.refreshRate
+            val needsUpdate = params.preferredDisplayModeId != maxMode.modeId ||
+                (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && params.preferredRefreshRate != maxMode.refreshRate)
+            if (needsUpdate) {
+                params.preferredDisplayModeId = maxMode.modeId
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    params.preferredRefreshRate = maxMode.refreshRate
+                }
+                window.attributes = params
             }
-            window.attributes = params
         }
     }
 }

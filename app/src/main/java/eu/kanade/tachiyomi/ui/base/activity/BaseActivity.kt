@@ -23,7 +23,6 @@ open class BaseActivity :
         applyAppTheme(this)
         super.onCreate(savedInstanceState)
         setHighRefreshRate()
-        window?.decorView?.post { setHighRefreshRate() }
     }
 
     override fun onResume() {

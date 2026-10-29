@@ -4,6 +4,7 @@ import android.content.Context
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.plugins.Plugin
 import dalvik.system.DexClassLoader
+import eu.kanade.tachiyomi.network.NetworkHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -13,15 +14,22 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import logcat.LogPriority
-import tachiyomi.core.common.util.system.logcat
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
+import tachiyomi.core.common.util.system.logcat
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.ZipFile
@@ -47,11 +55,12 @@ data class CloudStreamPluginItem(
 
 class CloudStreamManager(
     private val context: Context,
-    private val client: OkHttpClient = OkHttpClient(),
 ) {
     companion object {
         private const val PREF_REPOS = "zenyomi.cloudstream.repos"
         private const val PLUGINS_DIR = "cloudstream_plugins"
+        private const val USER_AGENT =
+            "Mozilla/5.0 (Linux; Android 14; ZenYomi) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
 
         @Volatile
         private var instance: CloudStreamManager? = null
@@ -69,6 +78,17 @@ class CloudStreamManager(
     private val prefs = context.getSharedPreferences("cloudstream_manager", Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true }
 
+    private val client: OkHttpClient by lazy {
+        try {
+            Injekt.get<NetworkHelper>().client
+        } catch (_: Exception) {
+            OkHttpClient.Builder()
+                .followRedirects(true)
+                .followSslRedirects(true)
+                .build()
+        }
+    }
+
     private val pluginsFolder: File by lazy {
         File(context.filesDir, PLUGINS_DIR).apply { mkdirs() }
     }
@@ -82,10 +102,18 @@ class CloudStreamManager(
     private val _installedSourcesFlow = MutableStateFlow<List<CloudStreamAnimeSource>>(emptyList())
     val installedSourcesFlow: StateFlow<List<CloudStreamAnimeSource>> = _installedSourcesFlow.asStateFlow()
 
+    private val _isLoadingFlow = MutableStateFlow(false)
+    val isLoadingFlow: StateFlow<Boolean> = _isLoadingFlow.asStateFlow()
+
+    private val _statusMessageFlow = MutableStateFlow<String?>(null)
+    val statusMessageFlow: StateFlow<String?> = _statusMessageFlow.asStateFlow()
+
     init {
         loadSavedRepositories()
-        loadInstalledPlugins()
-        refreshRepositories()
+        scope.launch {
+            loadInstalledPlugins()
+            refreshRepositories()
+        }
     }
 
     private fun loadSavedRepositories() {
@@ -107,12 +135,15 @@ class CloudStreamManager(
         _repositoriesFlow.value = repos
     }
 
-    fun addRepository(url: String, name: String = "CloudStream Repo") {
-        val cleanUrl = url.trim()
-        if (cleanUrl.isBlank()) return
+    fun addRepository(url: String, name: String = "") {
+        val normalized = normalizeRepoUrl(url)
+        if (normalized.isBlank()) return
         val current = _repositoriesFlow.value.toMutableList()
-        if (current.none { it.url == cleanUrl }) {
-            current.add(CloudStreamRepo(name = name, url = cleanUrl))
+        if (current.none { it.url == normalized }) {
+            val displayName = name.ifBlank {
+                normalized.substringAfterLast("/").substringBefore(".json").ifBlank { "CloudStream Repo" }
+            }
+            current.add(CloudStreamRepo(name = displayName, url = normalized))
             saveRepositories(current)
             refreshRepositories()
         }
@@ -127,6 +158,8 @@ class CloudStreamManager(
 
     fun refreshRepositories() {
         scope.launch {
+            _isLoadingFlow.value = true
+            _statusMessageFlow.value = "Fetching repository plugins..."
             val pluginsList = mutableListOf<CloudStreamPluginItem>()
             val repos = _repositoriesFlow.value
 
@@ -146,75 +179,184 @@ class CloudStreamManager(
                 ?.map { it.nameWithoutExtension }
                 ?.toSet() ?: emptySet()
 
-            val marked = pluginsList.map { item ->
+            val marked = pluginsList.distinctBy { "${it.repoUrl}_${it.internalName}" }.map { item ->
                 item.copy(isInstalled = installedNames.contains(item.internalName))
             }
             _availablePluginsFlow.value = marked
+            _statusMessageFlow.value = null
+            _isLoadingFlow.value = false
         }
+    }
+
+    private fun normalizeRepoUrl(raw: String): String {
+        var url = raw.trim()
+        if (url.startsWith("cloudstreamrepo://", ignoreCase = true)) {
+            url = url.substring("cloudstreamrepo://".length)
+        }
+        if (url.startsWith("https://cs.repo/?", ignoreCase = true) || url.startsWith("http://cs.repo/?", ignoreCase = true)) {
+            url = url.substringAfter("?")
+        } else if (url.startsWith("https://cs.repo/", ignoreCase = true) || url.startsWith("http://cs.repo/", ignoreCase = true)) {
+            url = url.substringAfter("cs.repo/")
+        }
+        if (!url.startsWith("http://", ignoreCase = true) && !url.startsWith("https://", ignoreCase = true)) {
+            url = "https://$url"
+        }
+        // GitHub tree/blob URL normalization to raw content
+        val treeRegex = "^https?://github\\.com/([^/]+)/([^/]+)/tree/([^/]+)/?(.*)$".toRegex(RegexOption.IGNORE_CASE)
+        val treeMatch = treeRegex.matchEntire(url)
+        if (treeMatch != null) {
+            val (owner, repo, branch, subpath) = treeMatch.destructured
+            url = "https://raw.githubusercontent.com/$owner/$repo/$branch/$subpath".trimEnd('/')
+        }
+        val blobRegex = "^https?://github\\.com/([^/]+)/([^/]+)/blob/([^/]+)/?(.*)$".toRegex(RegexOption.IGNORE_CASE)
+        val blobMatch = blobRegex.matchEntire(url)
+        if (blobMatch != null) {
+            val (owner, repo, branch, subpath) = blobMatch.destructured
+            url = "https://raw.githubusercontent.com/$owner/$repo/$branch/$subpath"
+        }
+        return url
+    }
+
+    private fun resolveUrl(baseUrl: String, target: String): String {
+        val trimmed = target.trim()
+        if (trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true)) {
+            return trimmed
+        }
+        val httpUrl = baseUrl.toHttpUrlOrNull() ?: return trimmed
+        return httpUrl.resolve(trimmed)?.toString() ?: trimmed
     }
 
     private fun resolvePluginUrls(repoUrl: String): List<String> {
-        val request = Request.Builder().url(repoUrl).build()
-        val response = client.newCall(request).execute()
-        val body = response.body.string()
-        if (body.isEmpty()) return emptyList()
-
-        return if (repoUrl.endsWith("plugins.json")) {
+        val candidates = if (repoUrl.endsWith(".json", ignoreCase = true)) {
             listOf(repoUrl)
         } else {
-            // It's a repo.json
+            val clean = repoUrl.trimEnd('/')
+            listOf(
+                "$clean/repo.json",
+                "$clean/plugins.json",
+                clean,
+            )
+        }
+
+        for (candidate in candidates) {
             try {
-                val element = json.parseToJsonElement(body).jsonObject
-                element["pluginLists"]?.jsonArray?.map { it.jsonPrimitive.content } ?: listOf(repoUrl)
+                val request = Request.Builder()
+                    .url(candidate)
+                    .header("User-Agent", USER_AGENT)
+                    .build()
+                val response = client.newCall(request).execute()
+                if (!response.isSuccessful) continue
+                val body = response.body.string()
+                if (body.isBlank()) continue
+
+                if (candidate.endsWith("plugins.json", ignoreCase = true)) {
+                    return listOf(candidate)
+                }
+
+                try {
+                    val parsed = json.parseToJsonElement(body)
+                    if (parsed is JsonObject) {
+                        val lists = parsed["pluginLists"]?.jsonArray?.mapNotNull {
+                            val path = it.jsonPrimitive.contentOrNull ?: return@mapNotNull null
+                            resolveUrl(candidate, path)
+                        }
+                        if (!lists.isNullOrEmpty()) {
+                            return lists
+                        }
+                    } else if (parsed is JsonArray) {
+                        // It was directly an array of plugins
+                        return listOf(candidate)
+                    }
+                } catch (_: Exception) {
+                }
+
+                return listOf(candidate)
             } catch (e: Exception) {
-                listOf(repoUrl)
+                logcat(LogPriority.WARN, e) { "Candidate $candidate failed" }
             }
         }
+        return emptyList()
     }
 
     private fun fetchPluginList(url: String, repoUrl: String): List<CloudStreamPluginItem> {
-        val request = Request.Builder().url(url).build()
-        val response = client.newCall(request).execute()
-        val body = response.body.string()
-        if (body.isEmpty()) return emptyList()
+        return try {
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", USER_AGENT)
+                .build()
+            val response = client.newCall(request).execute()
+            if (!response.isSuccessful) return emptyList()
+            val body = response.body.string()
+            if (body.isBlank()) return emptyList()
 
-        val jsonArray = json.parseToJsonElement(body).jsonArray
-        val results = mutableListOf<CloudStreamPluginItem>()
+            val parsed = try {
+                json.parseToJsonElement(body)
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR, e) { "Failed to parse JSON from $url" }
+                return emptyList()
+            }
 
-        for (elem in jsonArray) {
-            val obj = elem.jsonObject
-            val name = obj["name"]?.jsonPrimitive?.content ?: continue
-            val internalName = obj["internalName"]?.jsonPrimitive?.content ?: name
-            val pluginUrl = obj["url"]?.jsonPrimitive?.content ?: continue
-            val iconUrl = obj["iconUrl"]?.jsonPrimitive?.content
-            val version = obj["version"]?.jsonPrimitive?.content?.toIntOrNull() ?: 1
-            val lang = obj["language"]?.jsonPrimitive?.content ?: "en"
-            val tvTypes = obj["tvTypes"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList()
+            val jsonObjects: List<JsonObject> = when (parsed) {
+                is JsonArray -> parsed.mapNotNull { it as? JsonObject }
+                is JsonObject -> {
+                    if (parsed.containsKey("plugins") && parsed["plugins"] is JsonArray) {
+                        (parsed["plugins"] as JsonArray).mapNotNull { it as? JsonObject }
+                    } else {
+                        parsed.values.mapNotNull { it as? JsonObject }
+                    }
+                }
+                else -> emptyList()
+            }
 
-            results.add(
-                CloudStreamPluginItem(
-                    name = name,
-                    internalName = internalName,
-                    url = pluginUrl,
-                    iconUrl = iconUrl,
-                    version = version,
-                    tvTypes = tvTypes,
-                    language = lang,
-                    repoUrl = repoUrl,
-                ),
-            )
+            val results = mutableListOf<CloudStreamPluginItem>()
+            for (obj in jsonObjects) {
+                val name = obj["name"]?.jsonPrimitive?.contentOrNull ?: continue
+                val internalName = obj["internalName"]?.jsonPrimitive?.contentOrNull ?: name
+                val rawUrl = obj["url"]?.jsonPrimitive?.contentOrNull ?: continue
+                val pluginUrl = resolveUrl(url, rawUrl)
+                val iconUrl = obj["iconUrl"]?.jsonPrimitive?.contentOrNull?.let { resolveUrl(url, it) }
+                val version = obj["version"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 1
+                val lang = obj["language"]?.jsonPrimitive?.contentOrNull ?: "en"
+                val tvTypes = obj["tvTypes"]?.jsonArray?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList()
+
+                results.add(
+                    CloudStreamPluginItem(
+                        name = name,
+                        internalName = internalName,
+                        url = pluginUrl,
+                        iconUrl = iconUrl,
+                        version = version,
+                        tvTypes = tvTypes,
+                        language = lang,
+                        repoUrl = repoUrl,
+                    ),
+                )
+            }
+            results
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e) { "Error fetching plugin list from $url" }
+            emptyList()
         }
-        return results
     }
 
     suspend fun installPlugin(plugin: CloudStreamPluginItem) = withContext(Dispatchers.IO) {
         try {
             val targetFile = File(pluginsFolder, "${plugin.internalName}.cs3")
-            val request = Request.Builder().url(plugin.url).build()
+            if (targetFile.exists()) {
+                targetFile.delete()
+            }
+            val request = Request.Builder()
+                .url(plugin.url)
+                .header("User-Agent", USER_AGENT)
+                .build()
             val response = client.newCall(request).execute()
+            if (!response.isSuccessful) {
+                logcat(LogPriority.ERROR) { "HTTP ${response.code} downloading plugin from ${plugin.url}" }
+                return@withContext
+            }
             val bytes = response.body.bytes()
-
             FileOutputStream(targetFile).use { it.write(bytes) }
+            targetFile.setReadOnly()
 
             loadSinglePluginFile(targetFile)
             refreshRepositories()
@@ -228,15 +370,28 @@ class CloudStreamManager(
         if (targetFile.exists()) {
             targetFile.delete()
         }
+        val dexFile = File(context.codeCacheDir, "$internalName.dex")
+        if (dexFile.exists()) {
+            dexFile.delete()
+        }
         val currentSources = _installedSourcesFlow.value.toMutableList()
         currentSources.removeAll { it.pluginName == internalName || it.api.name == internalName }
         _installedSourcesFlow.value = currentSources
         refreshRepositories()
     }
 
-    private fun loadInstalledPlugins() {
+    fun reloadInstalledPlugins() {
+        scope.launch {
+            _isLoadingFlow.value = true
+            loadInstalledPlugins()
+            _isLoadingFlow.value = false
+        }
+    }
+
+    fun loadInstalledPlugins() {
         val cs3Files = pluginsFolder.listFiles { file -> file.extension == "cs3" } ?: return
         for (file in cs3Files) {
+            file.setReadOnly()
             loadSinglePluginFile(file)
         }
     }
@@ -253,25 +408,82 @@ class CloudStreamManager(
 
             if (pluginClassName.isBlank()) return
 
-            val dexClassLoader = DexClassLoader(
-                file.absolutePath,
-                context.codeCacheDir.absolutePath,
-                null,
+            val dexEntry = zip.getEntry("classes.dex") ?: return
+            val dexFile = File(context.codeCacheDir, "${file.nameWithoutExtension}.dex")
+            if (dexFile.exists()) {
+                dexFile.delete()
+            }
+            dexFile.outputStream().use { out ->
+                zip.getInputStream(dexEntry).use { it.copyTo(out) }
+            }
+            dexFile.setReadOnly()
+
+            val pathClassLoader = dalvik.system.PathClassLoader(
+                dexFile.absolutePath,
                 javaClass.classLoader,
             )
 
-            val clazz = dexClassLoader.loadClass(pluginClassName)
+            val clazz = pathClassLoader.loadClass(pluginClassName)
             val instance = clazz.getDeclaredConstructor().newInstance()
 
             val sources = mutableListOf<CloudStreamAnimeSource>()
 
             if (instance is Plugin) {
-                instance.load(context)
+                try {
+                    instance.load(context)
+                } catch (_: NoSuchMethodError) {
+                    try {
+                        instance.load()
+                    } catch (_: Throwable) {}
+                } catch (e: Throwable) {
+                    logcat(LogPriority.WARN, e) { "Error in plugin.load(context) for $pluginName" }
+                }
                 for (api in instance.registeredAPIs) {
                     sources.add(CloudStreamAnimeSource(api, pluginName = pluginName, pluginVersion = pluginVersion))
                 }
-            } else if (instance is MainAPI) {
+            } else {
+                try {
+                    clazz.getMethod("load", Context::class.java).invoke(instance, context)
+                } catch (_: NoSuchMethodException) {
+                    try {
+                        clazz.getMethod("load").invoke(instance)
+                    } catch (_: Throwable) {}
+                } catch (e: Throwable) {
+                    logcat(LogPriority.WARN, e) { "Reflection load failed on $pluginClassName" }
+                }
+
+                var currClass: Class<*>? = clazz
+                while (currClass != null && currClass != Any::class.java) {
+                    try {
+                        val field = currClass.getDeclaredField("registeredAPIs")
+                        field.isAccessible = true
+                        val list = field.get(instance) as? List<*>
+                        list?.forEach { item ->
+                            if (item is MainAPI) {
+                                sources.add(CloudStreamAnimeSource(item, pluginName = pluginName, pluginVersion = pluginVersion))
+                            }
+                        }
+                        break
+                    } catch (_: NoSuchFieldException) {
+                        currClass = currClass.superclass
+                    }
+                }
+            }
+
+            if (instance is MainAPI) {
                 sources.add(CloudStreamAnimeSource(instance, pluginName = pluginName, pluginVersion = pluginVersion))
+            }
+
+            if (sources.isEmpty()) {
+                for (field in clazz.declaredFields) {
+                    try {
+                        field.isAccessible = true
+                        val obj = field.get(instance)
+                        if (obj is MainAPI) {
+                            sources.add(CloudStreamAnimeSource(obj, pluginName = pluginName, pluginVersion = pluginVersion))
+                        }
+                    } catch (_: Throwable) {}
+                }
             }
 
             if (sources.isNotEmpty()) {
@@ -279,6 +491,7 @@ class CloudStreamManager(
                 current.removeAll { it.pluginName == pluginName }
                 current.addAll(sources)
                 _installedSourcesFlow.value = current
+                logcat(LogPriority.INFO) { "Loaded ${sources.size} CloudStream sources from $pluginName" }
             }
         } catch (e: Throwable) {
             logcat(LogPriority.ERROR, e) { "Failed to load CloudStream plugin from ${file.name}" }

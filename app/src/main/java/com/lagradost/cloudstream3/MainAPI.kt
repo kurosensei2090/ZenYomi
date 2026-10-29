@@ -3,15 +3,15 @@ package com.lagradost.cloudstream3
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.nicehttp.Requests
 
-val app: Requests = Requests()
 
 abstract class MainAPI {
     open var mainUrl: String = ""
     open var name: String = ""
-    open val supportedTypes: Set<TvType> = setOf(TvType.Anime)
+    open var supportedTypes: Set<TvType> = setOf(TvType.Anime, TvType.Movie, TvType.TvSeries)
     open var lang: String = "en"
-    open val hasMainPage: Boolean = false
-    open val hasQuickSearch: Boolean = false
+    open var hasMainPage: Boolean = false
+    open var hasQuickSearch: Boolean = false
+    open var hasDownloadSupport: Boolean = true
 
     val app: Requests get() = com.lagradost.cloudstream3.app
 

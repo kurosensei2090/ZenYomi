@@ -612,4 +612,6 @@
     <string name="pref_download_fillermarked_items">Allow downloading of fillermarked episodes</string>
     <string name="show_episode_previews">Episode thumbnails</string>
     <string name="show_episode_summaries">Episode summaries</string>
+    <string name="label_cs_sources">CS Sources</string>
+    <string name="label_cs_extensions">CS Extensions</string>
 </resources>

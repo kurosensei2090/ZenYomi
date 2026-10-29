@@ -84,9 +84,8 @@ class AndroidAnimeSourceManager(
         scope.launch {
             sourceRepository.subscribeAllAnime()
                 .collectLatest { sources ->
-                    val mutableMap = stubSourcesMap.toMutableMap()
                     sources.forEach {
-                        mutableMap[it.id] = it
+                        stubSourcesMap[it.id] = it
                     }
                 }
         }
@@ -97,8 +96,14 @@ class AndroidAnimeSourceManager(
     }
 
     override fun getOrStub(sourceKey: Long): AnimeSource {
-        return sourcesMapFlow.value[sourceKey] ?: stubSourcesMap.getOrPut(sourceKey) {
-            runBlocking { createStubSource(sourceKey) }
+        return sourcesMapFlow.value[sourceKey] ?: stubSourcesMap[sourceKey] ?: run {
+            val stub = StubAnimeSource(sourceKey, "", "")
+            stubSourcesMap[sourceKey] = stub
+            scope.launch {
+                val realStub = createStubSource(sourceKey)
+                stubSourcesMap[sourceKey] = realStub
+            }
+            stub
         }
     }
 

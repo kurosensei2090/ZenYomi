@@ -22,6 +22,8 @@ import eu.kanade.tachiyomi.ui.browse.anime.extension.animeExtensionsTab
 import eu.kanade.tachiyomi.ui.browse.anime.migration.sources.migrateAnimeSourceTab
 import eu.kanade.tachiyomi.ui.browse.anime.source.animeSourcesTab
 import eu.kanade.tachiyomi.ui.browse.anime.source.globalsearch.GlobalAnimeSearchScreen
+import eu.kanade.tachiyomi.ui.browse.cloudstream.csExtensionsTab
+import eu.kanade.tachiyomi.ui.browse.cloudstream.csSourcesTab
 import eu.kanade.tachiyomi.ui.browse.manga.extension.MangaExtensionsScreenModel
 import eu.kanade.tachiyomi.ui.browse.manga.extension.mangaExtensionsTab
 import eu.kanade.tachiyomi.ui.browse.manga.migration.sources.migrateMangaSourceTab
@@ -57,11 +59,19 @@ data object BrowseTab : Tab {
     private val switchToTabNumberChannel = Channel<Int>(1, BufferOverflow.DROP_OLDEST)
 
     fun showExtension() {
-        switchToTabNumberChannel.trySend(3) // Manga extensions: tab no. 3
+        switchToTabNumberChannel.trySend(4) // Manga extensions: tab no. 4
     }
 
     fun showAnimeExtension() {
-        switchToTabNumberChannel.trySend(2) // Anime extensions: tab no. 2
+        switchToTabNumberChannel.trySend(3) // Anime extensions: tab no. 3
+    }
+
+    fun showCsExtension() {
+        switchToTabNumberChannel.trySend(5) // CS extensions: tab no. 5
+    }
+
+    fun showCsSources() {
+        switchToTabNumberChannel.trySend(2) // CS sources: tab no. 2
     }
 
     @Composable
@@ -78,8 +88,10 @@ data object BrowseTab : Tab {
         val tabs = persistentListOf(
             animeSourcesTab(),
             mangaSourcesTab(),
+            csSourcesTab(),
             animeExtensionsTab(animeExtensionsScreenModel),
             mangaExtensionsTab(mangaExtensionsScreenModel),
+            csExtensionsTab(),
             migrateAnimeSourceTab(),
             migrateMangaSourceTab(),
         )

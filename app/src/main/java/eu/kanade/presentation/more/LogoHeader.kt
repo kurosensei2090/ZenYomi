@@ -39,7 +39,14 @@ fun LogoHeader() {
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(top = 12.dp, bottom = 32.dp),
+            modifier = Modifier.padding(top = 12.dp),
+        )
+
+        Text(
+            text = "v${eu.kanade.tachiyomi.BuildConfig.VERSION_NAME}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp, bottom = 28.dp),
         )
 
         HorizontalDivider()

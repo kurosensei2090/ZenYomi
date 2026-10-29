@@ -14,6 +14,8 @@ import java.util.concurrent.TimeUnit
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
+interface ResponseParser
+
 /**
  * CloudStream NiceResponse compatibility wrapper for ZenYomi.
  */
