@@ -188,46 +188,63 @@ class CloudStreamManager(
 
     fun removeRepository(url: String) {
         scope.launch(Dispatchers.IO) {
+            val normalizedTarget = normalizeRepoUrl(url).trimEnd('/')
             val current = _repositoriesFlow.value.toMutableList()
-            current.removeAll { it.url.equals(url, ignoreCase = true) }
+            current.removeAll {
+                val norm = normalizeRepoUrl(it.url).trimEnd('/')
+                norm == normalizedTarget || it.url.equals(url, ignoreCase = true)
+            }
             saveRepositories(current)
 
-            // Find all plugins belonging to this repository and delete their downloaded files
-            val repoPlugins = getPluginsForRepo(url)
-            val availableFromRepo = _availablePluginsFlow.value.filter { it.repoUrl.equals(url, ignoreCase = true) }
-            val namesToDelete = (repoPlugins + availableFromRepo.map { it.internalName } + availableFromRepo.map { it.name }).toSet()
-
-            for (name in namesToDelete) {
-                val safeName = name.replace(Regex("[^a-zA-Z0-9._-]"), "_")
-                val cs3File = File(pluginsFolder, "$safeName.cs3")
-                if (cs3File.exists()) {
-                    cs3File.setWritable(true)
-                    cs3File.delete()
+            if (current.isEmpty()) {
+                // All repos removed: wipe plugins folder and caches completely
+                pluginsFolder.listFiles()?.forEach { file ->
+                    try {
+                        file.setWritable(true)
+                        file.delete()
+                    } catch (_: Throwable) {}
                 }
-                val rawFile = File(pluginsFolder, "$name.cs3")
-                if (rawFile.exists()) {
-                    rawFile.setWritable(true)
-                    rawFile.delete()
+                context.codeCacheDir.listFiles { f -> f.extension == "jar" || f.extension == "dex" }?.forEach { f ->
+                    try {
+                        f.setWritable(true)
+                        f.delete()
+                    } catch (_: Throwable) {}
                 }
-                val jarFile = File(context.codeCacheDir, "$safeName.jar")
-                if (jarFile.exists()) {
-                    jarFile.setWritable(true)
-                    jarFile.delete()
-                }
-                removePluginRepoAssociation(name)
-                removePluginRepoAssociation(safeName)
+                com.lagradost.cloudstream3.APIHolder.allProviders.clear()
+                com.lagradost.cloudstream3.APIHolder.apis.clear()
+                savePluginRepoMap(emptyMap())
+                _installedSourcesFlow.value = emptyList()
+                _availablePluginsFlow.value = emptyList()
+                _lastErrorFlow.value = null
+                refreshRepositories()
+                return@launch
             }
 
-            // Immediately unload sources associated with this repository
-            val remainingSources = _installedSourcesFlow.value.filterNot { csSource ->
-                namesToDelete.any { name ->
-                    csSource.pluginName.equals(name, ignoreCase = true) ||
-                        csSource.api.name.equals(name, ignoreCase = true)
+            // Some repos remain. Find which plugins belong to remaining repos.
+            val remainingRepoUrls = current.map { normalizeRepoUrl(it.url).trimEnd('/') }.toSet()
+            val pluginsToKeep = _availablePluginsFlow.value
+                .filter { normalizeRepoUrl(it.repoUrl).trimEnd('/') in remainingRepoUrls }
+                .flatMap { listOf(it.internalName, it.name, it.internalName.replace(Regex("[^a-zA-Z0-9._-]"), "_")) }
+                .toSet()
+
+            // Delete any installed plugin file that does NOT belong to any remaining repo
+            pluginsFolder.listFiles { f -> f.extension.equals("cs3", ignoreCase = true) }?.forEach { file ->
+                val baseName = file.nameWithoutExtension
+                val isKeep = pluginsToKeep.any { it.equals(baseName, ignoreCase = true) }
+                if (!isKeep) {
+                    try {
+                        file.setWritable(true)
+                        file.delete()
+                    } catch (_: Throwable) {}
+                    val jarFile = File(context.codeCacheDir, "$baseName.jar")
+                    if (jarFile.exists()) {
+                        jarFile.setWritable(true)
+                        jarFile.delete()
+                    }
+                    removePluginRepoAssociation(baseName)
                 }
             }
-            _installedSourcesFlow.value = remainingSources
 
-            // Re-sync installed sources from disk and refresh available plugins
             loadInstalledPlugins()
             refreshRepositories()
         }
@@ -543,6 +560,27 @@ class CloudStreamManager(
     }
 
     fun loadInstalledPlugins() {
+        val repos = _repositoriesFlow.value
+        if (repos.isEmpty()) {
+            pluginsFolder.listFiles()?.forEach { file ->
+                try {
+                    file.setWritable(true)
+                    file.delete()
+                } catch (_: Throwable) {}
+            }
+            context.codeCacheDir.listFiles { f -> f.extension == "jar" || f.extension == "dex" }?.forEach { f ->
+                try {
+                    f.setWritable(true)
+                    f.delete()
+                } catch (_: Throwable) {}
+            }
+            com.lagradost.cloudstream3.APIHolder.allProviders.clear()
+            com.lagradost.cloudstream3.APIHolder.apis.clear()
+            _installedSourcesFlow.value = emptyList()
+            _lastErrorFlow.value = null
+            return
+        }
+
         val cs3Files = pluginsFolder.listFiles { file -> file.extension.equals("cs3", ignoreCase = true) } ?: return
         val allSources = mutableListOf<CloudStreamAnimeSource>()
         for (file in cs3Files) {
