@@ -147,7 +147,12 @@ class Requests(
         timeout: Duration = 30.seconds,
         allowRedirects: Boolean = true,
     ): NiceResponse {
-        var httpUrl = url.toHttpUrlOrNull() ?: throw IllegalArgumentException("Invalid URL: $url")
+        val cleanUrl = when {
+            url.startsWith("//") -> "https:$url"
+            !url.startsWith("http://", ignoreCase = true) && !url.startsWith("https://", ignoreCase = true) -> "https://$url"
+            else -> url
+        }
+        var httpUrl = cleanUrl.toHttpUrlOrNull() ?: throw IllegalArgumentException("Invalid URL: $url")
 
         if (params.isNotEmpty()) {
             val builder = httpUrl.newBuilder()

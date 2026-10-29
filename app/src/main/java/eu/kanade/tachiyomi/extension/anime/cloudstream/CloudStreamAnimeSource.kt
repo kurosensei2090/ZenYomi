@@ -83,13 +83,17 @@ class CloudStreamAnimeSource(
         }
 
         if (list.isEmpty()) {
-            try {
-                val searchResults = api.search("") ?: api.quickSearch("")
-                if (!searchResults.isNullOrEmpty()) {
-                    list.addAll(searchResults)
+            val fallbackQueries = listOf("", "a", "2024", "anime", "the")
+            for (q in fallbackQueries) {
+                try {
+                    val searchResults = api.search(q) ?: api.quickSearch(q)
+                    if (!searchResults.isNullOrEmpty()) {
+                        list.addAll(searchResults)
+                        break
+                    }
+                } catch (e: Throwable) {
+                    logcat(LogPriority.DEBUG, e) { "Fallback search '$q' failed for ${api.name}" }
                 }
-            } catch (e: Throwable) {
-                logcat(LogPriority.WARN, e) { "Failed fallback search for ${api.name}" }
             }
         }
 
@@ -238,19 +242,22 @@ class CloudStreamAnimeSource(
         }
 
         val onLink: (ExtractorLink) -> Unit = { link ->
-            val qualityName = "${link.name} - ${Qualities.getStringByInt(link.quality)}"
-            val okhttpHeaders = link.headers.toMutableMap()
-            if (link.referer.isNotEmpty()) {
-                okhttpHeaders["Referer"] = link.referer
-            }
+            if (link.url.isNotBlank()) {
+                val qualityName = "${link.name} - ${Qualities.getStringByInt(link.quality)}"
+                val okhttpHeaders = link.headers.toMutableMap()
+                if (link.referer.isNotEmpty()) {
+                    okhttpHeaders["Referer"] = link.referer
+                }
 
-            val video = Video(
-                videoUrl = link.url,
-                videoTitle = qualityName,
-                headers = okhttpHeaders.toHeaders(),
-                subtitleTracks = subtitles.toList(),
-            )
-            videos.add(video)
+                val video = Video(
+                    videoUrl = link.url,
+                    videoTitle = qualityName,
+                    headers = okhttpHeaders.toHeaders(),
+                    subtitleTracks = subtitles.toList(),
+                    initialized = true,
+                )
+                videos.add(video)
+            }
         }
 
         try {
@@ -264,6 +271,20 @@ class CloudStreamAnimeSource(
             logcat(LogPriority.ERROR, e) { "Failed to load links for ${episode.name}" }
         }
 
+        if (videos.isEmpty() && episode.url.isNotBlank()) {
+            try {
+                com.lagradost.cloudstream3.utils.loadExtractor(
+                    url = episode.url,
+                    referer = baseUrl,
+                    subtitleCallback = onSubtitle,
+                    callback = onLink,
+                )
+            } catch (e: Throwable) {
+                logcat(LogPriority.DEBUG, e) { "Direct loadExtractor fallback failed for ${episode.name}" }
+            }
+        }
+
+        logcat(LogPriority.INFO) { "Loaded ${videos.size} videos for ${episode.name} from ${api.name}" }
         return videos.toList()
     }
 

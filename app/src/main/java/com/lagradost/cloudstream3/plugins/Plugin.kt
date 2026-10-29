@@ -22,8 +22,17 @@ open class BasePlugin {
         APIHolder.addPlugin(api)
     }
 
-    open fun registerExtractorAPI(api: ExtractorApi) {}
-    open fun registerExtractorAPI(api: Any) {}
+    open fun registerExtractorAPI(api: ExtractorApi) {
+        if (!com.lagradost.cloudstream3.utils.extractorApis.contains(api)) {
+            com.lagradost.cloudstream3.utils.extractorApis.add(api)
+        }
+    }
+
+    open fun registerExtractorAPI(api: Any) {
+        if (api is ExtractorApi) {
+            registerExtractorAPI(api)
+        }
+    }
 }
 
 open class Plugin : BasePlugin()
