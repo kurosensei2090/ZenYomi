@@ -9,4 +9,12 @@ object StringUtils {
             else -> "$domain/$url"
         }
     }
+
+    fun encodeUri(str: String): String {
+        return try {
+            java.net.URLEncoder.encode(str, "UTF-8")
+        } catch (_: Exception) {
+            str
+        }
+    }
 }

@@ -3,6 +3,7 @@ package com.lagradost.nicehttp
 import okhttp3.Headers
 import okhttp3.Headers.Companion.toHeaders
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -40,15 +41,11 @@ class NiceResponse(
     }
 
     inline fun <reified T> parsed(): T {
-        return com.lagradost.cloudstream3.utils.csJson.decodeFromString<T>(text)
+        return com.lagradost.cloudstream3.utils.AppUtils.parseJson<T>(text)
     }
 
     inline fun <reified T> parsedSafe(): T? {
-        return try {
-            com.lagradost.cloudstream3.utils.csJson.decodeFromString<T>(text)
-        } catch (_: Exception) {
-            null
-        }
+        return com.lagradost.cloudstream3.utils.AppUtils.tryParseJson<T>(text)
     }
 }
 
@@ -68,9 +65,15 @@ class Requests(
         referer: String? = null,
         params: Map<String, String> = emptyMap(),
         cookies: Map<String, String> = emptyMap(),
-        timeout: Duration = 30.seconds,
+        cache: Boolean = false,
+        cacheTime: Int = 0,
+        timeUnit: TimeUnit = TimeUnit.MINUTES,
+        timeout: Long = 0,
+        interceptor: Interceptor? = null,
         allowRedirects: Boolean = true,
+        responseParser: ResponseParser? = null,
     ): NiceResponse {
+        val duration = if (timeout > 0) timeout.seconds else 30.seconds
         return request(
             url = url,
             method = "GET",
@@ -78,7 +81,7 @@ class Requests(
             referer = referer,
             params = params,
             cookies = cookies,
-            timeout = timeout,
+            timeout = duration,
             allowRedirects = allowRedirects,
         )
     }
@@ -92,9 +95,15 @@ class Requests(
         data: Map<String, String>? = null,
         json: String? = null,
         requestBody: okhttp3.RequestBody? = null,
-        timeout: Duration = 30.seconds,
+        cache: Boolean = false,
+        cacheTime: Int = 0,
+        timeUnit: TimeUnit = TimeUnit.MINUTES,
+        timeout: Long = 0,
+        interceptor: Interceptor? = null,
         allowRedirects: Boolean = true,
+        responseParser: ResponseParser? = null,
     ): NiceResponse {
+        val duration = if (timeout > 0) timeout.seconds else 30.seconds
         val body = when {
             requestBody != null -> requestBody
             json != null -> json.toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
@@ -114,7 +123,7 @@ class Requests(
             params = params,
             cookies = cookies,
             requestBody = body,
-            timeout = timeout,
+            timeout = duration,
             allowRedirects = allowRedirects,
         )
     }

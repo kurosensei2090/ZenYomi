@@ -268,6 +268,8 @@ dependencies {
 
     // Data serialization (JSON, protobuf, xml)
     implementation(kotlinx.bundles.serialization)
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.16.1")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.16.1")
 
     // HTML parser
     implementation(libs.jsoup)

@@ -207,6 +207,12 @@ class CloudStreamManager(
             url = "https://$url"
         }
         // GitHub tree/blob URL normalization to raw content
+        val baseGithubRegex = "^https?://github\\.com/([^/]+)/([^/]+)/?$".toRegex(RegexOption.IGNORE_CASE)
+        val baseGithubMatch = baseGithubRegex.matchEntire(url)
+        if (baseGithubMatch != null) {
+            val (owner, repo) = baseGithubMatch.destructured
+            url = "https://raw.githubusercontent.com/$owner/$repo/master"
+        }
         val treeRegex = "^https?://github\\.com/([^/]+)/([^/]+)/tree/([^/]+)/?(.*)$".toRegex(RegexOption.IGNORE_CASE)
         val treeMatch = treeRegex.matchEntire(url)
         if (treeMatch != null) {
@@ -480,23 +486,26 @@ class CloudStreamManager(
 
             if (instance is com.lagradost.cloudstream3.plugins.BasePlugin) {
                 try {
-                    instance.load(context)
+                    instance.load()
                 } catch (_: NoSuchMethodError) {
                     try {
-                        instance.load()
+                        instance.load(context)
                     } catch (_: Throwable) {}
                 } catch (e: Throwable) {
-                    logcat(LogPriority.WARN, e) { "Error in plugin.load(context) for $pluginName" }
+                    try {
+                        instance.load(context)
+                    } catch (_: Throwable) {}
+                    logcat(LogPriority.WARN, e) { "Error in plugin.load() for $pluginName" }
                 }
                 for (api in instance.registeredAPIs) {
                     sources.add(CloudStreamAnimeSource(api, pluginName = pluginName, pluginVersion = pluginVersion))
                 }
             } else {
                 try {
-                    clazz.getMethod("load", Context::class.java).invoke(instance, context)
+                    clazz.getMethod("load").invoke(instance)
                 } catch (_: NoSuchMethodException) {
                     try {
-                        clazz.getMethod("load").invoke(instance)
+                        clazz.getMethod("load", Context::class.java).invoke(instance, context)
                     } catch (_: Throwable) {}
                 } catch (e: Throwable) {
                     logcat(LogPriority.WARN, e) { "Reflection load failed on $pluginClassName" }

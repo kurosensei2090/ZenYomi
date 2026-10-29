@@ -25,53 +25,96 @@ class AnimeExtensionStoreService(
     private val json: Json,
     private val protoBuf: ProtoBuf,
 ) {
+    private fun normalizeStoreUrl(raw: String): List<String> {
+        var trimmed = raw.trim()
+        if (trimmed.startsWith("https://github.com/") || trimmed.startsWith("http://github.com/")) {
+            trimmed = trimmed.replace("/tree/", "/raw/").replace("/blob/", "/raw/")
+            if (trimmed.contains("/raw/")) {
+                trimmed = trimmed.replace("https://github.com/", "https://raw.githubusercontent.com/")
+                    .replace("http://github.com/", "https://raw.githubusercontent.com/")
+                    .replace("/raw/", "/")
+            }
+        }
+        val baseGithubRegex = "^https?://github\\.com/([^/]+)/([^/]+)/?$".toRegex(RegexOption.IGNORE_CASE)
+        val baseGithubMatch = baseGithubRegex.matchEntire(trimmed)
+        if (baseGithubMatch != null) {
+            val (owner, repo) = baseGithubMatch.destructured
+            trimmed = "https://raw.githubusercontent.com/$owner/$repo/repo"
+        }
+        if (trimmed.contains("keiyoushi.github.io/extensions", ignoreCase = true)) {
+            trimmed = "https://raw.githubusercontent.com/keiyoushi/extensions/repo"
+        }
+        if (!trimmed.startsWith("http://", ignoreCase = true) && !trimmed.startsWith("https://", ignoreCase = true)) {
+            trimmed = "https://$trimmed"
+        }
+
+        if (trimmed.endsWith("/index.min.json") || trimmed.endsWith("/index.pb") || trimmed.endsWith("/index.json")) {
+            return listOf(trimmed)
+        }
+        if (trimmed.endsWith("/repo.json")) {
+            return listOf(
+                trimmed.replace("/repo.json", "/index.min.json"),
+                trimmed.replace("/repo.json", "/index.pb"),
+                trimmed,
+            )
+        }
+        val clean = trimmed.trimEnd('/')
+        return listOf(
+            "$clean/index.min.json",
+            "$clean/index.pb",
+            "$clean/repo.json",
+            "$clean/index.json",
+            clean,
+        )
+    }
+
     suspend fun fetch(rawIndexUrl: String): Result<AnimeExtensionStore> {
-        val trimmed = rawIndexUrl.trim()
-        val indexUrl = when {
-            trimmed.endsWith("/index.min.json") -> trimmed
-            trimmed.endsWith("/repo.json") -> trimmed.replace("/repo.json", "/index.min.json")
-            trimmed.endsWith("/") -> "${trimmed}index.min.json"
-            else -> "$trimmed/index.min.json"
-        }
-        var updatedIndexUrl: String = indexUrl
-        return try {
-            val response = network.client.newCall(GET(updatedIndexUrl)).awaitSuccess()
-            val store = response.body.source().decompressIfGzipped().use { source ->
-                val networkStore = when (source.peek().readByte()) {
-                    // "[..."
-                    0x5B.toByte() -> run {
-                        if (!indexUrl.endsWith("/index.min.json")) {
-                            throw IllegalArgumentException("Provided legacy store url is not valid")
-                        }
-                        updatedIndexUrl = indexUrl.replace("/index.min.json", "/repo.json")
-                        network.client.newCall(GET(updatedIndexUrl)).awaitSuccess().body.source().use {
-                            json.decodeFromBufferedSource<NetworkLegacyAnimeExtensionRepo>(it)
-                        }
-                    }
-                    // "{..."
-                    0x7B.toByte() -> try {
-                        json.decodeFromBufferedSource<NetworkLegacyAnimeExtensionRepo>(source.peek())
-                    } catch (_: IllegalArgumentException) {
-                        json.decodeFromBufferedSource<NetworkAnimeExtensionStore>(source)
-                    }
-                    else -> protoBuf.decodeFromByteArray<NetworkAnimeExtensionStore>(source.readByteArray())
-                }
+        val candidates = normalizeStoreUrl(rawIndexUrl)
+        var lastException: Exception? = null
 
-                if (networkStore is NetworkLegacyAnimeExtensionRepo && networkStore.indexV2 != null) {
-                    return fetch(networkStore.indexV2)
-                }
+        for (candidate in candidates) {
+            var updatedIndexUrl: String = candidate
+            try {
+                val response = network.client.newCall(GET(candidate)).awaitSuccess()
+                val store = response.body.source().decompressIfGzipped().use { source ->
+                    val networkStore = when (source.peek().readByte()) {
+                        // "[..."
+                        0x5B.toByte() -> run {
+                            if (!candidate.endsWith("/index.min.json")) {
+                                throw IllegalArgumentException("Provided legacy store url is not valid")
+                            }
+                            updatedIndexUrl = candidate.replace("/index.min.json", "/repo.json")
+                            network.client.newCall(GET(updatedIndexUrl)).awaitSuccess().body.source().use {
+                                json.decodeFromBufferedSource<NetworkLegacyAnimeExtensionRepo>(it)
+                            }
+                        }
+                        // "{..."
+                        0x7B.toByte() -> try {
+                            json.decodeFromBufferedSource<NetworkLegacyAnimeExtensionRepo>(source.peek())
+                        } catch (_: IllegalArgumentException) {
+                            json.decodeFromBufferedSource<NetworkAnimeExtensionStore>(source)
+                        }
+                        else -> protoBuf.decodeFromByteArray<NetworkAnimeExtensionStore>(source.readByteArray())
+                    }
 
-                networkStore.toExtensionStore(updatedIndexUrl)
+                    if (networkStore is NetworkLegacyAnimeExtensionRepo && networkStore.indexV2 != null) {
+                        return fetch(networkStore.indexV2)
+                    }
+
+                    networkStore.toExtensionStore(updatedIndexUrl)
+                }
+                return Result.success(store)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                lastException = e
             }
-            Result.success(store)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            logcat(LogPriority.ERROR, e) {
-                "Failed to add extension store '$updatedIndexUrl'"
-            }
-            Result.failure(e)
         }
+
+        logcat(LogPriority.ERROR, lastException) {
+            "Failed to add extension store '$rawIndexUrl'"
+        }
+        return Result.failure(lastException ?: IllegalArgumentException("Invalid repository url"))
     }
 
     suspend fun getExtensions(store: AnimeExtensionStore): Result<List<AnimeExtension.Available>> {
