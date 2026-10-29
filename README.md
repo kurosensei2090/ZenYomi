@@ -38,6 +38,11 @@
 - **Tracking Services**: Full bi-directional sync with AniList, MyAnimeList (MAL), Kitsu, Shikimori, and Bangumi.
 - Automatically marks chapters read and video episodes watched as you finish them.
 
+### 🌐 Native CloudStream Repository Support
+- **Dynamic Plugin Runtime**: Direct `.cs3` repository parsing and native execution via Dalvik/ART ClassLoader.
+- **Repository Management**: Add CloudStream repositories (`repo.json` / `plugins.json`), browse available extensions, and install/update with a single tap from Settings > Browse > CloudStream Repositories.
+- **Zero Play Protect Flags**: Loads providers directly within the app runtime with zero separate APK installations.
+
 ### 🎨 Modern Jetpack Compose UI
 - Material 3 & Material You dynamic color theming.
 - Pitch Black AMOLED Dark Mode for battery saving.
@@ -50,6 +55,7 @@ ZenYomi stands on the shoulders of giants. Special thanks and deep appreciation 
 - [**Tachiyomi**](https://github.com/tachiyomiorg) — The original pioneer in open-source content reading for Android.
 - [**Mihon**](https://github.com/mihonapp/mihon) — The community successor keeping the modern Android content reading experience alive and thriving.
 - [**Aniyomi**](https://github.com/aniyomiorg/aniyomi) — The visionary video player and media streaming fork.
+- [**CloudStream 3**](https://github.com/recloudstream/cloudstream) — High-performance media provider architecture and plugin framework.
 
 ## Disclaimer
 
