@@ -25,6 +25,28 @@ open class ExtractorApi {
     }
 }
 
+suspend fun newExtractorLink(
+    source: String,
+    name: String,
+    url: String,
+    type: ExtractorLinkType = ExtractorLinkType.VIDEO,
+    initializer: (suspend ExtractorLink.() -> Unit)? = null,
+): ExtractorLink {
+    val link = ExtractorLink(
+        source = source,
+        name = name,
+        url = url,
+        referer = "",
+        quality = Qualities.Unknown.value,
+        type = type,
+        isM3u8 = type == ExtractorLinkType.M3U8,
+    )
+    if (initializer != null) {
+        link.initializer()
+    }
+    return link
+}
+
 suspend fun loadExtractor(
     url: String,
     subtitleCallback: (SubtitleFile) -> Unit = {},
@@ -58,8 +80,28 @@ suspend fun loadExtractor(
         }
     }
 
-    // 2. Direct media links
+    // 2. Direct media & cloud drive links
     val cleanUrl = url.trim()
+
+    if (cleanUrl.contains("drive.google.com", ignoreCase = true) || cleanUrl.contains("drive.usercontent.google.com", ignoreCase = true)) {
+        val fileIdRegex = Regex("""(?:/file/d/|[?&]id=)([0-9A-Za-z_-]{10,})""")
+        val fileId = fileIdRegex.find(cleanUrl)?.groupValues?.get(1)
+        if (!fileId.isNullOrBlank()) {
+            val directUrl = "https://drive.usercontent.google.com/download?id=$fileId&export=download&confirm=t"
+            callback(
+                ExtractorLink(
+                    source = "GoogleDrive",
+                    name = "Google Drive (Direct)",
+                    url = directUrl,
+                    referer = "https://drive.google.com/",
+                    quality = Qualities.P1080.value,
+                    isM3u8 = false,
+                ),
+            )
+            return true
+        }
+    }
+
     val isM3u8 = cleanUrl.contains(".m3u8", ignoreCase = true)
     val isMp4 = cleanUrl.contains(".mp4", ignoreCase = true) || cleanUrl.contains(".mkv", ignoreCase = true)
     if (isM3u8 || isMp4) {

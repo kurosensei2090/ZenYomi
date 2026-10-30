@@ -289,6 +289,9 @@ class CloudStreamAnimeSource(
                 if (link.referer.isNotEmpty()) {
                     okhttpHeaders["Referer"] = link.referer
                 }
+                if (!okhttpHeaders.containsKey("User-Agent")) {
+                    okhttpHeaders["User-Agent"] = com.lagradost.cloudstream3.USER_AGENT
+                }
 
                 val video = Video(
                     videoUrl = link.url,
@@ -340,7 +343,7 @@ class CloudStreamAnimeSource(
     private fun Episode.toSEpisode(index: Float): SEpisode {
         val sEpisode = SEpisode.create()
         sEpisode.name = this.name ?: "Episode ${this.episode ?: index.toInt()}"
-        sEpisode.url = this.data
+        sEpisode.url = api.fixUrl(this.data)
         sEpisode.episode_number = (this.episode ?: index.toInt()).toFloat()
         return sEpisode
     }

@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.app.Application
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
@@ -8,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
+import android.os.Bundle
 import android.os.Looper
 import android.webkit.WebView
 import androidx.core.content.ContextCompat
@@ -88,6 +90,23 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
         patchInjekt()
 
         com.lagradost.cloudstream3.AcraApplication.context = this
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
+            override fun onActivityStarted(activity: Activity) {
+                com.lagradost.cloudstream3.CommonActivity.activity = activity
+            }
+            override fun onActivityResumed(activity: Activity) {
+                com.lagradost.cloudstream3.CommonActivity.activity = activity
+            }
+            override fun onActivityPaused(activity: Activity) {}
+            override fun onActivityStopped(activity: Activity) {}
+            override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
+            override fun onActivityDestroyed(activity: Activity) {
+                if (com.lagradost.cloudstream3.CommonActivity.activity === activity) {
+                    com.lagradost.cloudstream3.CommonActivity.activity = null
+                }
+            }
+        })
 
         GlobalExceptionHandler.initialize(applicationContext, CrashActivity::class.java)
 
