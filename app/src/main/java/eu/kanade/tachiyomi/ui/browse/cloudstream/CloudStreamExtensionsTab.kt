@@ -2,7 +2,9 @@ package eu.kanade.tachiyomi.ui.browse.cloudstream
 
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,7 +15,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,6 +26,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -29,6 +34,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -36,6 +42,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -50,6 +57,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
 import eu.kanade.presentation.components.AppBar
@@ -92,15 +100,19 @@ fun Screen.csExtensionsTab(): TabContent {
             val statusMessage by manager.statusMessageFlow.collectAsState()
 
             var searchQuery by remember { mutableStateOf("") }
+            var selectedRepoUrl by remember { mutableStateOf<String?>(null) }
             var installingInternalName by remember { mutableStateOf<String?>(null) }
 
-            val filteredPlugins = if (searchQuery.isBlank()) {
-                plugins
-            } else {
-                plugins.filter {
-                    it.name.contains(searchQuery, ignoreCase = true) ||
-                        it.internalName.contains(searchQuery, ignoreCase = true) ||
-                        it.tvTypes.any { type -> type.contains(searchQuery, ignoreCase = true) }
+            val filteredPlugins = remember(plugins, searchQuery, selectedRepoUrl) {
+                plugins.filter { plugin ->
+                    val matchesRepo = selectedRepoUrl == null ||
+                        plugin.repoUrl == selectedRepoUrl ||
+                        (selectedRepoUrl!!.isNotBlank() && (plugin.repoUrl.contains(selectedRepoUrl!!) || selectedRepoUrl!!.contains(plugin.repoUrl)))
+                    val matchesSearch = searchQuery.isBlank() ||
+                        plugin.name.contains(searchQuery, ignoreCase = true) ||
+                        plugin.internalName.contains(searchQuery, ignoreCase = true) ||
+                        plugin.tvTypes.any { type -> type.contains(searchQuery, ignoreCase = true) }
+                    matchesRepo && matchesSearch
                 }
             }
 
@@ -188,11 +200,24 @@ fun Screen.csExtensionsTab(): TabContent {
                         }
                     } else {
                         items(repos, key = { it.url }) { repo ->
+                            val isFiltering = selectedRepoUrl == repo.url
+                            val repoPluginCount = plugins.count { it.repoUrl == repo.url || (it.repoUrl.isNotBlank() && (repo.url.contains(it.repoUrl) || it.repoUrl.contains(repo.url))) }
                             Card(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        selectedRepoUrl = if (isFiltering) null else repo.url
+                                    },
                                 colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                                    containerColor = if (isFiltering) {
+                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                                    },
                                 ),
+                                border = if (isFiltering) {
+                                    BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
+                                } else null,
                                 shape = RoundedCornerShape(10.dp),
                             ) {
                                 Row(
@@ -203,16 +228,34 @@ fun Screen.csExtensionsTab(): TabContent {
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = repo.name,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Bold,
+                                            )
+                                            if (isFiltering) {
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                ) {
+                                                    Text(
+                                                        text = "Active Filter",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onPrimary,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(2.dp))
                                         Text(
-                                            text = repo.name,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.Bold,
-                                        )
-                                        Text(
-                                            text = repo.url,
+                                            text = "$repoPluginCount available providers • ${repo.url}",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
                                         )
                                     }
                                     IconButton(onClick = { manager.removeRepository(repo.url) }) {
@@ -227,15 +270,62 @@ fun Screen.csExtensionsTab(): TabContent {
                         }
                     }
 
-                    // Available Providers Section
+                    // Repository Filter Bar (when multiple repositories connected)
+                    if (repos.size > 1) {
+                        item {
+                            LazyRow(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                item {
+                                    FilterChip(
+                                        selected = selectedRepoUrl == null,
+                                        onClick = { selectedRepoUrl = null },
+                                        label = { Text("All (${plugins.size})") },
+                                    )
+                                }
+                                items(repos, key = { it.url }) { repo ->
+                                    val count = plugins.count { it.repoUrl == repo.url || (it.repoUrl.isNotBlank() && (repo.url.contains(it.repoUrl) || it.repoUrl.contains(repo.url))) }
+                                    FilterChip(
+                                        selected = selectedRepoUrl == repo.url,
+                                        onClick = {
+                                            selectedRepoUrl = if (selectedRepoUrl == repo.url) null else repo.url
+                                        },
+                                        label = { Text("${repo.name} ($count)") },
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Available Providers Section Header
                     item {
-                        Text(
-                            text = "Available CS Providers (${filteredPlugins.size})",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(top = 12.dp),
-                        )
+                        val activeRepo = repos.find { it.url == selectedRepoUrl }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = if (activeRepo != null) {
+                                    "${activeRepo.name} (${filteredPlugins.size})"
+                                } else {
+                                    "Available CS Providers (${filteredPlugins.size})"
+                                },
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            if (selectedRepoUrl != null) {
+                                TextButton(onClick = { selectedRepoUrl = null }) {
+                                    Text("Show All")
+                                }
+                            }
+                        }
                     }
 
                     if (filteredPlugins.isEmpty()) {
@@ -251,6 +341,8 @@ fun Screen.csExtensionsTab(): TabContent {
                                         statusMessage ?: "Loading providers from repositories..."
                                     } else if (repos.isEmpty()) {
                                         "Add a repository above to view available providers."
+                                    } else if (selectedRepoUrl != null) {
+                                        "No matching providers found in this repository."
                                     } else {
                                         "No providers found in connected repositories."
                                     },
@@ -262,6 +354,10 @@ fun Screen.csExtensionsTab(): TabContent {
                     } else {
                         items(filteredPlugins, key = { "${it.repoUrl}_${it.internalName}" }) { plugin ->
                             val isCurrentlyInstalling = installingInternalName == plugin.internalName
+                            val repoName = remember(plugin.repoUrl, repos) {
+                                repos.find { it.url == plugin.repoUrl }?.name
+                                    ?: repos.find { plugin.repoUrl.isNotBlank() && (it.url.contains(plugin.repoUrl) || plugin.repoUrl.contains(it.url)) }?.name
+                            }
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = CardDefaults.cardColors(
@@ -313,6 +409,34 @@ fun Screen.csExtensionsTab(): TabContent {
                                         Spacer(modifier = Modifier.size(12.dp))
 
                                         Column {
+                                            if (!repoName.isNullOrBlank() && repos.size > 1) {
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f),
+                                                    modifier = Modifier.padding(bottom = 3.dp),
+                                                ) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Outlined.Folder,
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(11.dp),
+                                                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                        )
+                                                        Spacer(modifier = Modifier.width(3.dp))
+                                                        Text(
+                                                            text = repoName,
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontWeight = FontWeight.Medium,
+                                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis,
+                                                        )
+                                                    }
+                                                }
+                                            }
                                             Text(
                                                 text = plugin.name,
                                                 style = MaterialTheme.typography.bodyLarge,

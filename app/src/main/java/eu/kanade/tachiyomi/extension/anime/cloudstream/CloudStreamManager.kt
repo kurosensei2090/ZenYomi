@@ -181,6 +181,18 @@ class CloudStreamManager(
         return map.filter { it.value.equals(repoUrl, ignoreCase = true) }.map { it.key }
     }
 
+    fun getRepoForPlugin(pluginName: String): CloudStreamRepo? {
+        val map = getPluginRepoMap()
+        val repoUrl = map[pluginName]
+            ?: _availablePluginsFlow.value.find { it.internalName.equals(pluginName, ignoreCase = true) || it.name.equals(pluginName, ignoreCase = true) }?.repoUrl
+            ?: map.entries.find { pluginName.contains(it.key, ignoreCase = true) || it.key.contains(pluginName, ignoreCase = true) }?.value
+        if (repoUrl != null) {
+            return _repositoriesFlow.value.find { it.url == repoUrl }
+                ?: _repositoriesFlow.value.find { it.url.contains(repoUrl) || repoUrl.contains(it.url) }
+        }
+        return null
+    }
+
     fun addRepository(url: String, name: String = "") {
         val normalized = normalizeRepoUrl(url)
         if (normalized.isBlank()) return
