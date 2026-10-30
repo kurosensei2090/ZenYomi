@@ -9,16 +9,18 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.util.concurrent.ConcurrentHashMap
 
-private val animeSourceIconCache = ConcurrentHashMap<Long, ImageBitmap?>()
+private object NoIcon
+private val animeSourceIconCache = ConcurrentHashMap<Long, Any>()
 
 val AnimeSource.icon: ImageBitmap?
     get() {
-        if (animeSourceIconCache.containsKey(id)) {
-            return animeSourceIconCache[id]
-        }
+        val cached = animeSourceIconCache[id]
+        if (cached === NoIcon) return null
+        if (cached is ImageBitmap) return cached
+
         val bitmap = Injekt.get<AnimeExtensionManager>().getAppIconForSource(id)
             ?.toBitmap()
             ?.asImageBitmap()
-        animeSourceIconCache[id] = bitmap
+        animeSourceIconCache[id] = bitmap ?: NoIcon
         return bitmap
     }
