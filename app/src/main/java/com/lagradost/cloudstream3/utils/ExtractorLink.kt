@@ -46,7 +46,7 @@ data class ExtractorLink(
     var referer: String = "",
     var quality: Int = Qualities.Unknown.value,
     var isM3u8: Boolean = false,
-    val headers: Map<String, String> = emptyMap(),
-    val extractorData: String? = null,
+    var headers: Map<String, String> = emptyMap(),
+    var extractorData: String? = null,
     var type: ExtractorLinkType = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO,
 )

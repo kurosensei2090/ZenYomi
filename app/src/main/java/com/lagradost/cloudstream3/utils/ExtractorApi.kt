@@ -189,3 +189,25 @@ suspend fun loadExtractor(
 
     return false
 }
+
+fun getQualityFromName(qualityName: String?): Int {
+    return when (qualityName?.lowercase()?.trim()) {
+        "4k", "4k / uhd", "uhd" -> Qualities.P2160.value
+        "1440p", "2k", "qhd" -> Qualities.P1440.value
+        "1080p", "fhd", "full hd" -> Qualities.P1080.value
+        "720p", "hd" -> Qualities.P720.value
+        "480p", "sd" -> Qualities.P480.value
+        "360p" -> Qualities.P360.value
+        "240p" -> Qualities.P240.value
+        "144p" -> Qualities.P144.value
+        else -> {
+            val num = qualityName?.filter { it.isDigit() }?.toIntOrNull()
+            if (num != null) {
+                Qualities.values().find { it.value == num }?.value ?: Qualities.Unknown.value
+            } else {
+                Qualities.Unknown.value
+            }
+        }
+    }
+}
+

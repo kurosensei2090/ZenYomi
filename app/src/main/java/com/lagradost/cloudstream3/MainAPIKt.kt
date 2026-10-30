@@ -63,6 +63,23 @@ fun AnimeSearchResponse.addDubStatus(
     if (subEpisodes != null) this.sub = subEpisodes
 }
 
+@JvmOverloads
+fun AnimeSearchResponse.addDubStatus(
+    isDub: Boolean,
+    episodes: Int? = null,
+) {
+    val set = this.dubStatus?.toMutableSet() ?: mutableSetOf()
+    if (isDub) {
+        set.add("dub")
+        if (episodes != null) this.dub = episodes
+    } else {
+        set.add("sub")
+        if (episodes != null) this.sub = episodes
+    }
+    this.dubStatus = set
+}
+
+
 fun AnimeLoadResponse.addEpisodes(status: DubStatus, episodes: List<Episode>) {
     val list = this.episodes.getOrPut(status) { mutableListOf() }.toMutableList()
     list.addAll(episodes)
