@@ -96,18 +96,18 @@ data object BrowseTab : Tab {
         val showManga by sourcePreferences.showMangaInBrowse().collectAsState()
         val showCloudStream by sourcePreferences.showCloudStreamInBrowse().collectAsState()
 
-        // Hoisted for extensions tab's search bar
-        val mangaExtensionsScreenModel = rememberScreenModel { MangaExtensionsScreenModel() }
-        val mangaExtensionsState by mangaExtensionsScreenModel.state.collectAsState()
+        // Hoisted for extensions tab's search bar only if corresponding section is enabled
+        val mangaExtensionsScreenModel = if (showManga) rememberScreenModel { MangaExtensionsScreenModel() } else null
+        val mangaExtensionsState = mangaExtensionsScreenModel?.state?.collectAsState()?.value
 
-        val animeExtensionsScreenModel = rememberScreenModel { AnimeExtensionsScreenModel() }
-        val animeExtensionsState by animeExtensionsScreenModel.state.collectAsState()
+        val animeExtensionsScreenModel = if (showAnime) rememberScreenModel { AnimeExtensionsScreenModel() } else null
+        val animeExtensionsState = animeExtensionsScreenModel?.state?.collectAsState()?.value
 
         val animeSources = if (showAnime) animeSourcesTab() else null
         val mangaSources = if (showManga) mangaSourcesTab() else null
         val csSources = if (showCloudStream) csSourcesTab() else null
-        val animeExtensions = if (showAnime) animeExtensionsTab(animeExtensionsScreenModel) else null
-        val mangaExtensions = if (showManga) mangaExtensionsTab(mangaExtensionsScreenModel) else null
+        val animeExtensions = if (showAnime && animeExtensionsScreenModel != null) animeExtensionsTab(animeExtensionsScreenModel) else null
+        val mangaExtensions = if (showManga && mangaExtensionsScreenModel != null) mangaExtensionsTab(mangaExtensionsScreenModel) else null
         val csExtensions = if (showCloudStream) csExtensionsTab() else null
         val migrateAnime = if (showAnime) migrateAnimeSourceTab() else null
         val migrateManga = if (showManga) migrateMangaSourceTab() else null
@@ -129,10 +129,10 @@ data object BrowseTab : Tab {
             titleRes = MR.strings.browse,
             tabs = tabs,
             state = state,
-            mangaSearchQuery = mangaExtensionsState.searchQuery,
-            onChangeMangaSearchQuery = mangaExtensionsScreenModel::search,
-            animeSearchQuery = animeExtensionsState.searchQuery,
-            onChangeAnimeSearchQuery = animeExtensionsScreenModel::search,
+            mangaSearchQuery = mangaExtensionsState?.searchQuery,
+            onChangeMangaSearchQuery = { mangaExtensionsScreenModel?.search(it) },
+            animeSearchQuery = animeExtensionsState?.searchQuery,
+            onChangeAnimeSearchQuery = { animeExtensionsScreenModel?.search(it) },
             scrollable = true,
         )
         LaunchedEffect(tabs) {

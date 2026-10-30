@@ -44,7 +44,10 @@ fun BrowseAnimeSourceList(
                 }
             }
 
-            items(count = animeList.itemCount) { index ->
+            items(
+                count = animeList.itemCount,
+                key = { index -> animeList.peek(index)?.value?.id?.takeIf { it > 0 } ?: -(index.toLong() + 1L) },
+            ) { index ->
                 val anime by animeList[index]?.collectAsState() ?: return@items
                 BrowseAnimeSourceListItem(
                     anime = anime,

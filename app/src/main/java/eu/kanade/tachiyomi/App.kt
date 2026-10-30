@@ -17,11 +17,13 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
+import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.allowRgb565
 import coil3.request.crossfade
 import coil3.util.DebugLogger
+import okio.Path.Companion.toOkioPath
 import dev.mihon.injekt.patchInjekt
 import eu.kanade.domain.DomainModule
 import eu.kanade.domain.SYDomainModule
@@ -219,13 +221,21 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
                     .build(),
             )
 
+            diskCache {
+                DiskCache.Builder()
+                    .directory(cacheDir.resolve("image_cache").toOkioPath())
+                    .maxSizeBytes(100L * 1024 * 1024)
+                    .build()
+            }
+
             crossfade(false)
-            allowRgb565(DeviceUtil.isLowRamDevice(this@App))
+            val isLowRam = DeviceUtil.isLowRamDevice(this@App)
+            allowRgb565(isLowRam)
             if (networkPreferences.verboseLogging().get()) logger(DebugLogger())
 
-            // Coil spawns a new thread for every image load by default
-            fetcherCoroutineContext(Dispatchers.IO.limitedParallelism(8))
-            decoderCoroutineContext(Dispatchers.IO.limitedParallelism(4))
+            // Coil spawns a new thread for every image load by default; throttle on low-RAM devices to avoid GC churn
+            fetcherCoroutineContext(Dispatchers.IO.limitedParallelism(if (isLowRam) 4 else 8))
+            decoderCoroutineContext(Dispatchers.IO.limitedParallelism(if (isLowRam) 2 else 4))
         }
             .build()
     }

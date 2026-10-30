@@ -27,6 +27,7 @@ import dev.icerock.moko.resources.StringResource
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.launch
+import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.TabText
 import tachiyomi.presentation.core.i18n.stringResource
@@ -53,15 +54,12 @@ fun TabbedScreen(
                 val tab = tabs[state.currentPage]
                 val searchEnabled = tab.searchEnabled
 
-                val actualQuery = when (state.currentPage % 2) {
-                    1 -> mangaSearchQuery // History and Browse
-                    else -> animeSearchQuery
-                }
+                val isManga = tab.titleRes == AYMR.strings.label_manga_sources ||
+                    tab.titleRes == AYMR.strings.label_manga_extensions ||
+                    tab.titleRes == AYMR.strings.label_migration_manga
 
-                val actualOnChange = when (state.currentPage % 2) {
-                    1 -> onChangeMangaSearchQuery // History and Browse
-                    else -> onChangeAnimeSearchQuery
-                }
+                val actualQuery = if (isManga) mangaSearchQuery else animeSearchQuery
+                val actualOnChange = if (isManga) onChangeMangaSearchQuery else onChangeAnimeSearchQuery
 
                 SearchToolbar(
                     titleContent = {
@@ -120,7 +118,7 @@ fun TabbedScreen(
                 modifier = Modifier.fillMaxSize(),
                 state = state,
                 verticalAlignment = Alignment.Top,
-                beyondViewportPageCount = 1,
+                beyondViewportPageCount = 0,
                 key = { page -> tabs[page].titleRes.resourceId },
             ) { page ->
                 tabs[page].content(

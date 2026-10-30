@@ -20,6 +20,9 @@ import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import logcat.LogPriority
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import okhttp3.Headers.Companion.toHeaders
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -58,17 +61,25 @@ class CloudStreamAnimeSource(
 
         val mainPages = api.mainPage
         if (mainPages.isNotEmpty()) {
-            for (mp in mainPages) {
-                try {
-                    val resp = api.getMainPage(page, MainPageRequest(mp.name, mp.data, mp.horizontalImages))
+            val pagesToFetch = if (page == 1) mainPages.take(4) else mainPages.take(2)
+            coroutineScope {
+                val deferredList = pagesToFetch.map { mp ->
+                    async {
+                        try {
+                            api.getMainPage(page, MainPageRequest(mp.name, mp.data, mp.horizontalImages))
+                        } catch (e: Throwable) {
+                            logcat(LogPriority.WARN, e) { "Failed to load main page row ${mp.name} for ${api.name}" }
+                            null
+                        }
+                    }
+                }
+                deferredList.awaitAll().forEach { resp ->
                     resp?.items?.forEach { hpList ->
                         list.addAll(hpList.list)
                     }
                     if (resp?.hasNext == true) {
                         hasNext = true
                     }
-                } catch (e: Throwable) {
-                    logcat(LogPriority.WARN, e) { "Failed to load main page row ${mp.name} for ${api.name}" }
                 }
             }
         } else if (api.hasMainPage) {
@@ -84,7 +95,7 @@ class CloudStreamAnimeSource(
         }
 
         if (list.isEmpty()) {
-            val fallbackQueries = listOf("", "a", "2024", "anime", "the")
+            val fallbackQueries = listOf("", "a")
             for (q in fallbackQueries) {
                 try {
                     val searchResults = api.search(q) ?: api.quickSearch(q)
