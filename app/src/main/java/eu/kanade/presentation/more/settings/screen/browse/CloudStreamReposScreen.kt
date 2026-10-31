@@ -320,8 +320,8 @@ class CloudStreamReposScreen : Screen() {
             confirmButton = {
                 Button(
                     onClick = {
-                        if (url.isNotBlank()) {
-                            onAdd(url.trim(), if (name.isBlank()) "CloudStream Repo" else name.trim())
+                        if (url.isNotBlank() || name.isNotBlank()) {
+                            onAdd(url.trim(), name.trim())
                         }
                     },
                 ) {

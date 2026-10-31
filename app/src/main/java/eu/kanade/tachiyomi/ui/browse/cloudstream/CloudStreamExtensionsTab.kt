@@ -504,8 +504,8 @@ fun Screen.csExtensionsTab(): TabContent {
             }
 
             if (showAddDialog) {
-                var urlInput by remember { mutableStateOf("") }
                 var nameInput by remember { mutableStateOf("") }
+                var urlInput by remember { mutableStateOf("") }
 
                 AlertDialog(
                     onDismissRequest = { showAddDialog = false },
@@ -518,18 +518,18 @@ fun Screen.csExtensionsTab(): TabContent {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             OutlinedTextField(
-                                value = urlInput,
-                                onValueChange = { urlInput = it },
-                                label = { Text("Repository URL") },
-                                placeholder = { Text("https://.../repo.json") },
+                                value = nameInput,
+                                onValueChange = { nameInput = it },
+                                label = { Text("Repository Name (Optional)") },
+                                placeholder = { Text("e.g. 3rabi عربي") },
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth(),
                             )
                             OutlinedTextField(
-                                value = nameInput,
-                                onValueChange = { nameInput = it },
-                                label = { Text("Display Name (Optional)") },
-                                placeholder = { Text("My CloudStream Repo") },
+                                value = urlInput,
+                                onValueChange = { urlInput = it },
+                                label = { Text("Repository URL") },
+                                placeholder = { Text("https://.../repo.json") },
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth(),
                             )
@@ -538,7 +538,7 @@ fun Screen.csExtensionsTab(): TabContent {
                     confirmButton = {
                         Button(
                             onClick = {
-                                if (urlInput.isNotBlank()) {
+                                if (urlInput.isNotBlank() || nameInput.isNotBlank()) {
                                     manager.addRepository(urlInput, nameInput)
                                     showAddDialog = false
                                 }

@@ -130,6 +130,18 @@ class CloudStreamManager(
         }
     }
 
+    private fun isUrlLike(s: String): Boolean {
+        val trimmed = s.trim()
+        if (trimmed.isBlank() || trimmed.contains(" ")) return false
+        return trimmed.startsWith("http://", ignoreCase = true) ||
+            trimmed.startsWith("https://", ignoreCase = true) ||
+            trimmed.startsWith("cloudstreamrepo://", ignoreCase = true) ||
+            trimmed.contains("raw.githubusercontent.com", ignoreCase = true) ||
+            trimmed.contains("github.com", ignoreCase = true) ||
+            trimmed.endsWith(".json", ignoreCase = true) ||
+            trimmed.endsWith("/repo", ignoreCase = true)
+    }
+
     private fun loadSavedRepositories() {
         val raw = prefs.getString(PREF_REPOS, null)
         val repos = if (!raw.isNullOrBlank()) {
@@ -141,7 +153,29 @@ class CloudStreamManager(
         } else {
             emptyList()
         }
-        _repositoriesFlow.value = repos
+
+        // Auto-repair any swapped repos saved previously (e.g. where name had the URL and url had the name)
+        var hasRepairs = false
+        val repaired = repos.map { repo ->
+            if (!isUrlLike(repo.url) && isUrlLike(repo.name)) {
+                hasRepairs = true
+                CloudStreamRepo(
+                    name = if (repo.url.startsWith("https://") || repo.url.startsWith("http://")) {
+                        repo.url.substringAfter("://")
+                    } else {
+                        repo.url
+                    },
+                    url = normalizeRepoUrl(repo.name),
+                )
+            } else {
+                repo
+            }
+        }
+
+        _repositoriesFlow.value = repaired
+        if (hasRepairs) {
+            saveRepositories(repaired)
+        }
     }
 
     private fun saveRepositories(repos: List<CloudStreamRepo>) {
@@ -194,11 +228,25 @@ class CloudStreamManager(
     }
 
     fun addRepository(url: String, name: String = "") {
-        val normalized = normalizeRepoUrl(url)
+        var rawUrl = url.trim()
+        var rawName = name.trim()
+
+        // Auto-swap if user put the URL in the Name field and the Name in the URL field
+        if (!isUrlLike(rawUrl) && isUrlLike(rawName)) {
+            val temp = rawUrl
+            rawUrl = rawName
+            rawName = if (temp.startsWith("https://") || temp.startsWith("http://")) {
+                temp.substringAfter("://")
+            } else {
+                temp
+            }
+        }
+
+        val normalized = normalizeRepoUrl(rawUrl)
         if (normalized.isBlank()) return
         val current = _repositoriesFlow.value.toMutableList()
         if (current.none { it.url == normalized }) {
-            val displayName = name.ifBlank {
+            val displayName = rawName.ifBlank {
                 normalized.substringAfterLast("/").substringBefore(".json").ifBlank { "CloudStream Repo" }
             }
             current.add(CloudStreamRepo(name = displayName, url = normalized))
@@ -271,6 +319,11 @@ class CloudStreamManager(
         }
     }
 
+    private data class RepoResolveResult(
+        val pluginUrls: List<String>,
+        val detectedName: String? = null,
+    )
+
     fun refreshRepositories() {
         scope.launch {
             _isLoadingFlow.value = true
@@ -278,17 +331,29 @@ class CloudStreamManager(
             try {
                 val pluginsList = mutableListOf<CloudStreamPluginItem>()
                 val repos = _repositoriesFlow.value
+                val updatedRepos = repos.toMutableList()
+                var reposChanged = false
 
-                for (repo in repos) {
+                for ((index, repo) in repos.withIndex()) {
                     try {
-                        val pluginUrls = resolvePluginUrls(repo.url)
-                        for (pluginListUrl in pluginUrls) {
+                        val result = resolvePluginUrls(repo.url)
+                        if (!result.detectedName.isNullOrBlank() &&
+                            (repo.name.isBlank() || isUrlLike(repo.name) || repo.name == "CloudStream Repo" || repo.name == "repo")
+                        ) {
+                            updatedRepos[index] = repo.copy(name = result.detectedName)
+                            reposChanged = true
+                        }
+                        for (pluginListUrl in result.pluginUrls) {
                             val items = fetchPluginList(pluginListUrl, repo.url)
                             pluginsList.addAll(items)
                         }
                     } catch (e: Exception) {
                         logcat(LogPriority.ERROR, e) { "Failed to fetch CloudStream repo: ${repo.url}" }
                     }
+                }
+
+                if (reposChanged) {
+                    saveRepositories(updatedRepos)
                 }
 
                 val installedNames = pluginsFolder.listFiles { file -> file.extension == "cs3" }
@@ -351,12 +416,13 @@ class CloudStreamManager(
         return httpUrl.resolve(trimmed)?.toString() ?: trimmed
     }
 
-    private fun resolvePluginUrls(repoUrl: String): List<String> {
+    private fun resolvePluginUrls(repoUrl: String): RepoResolveResult {
         val candidates = if (repoUrl.endsWith(".json", ignoreCase = true)) {
             listOf(repoUrl)
         } else {
             val clean = repoUrl.trimEnd('/')
             listOf(
+                "$clean.json",
                 "$clean/repo.json",
                 "$clean/plugins.json",
                 clean,
@@ -375,32 +441,36 @@ class CloudStreamManager(
                 if (body.isBlank()) continue
 
                 if (candidate.endsWith("plugins.json", ignoreCase = true)) {
-                    return listOf(candidate)
+                    return RepoResolveResult(listOf(candidate))
                 }
 
                 try {
                     val parsed = json.parseToJsonElement(body)
                     if (parsed is JsonObject) {
+                        val detectedName = parsed["name"]?.jsonPrimitive?.contentOrNull
                         val lists = parsed["pluginLists"]?.jsonArray?.mapNotNull {
                             val path = it.jsonPrimitive.contentOrNull ?: return@mapNotNull null
                             resolveUrl(candidate, path)
                         }
                         if (!lists.isNullOrEmpty()) {
-                            return lists
+                            return RepoResolveResult(lists, detectedName)
+                        }
+                        if (parsed.containsKey("plugins")) {
+                            return RepoResolveResult(listOf(candidate), detectedName)
                         }
                     } else if (parsed is JsonArray) {
                         // It was directly an array of plugins
-                        return listOf(candidate)
+                        return RepoResolveResult(listOf(candidate))
                     }
                 } catch (_: Exception) {
                 }
 
-                return listOf(candidate)
+                return RepoResolveResult(listOf(candidate))
             } catch (e: Exception) {
                 logcat(LogPriority.WARN, e) { "Candidate $candidate failed" }
             }
         }
-        return emptyList()
+        return RepoResolveResult(emptyList())
     }
 
     private fun fetchPluginList(url: String, repoUrl: String): List<CloudStreamPluginItem> {
