@@ -34,17 +34,23 @@ import kotlin.math.abs
 @Suppress("OVERRIDE_DEPRECATION")
 class CloudStreamAnimeSource(
     val api: MainAPI,
-    val pluginName: String = api.name,
+    val pluginName: String = runCatching { api.name }.getOrDefault("CS-Plugin"),
     val pluginVersion: Int = 1,
 ) : AnimeHttpSource() {
 
-    override val id: Long = abs(api.name.hashCode().toLong() xor 0x43534C00L)
-    override val name: String = "${api.name} [CS]"
-    override val lang: String = api.lang
-    override val baseUrl: String = api.mainUrl.ifBlank { "https://localhost" }
-    override val supportsLatest: Boolean = api.hasMainPage
+    override val id: Long = abs(runCatching { api.name }.getOrDefault(pluginName).hashCode().toLong() xor 0x43534C00L)
+    override val name: String = "${runCatching { api.name }.getOrDefault(pluginName)} [CS]"
+    override val lang: String = runCatching { api.lang }.getOrDefault("en")
+    override val baseUrl: String = (runCatching { api.mainUrl }.getOrDefault("https://localhost")).ifBlank { "https://localhost" }
+    override val supportsLatest: Boolean = runCatching { api.hasMainPage }.getOrDefault(false)
 
-    override val client: OkHttpClient = api.app.baseClient
+    override val client: OkHttpClient by lazy {
+        try {
+            api.app.baseClient
+        } catch (_: Throwable) {
+            network.client
+        }
+    }
 
     override fun popularAnimeRequest(page: Int): Request {
         val target = if (baseUrl.startsWith("http://", ignoreCase = true) || baseUrl.startsWith("https://", ignoreCase = true)) baseUrl else "https://$baseUrl"

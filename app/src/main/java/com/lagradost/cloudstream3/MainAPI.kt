@@ -14,6 +14,26 @@ abstract class MainAPI {
     open var hasQuickSearch: Boolean = false
     open var hasDownloadSupport: Boolean = true
 
+    open var storedCredentials: String? = null
+    open var canBeOverridden: Boolean = true
+    open var sequentialMainPage: Boolean = false
+    open var sequentialMainPageDelay: Long = 0L
+    open var sequentialMainPageScrollDelay: Long = 0L
+    var lastHomepageRequest: Long = 0L
+    open val instantLinkLoading: Boolean = false
+    open val hasChromecastSupport: Boolean = true
+    open val usesWebView: Boolean = false
+    var sourcePlugin: String? = null
+    open val loadLinksTimeoutMs: Long? = null
+    open val getMainPageTimeoutMs: Long? = null
+    open val searchTimeoutMs: Long? = null
+    open val quickSearchTimeoutMs: Long? = null
+    open val loadTimeoutMs: Long? = null
+
+    open fun init() {}
+    open fun overrideWithNewData(data: Any?) {}
+    open fun beforeUnload() {}
+
     open val app: Requests get() = com.lagradost.cloudstream3.app
 
     @UnsafeSSL

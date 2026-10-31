@@ -899,12 +899,21 @@ class CloudStreamManager(
                 _lastErrorFlow.value = "Error during plugin.load(): ${cause::class.java.simpleName}: ${cause.message}"
             }
 
-            if (instance is com.lagradost.cloudstream3.plugins.BasePlugin) {
-                for (api in instance.registeredAPIs) {
-                    if (sources.none { it.api.name == api.name }) {
-                        sources.add(CloudStreamAnimeSource(api, pluginName = pluginName, pluginVersion = pluginVersion))
+            try {
+                if (instance is com.lagradost.cloudstream3.plugins.BasePlugin) {
+                    for (api in instance.registeredAPIs) {
+                        try {
+                            val apiName = runCatching { api.name }.getOrNull() ?: ""
+                            if (sources.none { runCatching { it.api.name }.getOrDefault("") == apiName }) {
+                                sources.add(CloudStreamAnimeSource(api, pluginName = pluginName, pluginVersion = pluginVersion))
+                            }
+                        } catch (t: Throwable) {
+                            logcat(LogPriority.WARN, t) { "Failed to create source for API in registeredAPIs of $pluginName" }
+                        }
                     }
                 }
+            } catch (t: Throwable) {
+                logcat(LogPriority.WARN, t) { "Error accessing registeredAPIs on $pluginName" }
             }
 
             try {
@@ -915,8 +924,11 @@ class CloudStreamManager(
                         field.isAccessible = true
                         val list = field.get(instance) as? List<*>
                         list?.forEach { item ->
-                            if (item is MainAPI && sources.none { it.api.name == item.name }) {
-                                sources.add(CloudStreamAnimeSource(item, pluginName = pluginName, pluginVersion = pluginVersion))
+                            if (item is MainAPI) {
+                                val itemApiName = runCatching { item.name }.getOrNull() ?: ""
+                                if (sources.none { runCatching { it.api.name }.getOrDefault("") == itemApiName }) {
+                                    sources.add(CloudStreamAnimeSource(item, pluginName = pluginName, pluginVersion = pluginVersion))
+                                }
                             }
                         }
                         break
@@ -926,17 +938,30 @@ class CloudStreamManager(
                 }
             } catch (_: Throwable) {}
 
-            val newApis = com.lagradost.cloudstream3.APIHolder.allProviders.filter { afterApi ->
-                apisBefore.none { it.name.equals(afterApi.name, ignoreCase = true) }
-            }
-            for (api in newApis) {
-                if (sources.none { it.api.name == api.name }) {
-                    sources.add(CloudStreamAnimeSource(api, pluginName = pluginName, pluginVersion = pluginVersion))
+            try {
+                val newApis = com.lagradost.cloudstream3.APIHolder.allProviders.filter { afterApi ->
+                    val afterName = runCatching { afterApi.name }.getOrNull() ?: ""
+                    apisBefore.none { runCatching { it.name.equals(afterName, ignoreCase = true) }.getOrDefault(false) }
                 }
+                for (api in newApis) {
+                    val apiName = runCatching { api.name }.getOrNull() ?: ""
+                    if (sources.none { runCatching { it.api.name }.getOrDefault("") == apiName }) {
+                        sources.add(CloudStreamAnimeSource(api, pluginName = pluginName, pluginVersion = pluginVersion))
+                    }
+                }
+            } catch (t: Throwable) {
+                logcat(LogPriority.WARN, t) { "Error reading new providers from APIHolder for $pluginName" }
             }
 
-            if (instance is MainAPI && sources.none { it.api.name == instance.name }) {
-                sources.add(CloudStreamAnimeSource(instance, pluginName = pluginName, pluginVersion = pluginVersion))
+            try {
+                if (instance is MainAPI) {
+                    val instName = runCatching { instance.name }.getOrNull() ?: ""
+                    if (sources.none { runCatching { it.api.name }.getOrDefault("") == instName }) {
+                        sources.add(CloudStreamAnimeSource(instance, pluginName = pluginName, pluginVersion = pluginVersion))
+                    }
+                }
+            } catch (t: Throwable) {
+                logcat(LogPriority.WARN, t) { "Error checking instance as MainAPI for $pluginName" }
             }
 
             try {
@@ -946,11 +971,15 @@ class CloudStreamManager(
                         try {
                             field.isAccessible = true
                             val obj = field.get(instance)
-                            if (obj is MainAPI && sources.none { it.api.name == obj.name }) {
-                                sources.add(CloudStreamAnimeSource(obj, pluginName = pluginName, pluginVersion = pluginVersion))
+                            if (obj is MainAPI) {
+                                val objName = runCatching { obj.name }.getOrNull() ?: ""
+                                if (sources.none { runCatching { it.api.name }.getOrDefault("") == objName }) {
+                                    sources.add(CloudStreamAnimeSource(obj, pluginName = pluginName, pluginVersion = pluginVersion))
+                                }
                             } else if (obj is Collection<*>) {
                                 obj.filterIsInstance<MainAPI>().forEach { api ->
-                                    if (sources.none { it.api.name == api.name }) {
+                                    val apiName = runCatching { api.name }.getOrNull() ?: ""
+                                    if (sources.none { runCatching { it.api.name }.getOrDefault("") == apiName }) {
                                         sources.add(CloudStreamAnimeSource(api, pluginName = pluginName, pluginVersion = pluginVersion))
                                     }
                                 }
@@ -968,7 +997,10 @@ class CloudStreamManager(
                 _lastErrorFlow.value = "No MainAPI providers registered by $pluginName"
             }
         } catch (e: Throwable) {
-            val errMsg = "Failed to load ${file.name}: ${e::class.java.simpleName}: ${e.message}"
+            val cause = e.cause ?: e
+            val fullMsg = cause.message?.takeIf { it.isNotBlank() } ?: cause.toString()
+            val cleanMsg = if (fullMsg.length > 100) fullMsg.take(97) + "..." else fullMsg
+            val errMsg = "Failed to load ${file.name}: ${cause::class.java.simpleName}: $cleanMsg"
             logcat(LogPriority.ERROR, e) { errMsg }
             _lastErrorFlow.value = errMsg
         }

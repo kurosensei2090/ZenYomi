@@ -14,12 +14,24 @@ open class BasePlugin {
     var resources: Any? = null
     val registeredAPIs = mutableListOf<MainAPI>()
 
-    open fun load(context: Context) {}
+    open fun load(context: Context) {
+        load()
+    }
     open fun load() {}
 
+    open fun beforeUnload() {}
+
     open fun registerMainAPI(api: MainAPI) {
-        registeredAPIs.add(api)
+        if (!registeredAPIs.contains(api)) {
+            registeredAPIs.add(api)
+        }
         APIHolder.addPlugin(api)
+    }
+
+    open fun registerMainAPI(api: Any) {
+        if (api is MainAPI) {
+            registerMainAPI(api)
+        }
     }
 
     open fun registerExtractorAPI(api: ExtractorApi) {
@@ -35,4 +47,19 @@ open class BasePlugin {
     }
 }
 
-open class Plugin : BasePlugin()
+open class Plugin : BasePlugin() {
+    var openSettings: ((context: Context) -> Unit)? = null
+
+    override fun load(context: Context) {
+        load()
+    }
+
+    override fun registerMainAPI(api: MainAPI) {
+        super.registerMainAPI(api)
+    }
+
+    override fun registerExtractorAPI(api: ExtractorApi) {
+        super.registerExtractorAPI(api)
+    }
+}
+
