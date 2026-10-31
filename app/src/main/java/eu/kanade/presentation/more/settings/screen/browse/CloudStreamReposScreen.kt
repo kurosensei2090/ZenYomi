@@ -1,5 +1,6 @@
 package eu.kanade.presentation.more.settings.screen.browse
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,9 +15,11 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -46,6 +49,7 @@ import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.extension.anime.cloudstream.CloudStreamManager
 import eu.kanade.tachiyomi.extension.anime.cloudstream.CloudStreamPluginItem
+import eu.kanade.tachiyomi.extension.anime.cloudstream.CloudStreamRepo
 import kotlinx.coroutines.launch
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.padding
@@ -64,6 +68,8 @@ class CloudStreamReposScreen : Screen() {
 
         val lazyListState = rememberLazyListState()
         var showAddDialog by remember { mutableStateOf(false) }
+        var repoToEdit by remember { mutableStateOf<CloudStreamRepo?>(null) }
+        var repoToDelete by remember { mutableStateOf<CloudStreamRepo?>(null) }
 
         Scaffold(
             topBar = { scrollBehavior ->
@@ -129,8 +135,14 @@ class CloudStreamReposScreen : Screen() {
                     }
                 } else {
                     items(repos, key = { it.url }) { repo ->
+                        val repoPluginCount = plugins.count {
+                            it.repoUrl == repo.url ||
+                                (it.repoUrl.isNotBlank() && (repo.url.contains(it.repoUrl) || it.repoUrl.contains(repo.url)))
+                        }
                         Card(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { repoToEdit = repo },
                         ) {
                             Row(
                                 modifier = Modifier
@@ -141,23 +153,31 @@ class CloudStreamReposScreen : Screen() {
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = repo.name,
+                                        text = repo.cleanName,
                                         style = MaterialTheme.typography.bodyLarge,
                                         fontWeight = FontWeight.Bold,
                                     )
+                                    Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = repo.url,
+                                        text = "$repoPluginCount available providers",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
                                     )
                                 }
-                                IconButton(onClick = { manager.removeRepository(repo.url) }) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Delete,
-                                        contentDescription = "Remove",
-                                        tint = MaterialTheme.colorScheme.error,
-                                    )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    IconButton(onClick = { repoToEdit = repo }) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Edit,
+                                            contentDescription = "Edit Name",
+                                        )
+                                    }
+                                    IconButton(onClick = { repoToDelete = repo }) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Delete,
+                                            contentDescription = "Remove",
+                                            tint = MaterialTheme.colorScheme.error,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -207,6 +227,72 @@ class CloudStreamReposScreen : Screen() {
                     onAdd = { url, name ->
                         manager.addRepository(url = url, name = name)
                         showAddDialog = false
+                    },
+                )
+            }
+
+            if (repoToEdit != null) {
+                val target = repoToEdit!!
+                var editName by remember(target) { mutableStateOf(target.cleanName) }
+                AlertDialog(
+                    onDismissRequest = { repoToEdit = null },
+                    title = { Text("Edit Repository Name") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = editName,
+                                onValueChange = { editName = it },
+                                label = { Text("Repository Name") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                if (editName.isNotBlank()) {
+                                    manager.renameRepository(target.url, editName)
+                                }
+                                repoToEdit = null
+                            },
+                        ) {
+                            Text("Save")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { repoToEdit = null }) {
+                            Text("Cancel")
+                        }
+                    },
+                )
+            }
+
+            if (repoToDelete != null) {
+                val target = repoToDelete!!
+                AlertDialog(
+                    onDismissRequest = { repoToDelete = null },
+                    title = { Text("Remove Repository") },
+                    text = {
+                        Text("Are you sure you want to remove \"${target.cleanName}\"? All uninstalled providers from this repository will be removed.")
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                manager.removeRepository(target.url)
+                                repoToDelete = null
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error,
+                            ),
+                        ) {
+                            Text("Remove")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { repoToDelete = null }) {
+                            Text("Cancel")
+                        }
                     },
                 )
             }

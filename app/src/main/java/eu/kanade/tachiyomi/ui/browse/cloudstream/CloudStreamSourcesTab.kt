@@ -219,7 +219,7 @@ fun Screen.csSourcesTab(): TabContent {
                                             onClick = {
                                                 selectedRepoUrl = if (selectedRepoUrl == repo.url) null else repo.url
                                             },
-                                            label = { Text("${repo.name} ($count)") },
+                                            label = { Text("${repo.cleanName} ($count)") },
                                         )
                                     }
                                 }
@@ -237,7 +237,7 @@ fun Screen.csSourcesTab(): TabContent {
                             ) {
                                 Text(
                                     text = if (activeRepo != null) {
-                                        "${activeRepo.name} Sources (${filteredSources.size})"
+                                        "${activeRepo.cleanName} Sources (${filteredSources.size})"
                                     } else {
                                         "Installed CS Sources (${filteredSources.size})"
                                     },
@@ -318,7 +318,7 @@ fun Screen.csSourcesTab(): TabContent {
                                                         )
                                                         Spacer(modifier = Modifier.width(3.dp))
                                                         Text(
-                                                            text = repo.name,
+                                                            text = repo.cleanName,
                                                             style = MaterialTheme.typography.labelSmall,
                                                             fontWeight = FontWeight.Medium,
                                                             color = MaterialTheme.colorScheme.onSecondaryContainer,

@@ -26,6 +26,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.AlertDialog
@@ -64,6 +65,7 @@ import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.TabContent
 import eu.kanade.tachiyomi.extension.anime.cloudstream.CloudStreamManager
 import eu.kanade.tachiyomi.extension.anime.cloudstream.CloudStreamPluginItem
+import eu.kanade.tachiyomi.extension.anime.cloudstream.CloudStreamRepo
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.launch
@@ -102,6 +104,7 @@ fun Screen.csExtensionsTab(): TabContent {
             var searchQuery by remember { mutableStateOf("") }
             var selectedRepoUrl by remember { mutableStateOf<String?>(null) }
             var installingInternalName by remember { mutableStateOf<String?>(null) }
+            var repoToEdit by remember { mutableStateOf<CloudStreamRepo?>(null) }
 
             val filteredPlugins = remember(plugins, searchQuery, selectedRepoUrl) {
                 plugins.filter { plugin ->
@@ -147,25 +150,86 @@ fun Screen.csExtensionsTab(): TabContent {
                         )
                     }
 
-                    // Connected Repositories Section
+                    // Repository Filter Bar (horizontal chips without large stacked cards)
+                    if (repos.isNotEmpty()) {
+                        item {
+                            LazyRow(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                item {
+                                    FilterChip(
+                                        selected = selectedRepoUrl == null,
+                                        onClick = { selectedRepoUrl = null },
+                                        label = { Text("All (${plugins.size})") },
+                                    )
+                                }
+                                items(repos, key = { it.url }) { repo ->
+                                    val count = plugins.count {
+                                        it.repoUrl == repo.url ||
+                                            (it.repoUrl.isNotBlank() && (repo.url.contains(it.repoUrl) || it.repoUrl.contains(repo.url)))
+                                    }
+                                    FilterChip(
+                                        selected = selectedRepoUrl == repo.url,
+                                        onClick = {
+                                            selectedRepoUrl = if (selectedRepoUrl == repo.url) null else repo.url
+                                        },
+                                        label = { Text("${repo.cleanName} ($count)") },
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Available Providers Section Header
                     item {
+                        val activeRepo = repos.find { it.url == selectedRepoUrl }
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(top = 8.dp),
+                                .padding(top = 4.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(
-                                text = "Connected Repositories (${repos.size})",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                            TextButton(onClick = { showAddDialog = true }) {
-                                Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.size(4.dp))
-                                Text("Add Repo")
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f, fill = false),
+                            ) {
+                                Text(
+                                    text = if (activeRepo != null) {
+                                        "${activeRepo.cleanName} (${filteredPlugins.size})"
+                                    } else {
+                                        "Available CS Providers (${filteredPlugins.size})"
+                                    },
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                if (activeRepo != null) {
+                                    IconButton(
+                                        onClick = { repoToEdit = activeRepo },
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .padding(start = 4.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Edit,
+                                            contentDescription = "Edit Repository Name",
+                                            modifier = Modifier.size(16.dp),
+                                            tint = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
+                                }
+                            }
+                            if (selectedRepoUrl != null) {
+                                TextButton(onClick = { selectedRepoUrl = null }) {
+                                    Text("Show All")
+                                }
                             }
                         }
                     }
@@ -173,7 +237,9 @@ fun Screen.csExtensionsTab(): TabContent {
                     if (repos.isEmpty()) {
                         item {
                             Card(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 12.dp),
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                                 ),
@@ -198,137 +264,7 @@ fun Screen.csExtensionsTab(): TabContent {
                                 }
                             }
                         }
-                    } else {
-                        items(repos, key = { it.url }) { repo ->
-                            val isFiltering = selectedRepoUrl == repo.url
-                            val repoPluginCount = plugins.count { it.repoUrl == repo.url || (it.repoUrl.isNotBlank() && (repo.url.contains(it.repoUrl) || it.repoUrl.contains(repo.url))) }
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        selectedRepoUrl = if (isFiltering) null else repo.url
-                                    },
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (isFiltering) {
-                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
-                                    } else {
-                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-                                    },
-                                ),
-                                border = if (isFiltering) {
-                                    BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
-                                } else null,
-                                shape = RoundedCornerShape(10.dp),
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(
-                                                text = repo.name,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.Bold,
-                                            )
-                                            if (isFiltering) {
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Surface(
-                                                    shape = RoundedCornerShape(4.dp),
-                                                    color = MaterialTheme.colorScheme.primary,
-                                                ) {
-                                                    Text(
-                                                        text = "Active Filter",
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        color = MaterialTheme.colorScheme.onPrimary,
-                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                                    )
-                                                }
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Text(
-                                            text = "$repoPluginCount available providers • ${repo.url}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                    }
-                                    IconButton(onClick = { manager.removeRepository(repo.url) }) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Delete,
-                                            contentDescription = "Delete Repo",
-                                            tint = MaterialTheme.colorScheme.error,
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Repository Filter Bar (when multiple repositories connected)
-                    if (repos.size > 1) {
-                        item {
-                            LazyRow(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                item {
-                                    FilterChip(
-                                        selected = selectedRepoUrl == null,
-                                        onClick = { selectedRepoUrl = null },
-                                        label = { Text("All (${plugins.size})") },
-                                    )
-                                }
-                                items(repos, key = { it.url }) { repo ->
-                                    val count = plugins.count { it.repoUrl == repo.url || (it.repoUrl.isNotBlank() && (repo.url.contains(it.repoUrl) || it.repoUrl.contains(repo.url))) }
-                                    FilterChip(
-                                        selected = selectedRepoUrl == repo.url,
-                                        onClick = {
-                                            selectedRepoUrl = if (selectedRepoUrl == repo.url) null else repo.url
-                                        },
-                                        label = { Text("${repo.name} ($count)") },
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // Available Providers Section Header
-                    item {
-                        val activeRepo = repos.find { it.url == selectedRepoUrl }
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 10.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = if (activeRepo != null) {
-                                    "${activeRepo.name} (${filteredPlugins.size})"
-                                } else {
-                                    "Available CS Providers (${filteredPlugins.size})"
-                                },
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                            if (selectedRepoUrl != null) {
-                                TextButton(onClick = { selectedRepoUrl = null }) {
-                                    Text("Show All")
-                                }
-                            }
-                        }
-                    }
-
-                    if (filteredPlugins.isEmpty()) {
+                    } else if (filteredPlugins.isEmpty()) {
                         item {
                             Box(
                                 modifier = Modifier
@@ -339,8 +275,6 @@ fun Screen.csExtensionsTab(): TabContent {
                                 Text(
                                     text = if (isLoading) {
                                         statusMessage ?: "Loading providers from repositories..."
-                                    } else if (repos.isEmpty()) {
-                                        "Add a repository above to view available providers."
                                     } else if (selectedRepoUrl != null) {
                                         "No matching providers found in this repository."
                                     } else {
@@ -355,8 +289,8 @@ fun Screen.csExtensionsTab(): TabContent {
                         items(filteredPlugins, key = { "${it.repoUrl}_${it.internalName}" }) { plugin ->
                             val isCurrentlyInstalling = installingInternalName == plugin.internalName
                             val repoName = remember(plugin.repoUrl, repos) {
-                                repos.find { it.url == plugin.repoUrl }?.name
-                                    ?: repos.find { plugin.repoUrl.isNotBlank() && (it.url.contains(plugin.repoUrl) || plugin.repoUrl.contains(it.url)) }?.name
+                                repos.find { it.url == plugin.repoUrl }?.cleanName
+                                    ?: repos.find { plugin.repoUrl.isNotBlank() && (it.url.contains(plugin.repoUrl) || plugin.repoUrl.contains(it.url)) }?.cleanName
                             }
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
@@ -549,6 +483,43 @@ fun Screen.csExtensionsTab(): TabContent {
                     },
                     dismissButton = {
                         TextButton(onClick = { showAddDialog = false }) {
+                            Text("Cancel")
+                        }
+                    },
+                )
+            }
+            if (repoToEdit != null) {
+                val targetRepo = repoToEdit!!
+                var editName by remember(targetRepo) { mutableStateOf(targetRepo.cleanName) }
+
+                AlertDialog(
+                    onDismissRequest = { repoToEdit = null },
+                    title = { Text("Edit Repository Name") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = editName,
+                                onValueChange = { editName = it },
+                                label = { Text("Repository Name") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                if (editName.isNotBlank()) {
+                                    manager.renameRepository(targetRepo.url, editName)
+                                }
+                                repoToEdit = null
+                            },
+                        ) {
+                            Text("Save")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { repoToEdit = null }) {
                             Text("Cancel")
                         }
                     },

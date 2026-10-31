@@ -41,7 +41,23 @@ import java.util.zip.ZipFile
 data class CloudStreamRepo(
     val name: String,
     val url: String,
-)
+) {
+    val cleanName: String
+        get() {
+            val firstLine = name.lineSequence().firstOrNull()?.trim().orEmpty()
+            if (firstLine.isBlank() || firstLine.startsWith("http://", ignoreCase = true) || firstLine.startsWith("https://", ignoreCase = true)) {
+                val clean = url.trimEnd('/')
+                val lastPart = clean.substringAfterLast('/').substringBefore(".json")
+                return if (lastPart.isNotBlank() && lastPart != "repo" && lastPart != "plugins") {
+                    lastPart
+                } else {
+                    clean.substringBeforeLast('/').substringAfterLast('/')
+                }.ifBlank { "CloudStream Repo" }
+            }
+            val stripped = firstLine.split(Regex("\\s+https?://")).first().trim()
+            return stripped.ifBlank { firstLine }
+        }
+}
 
 @Serializable
 data class CloudStreamPluginItem(
@@ -154,19 +170,33 @@ class CloudStreamManager(
             emptyList()
         }
 
-        // Auto-repair any swapped repos saved previously (e.g. where name had the URL and url had the name)
+        // Auto-repair any swapped or messy repos saved previously (e.g. where name had newlines, URLs or swapped)
         var hasRepairs = false
         val repaired = repos.map { repo ->
-            if (!isUrlLike(repo.url) && isUrlLike(repo.name)) {
+            var newName = repo.name.lines().firstOrNull()?.trim().orEmpty()
+            if (newName.isBlank() || isUrlLike(newName)) {
+                val clean = repo.url.trimEnd('/')
+                val lastPart = clean.substringAfterLast('/').substringBefore(".json")
+                newName = if (lastPart.isNotBlank() && lastPart != "repo" && lastPart != "plugins") {
+                    lastPart
+                } else {
+                    clean.substringBeforeLast('/').substringAfterLast('/')
+                }.ifBlank { "CloudStream Repo" }
+            }
+            // Strip any URL that got appended to name
+            val stripped = newName.split(Regex("\\s+https?://")).first().trim()
+            if (stripped.isNotBlank()) {
+                newName = stripped
+            }
+
+            var newUrl = repo.url
+            if (!isUrlLike(newUrl) && isUrlLike(repo.name)) {
+                newUrl = normalizeRepoUrl(repo.name)
+            }
+
+            if (newName != repo.name || newUrl != repo.url) {
                 hasRepairs = true
-                CloudStreamRepo(
-                    name = if (repo.url.startsWith("https://") || repo.url.startsWith("http://")) {
-                        repo.url.substringAfter("://")
-                    } else {
-                        repo.url
-                    },
-                    url = normalizeRepoUrl(repo.name),
-                )
+                CloudStreamRepo(name = newName, url = newUrl)
             } else {
                 repo
             }
@@ -229,7 +259,7 @@ class CloudStreamManager(
 
     fun addRepository(url: String, name: String = "") {
         var rawUrl = url.trim()
-        var rawName = name.trim()
+        var rawName = name.lines().firstOrNull()?.trim().orEmpty()
 
         // Auto-swap if user put the URL in the Name field and the Name in the URL field
         if (!isUrlLike(rawUrl) && isUrlLike(rawName)) {
@@ -242,16 +272,39 @@ class CloudStreamManager(
             }
         }
 
+        if (isUrlLike(rawName)) {
+            rawName = ""
+        }
+
         val normalized = normalizeRepoUrl(rawUrl)
         if (normalized.isBlank()) return
         val current = _repositoriesFlow.value.toMutableList()
         if (current.none { it.url == normalized }) {
             val displayName = rawName.ifBlank {
-                normalized.substringAfterLast("/").substringBefore(".json").ifBlank { "CloudStream Repo" }
+                val clean = normalized.trimEnd('/')
+                val lastPart = clean.substringAfterLast('/').substringBefore(".json")
+                if (lastPart.isNotBlank() && lastPart != "repo" && lastPart != "plugins") {
+                    lastPart
+                } else {
+                    clean.substringBeforeLast('/').substringAfterLast('/')
+                }.ifBlank { "CloudStream Repo" }
             }
             current.add(CloudStreamRepo(name = displayName, url = normalized))
             saveRepositories(current)
             refreshRepositories()
+        }
+    }
+
+    fun renameRepository(url: String, newName: String) {
+        val trimmed = newName.lines().firstOrNull()?.trim().orEmpty()
+        if (trimmed.isBlank()) return
+        val current = _repositoriesFlow.value.toMutableList()
+        val index = current.indexOfFirst {
+            it.url.equals(url, ignoreCase = true) || normalizeRepoUrl(it.url) == normalizeRepoUrl(url)
+        }
+        if (index != -1) {
+            current[index] = current[index].copy(name = trimmed)
+            saveRepositories(current)
         }
     }
 
@@ -340,8 +393,11 @@ class CloudStreamManager(
                         if (!result.detectedName.isNullOrBlank() &&
                             (repo.name.isBlank() || isUrlLike(repo.name) || repo.name == "CloudStream Repo" || repo.name == "repo")
                         ) {
-                            updatedRepos[index] = repo.copy(name = result.detectedName)
-                            reposChanged = true
+                            val cleanDetected = result.detectedName.lines().firstOrNull()?.trim().orEmpty()
+                            if (cleanDetected.isNotBlank()) {
+                                updatedRepos[index] = repo.copy(name = cleanDetected)
+                                reposChanged = true
+                            }
                         }
                         for (pluginListUrl in result.pluginUrls) {
                             val items = fetchPluginList(pluginListUrl, repo.url)
