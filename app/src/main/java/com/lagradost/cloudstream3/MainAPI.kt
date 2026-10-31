@@ -6,12 +6,13 @@ import com.lagradost.nicehttp.Requests
 abstract class MainAPI {
     open var mainUrl: String = ""
     open var name: String = ""
-    open val supportedTypes: Set<TvType> = setOf(TvType.Anime, TvType.Movie, TvType.TvSeries)
+    open var supportedTypes: Set<TvType> = setOf(TvType.Anime, TvType.Movie, TvType.TvSeries)
     open var lang: String = "en"
-    open val mainPage: List<MainPageData> = emptyList()
-    open val hasMainPage: Boolean get() = mainPage.isNotEmpty()
-    open val hasQuickSearch: Boolean = false
-    open val hasDownloadSupport: Boolean = true
+    open var mainPage: List<MainPageData> = emptyList()
+    open var hasMainPage: Boolean = false
+        get() = field || mainPage.isNotEmpty()
+    open var hasQuickSearch: Boolean = false
+    open var hasDownloadSupport: Boolean = true
 
     open val app: Requests get() = com.lagradost.cloudstream3.app
 

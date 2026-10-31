@@ -90,3 +90,14 @@
 -keep @interface com.lagradost.** { *; }
 -keep class com.fasterxml.jackson.** { *; }
 -keepclassmembers class com.fasterxml.jackson.** { *; }
+
+# Keep full classes and members for dynamically loaded CloudStream plugins (.cs3)
+-keep class org.jsoup.** { *; }
+-keepclassmembers class org.jsoup.** { *; }
+-keep class kotlin.collections.CollectionsKt** { *; }
+-keep class kotlin.text.StringsKt** { *; }
+-keep class kotlin.text.CharsKt** { *; }
+-keep class kotlin.comparisons.ComparisonsKt** { *; }
+-keep class kotlin.coroutines.intrinsics.** { *; }
+-keep class kotlin.coroutines.jvm.internal.** { *; }
+

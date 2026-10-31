@@ -148,52 +148,52 @@ fun MainAPI.newEpisode(data: Any?, builder: Episode.() -> Unit = {}): Episode {
 fun newHomePageResponse(
     name: String,
     items: List<SearchResponse>,
-    hasNext: Boolean = false,
+    hasNext: Boolean? = false,
 ): HomePageResponse {
-    return HomePageResponse(items = listOf(HomePageList(name = name, list = items)), hasNext = hasNext)
+    return HomePageResponse(items = listOf(HomePageList(name = name, list = items)), hasNext = hasNext ?: false)
 }
 
 fun newHomePageResponse(
     data: MainPageRequest,
     list: List<SearchResponse>,
-    hasNext: Boolean = false,
+    hasNext: Boolean? = false,
 ): HomePageResponse {
     return HomePageResponse(
         items = listOf(HomePageList(name = data.name, list = list, isHorizontalImages = data.horizontalImages)),
-        hasNext = hasNext,
+        hasNext = hasNext ?: false,
     )
 }
 
 fun newHomePageResponse(
     data: MainPageData,
     list: List<SearchResponse>,
-    hasNext: Boolean = false,
+    hasNext: Boolean? = false,
 ): HomePageResponse {
     return HomePageResponse(
         items = listOf(HomePageList(name = data.name, list = list, isHorizontalImages = data.horizontalImages)),
-        hasNext = hasNext,
+        hasNext = hasNext ?: false,
     )
 }
 
 fun newSearchResponseList(
     list: List<SearchResponse>,
-    hasNext: Boolean = false,
+    hasNext: Boolean? = false,
 ): SearchResponseList {
-    return SearchResponseList(list = list, hasNext = hasNext)
+    return SearchResponseList(list = list, hasNext = hasNext ?: false)
 }
 
 fun newHomePageResponse(
     items: List<HomePageList>,
-    hasNext: Boolean = false,
+    hasNext: Boolean? = false,
 ): HomePageResponse {
-    return HomePageResponse(items = items, hasNext = hasNext)
+    return HomePageResponse(items = items, hasNext = hasNext ?: false)
 }
 
 fun newHomePageResponse(
     item: HomePageList,
-    hasNext: Boolean = false,
+    hasNext: Boolean? = false,
 ): HomePageResponse {
-    return HomePageResponse(items = listOf(item), hasNext = hasNext)
+    return HomePageResponse(items = listOf(item), hasNext = hasNext ?: false)
 }
 
 suspend fun newSubtitleFile(
