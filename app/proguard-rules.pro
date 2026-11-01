@@ -95,6 +95,17 @@
 -keepclassmembers class com.lagradost.** { *; }
 -keep interface com.lagradost.** { *; }
 -keep enum com.lagradost.** { *; }
+-keepclassmembers enum com.lagradost.** {
+    public static **[] values();
+    public static ** valueOf(java.lang.String);
+    public int ordinal();
+    public java.lang.String name();
+    public *;
+}
+-keep class com.lagradost.cloudstream3.utils.ExtractorLinkType { *; }
+-keepclassmembers class com.lagradost.cloudstream3.utils.ExtractorLinkType { *; }
+-keep class com.lagradost.cloudstream3.utils.Qualities { *; }
+-keepclassmembers class com.lagradost.cloudstream3.utils.Qualities { *; }
 -keep @interface com.lagradost.** { *; }
 -keep class com.fasterxml.jackson.** { *; }
 -keepclassmembers class com.fasterxml.jackson.** { *; }

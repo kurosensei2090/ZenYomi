@@ -138,4 +138,74 @@ data class ExtractorLink(
         extractorData = extractorData,
         type = type,
     )
+
+    // Binary compatibility constructors for Dalvik synthetic default calls
+    constructor(
+        source: String,
+        name: String,
+        url: String,
+        referer: String,
+        quality: Int,
+        isM3u8: Boolean,
+        headers: Map<String, String>,
+        extractorData: String?,
+        mask: Int,
+        marker: kotlin.jvm.internal.DefaultConstructorMarker?,
+    ) : this(
+        source = source,
+        name = name,
+        url = url,
+        referer = referer,
+        quality = quality,
+        isM3u8 = if ((mask and 32) != 0) false else isM3u8,
+        headers = if ((mask and 64) != 0) emptyMap() else headers,
+        extractorData = if ((mask and 128) != 0) null else extractorData,
+        type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO,
+    )
+
+    constructor(
+        source: String,
+        name: String,
+        url: String,
+        referer: String,
+        quality: Int,
+        type: ExtractorLinkType,
+        headers: Map<String, String>,
+        extractorData: String?,
+        mask: Int,
+        marker: kotlin.jvm.internal.DefaultConstructorMarker?,
+    ) : this(
+        source = source,
+        name = name,
+        url = url,
+        referer = referer,
+        quality = quality,
+        isM3u8 = type == ExtractorLinkType.M3U8,
+        headers = if ((mask and 64) != 0) emptyMap() else headers,
+        extractorData = if ((mask and 128) != 0) null else extractorData,
+        type = if ((mask and 32) != 0) ExtractorLinkType.VIDEO else type,
+    )
+
+    constructor(
+        source: String,
+        name: String,
+        url: String,
+        referer: String,
+        quality: Int,
+        headers: Map<String, String>,
+        extractorData: String?,
+        type: ExtractorLinkType,
+        mask: Int,
+        marker: kotlin.jvm.internal.DefaultConstructorMarker?,
+    ) : this(
+        source = source,
+        name = name,
+        url = url,
+        referer = referer,
+        quality = quality,
+        isM3u8 = type == ExtractorLinkType.M3U8,
+        headers = if ((mask and 32) != 0) emptyMap() else headers,
+        extractorData = if ((mask and 64) != 0) null else extractorData,
+        type = if ((mask and 128) != 0) ExtractorLinkType.VIDEO else type,
+    )
 }

@@ -858,7 +858,18 @@ class CloudStreamManager(
                 }
             } catch (t: Throwable) {
                 val cause = t.cause ?: t
-                val errMsg = "Failed to instantiate $pluginClassName: ${cause::class.java.simpleName}: ${cause.message}"
+                val fullMsg = cause.message?.takeIf { it.isNotBlank() } ?: cause.toString()
+                val methodRegex = Regex("""No (?:virtual|static|direct) method ([^(\s]+)(\([^)]*\)[^(\s]+) in class (L[^;]+;)""")
+                val matched = methodRegex.find(fullMsg)
+                val cleanDetail = if (matched != null) {
+                    val mName = matched.groupValues[1]
+                    val mSig = matched.groupValues[2]
+                    val mCls = matched.groupValues[3].substringAfterLast('/').removeSuffix(";")
+                    "Missing: $mCls.$mName$mSig"
+                } else {
+                    "${cause::class.java.simpleName}: ${cause.message?.take(50)}"
+                }
+                val errMsg = "[${file.nameWithoutExtension}] $cleanDetail"
                 logcat(LogPriority.ERROR, cause) { errMsg }
                 _lastErrorFlow.value = errMsg
                 return emptyList()
@@ -908,10 +919,19 @@ class CloudStreamManager(
                 val cause = t.cause ?: t
                 logcat(LogPriority.WARN, cause) { "Error calling load() on $pluginName: ${cause.message}" }
                 val fullMsg = cause.message?.takeIf { it.isNotBlank() } ?: cause.toString()
-                val methodRegex = Regex("""(No (?:virtual|static|direct) method [^(\s]+\([^)]*\)[^(\s]+)""")
-                val matched = methodRegex.find(fullMsg)?.groupValues?.getOrNull(1)
-                val cleanMsg = matched ?: if (fullMsg.length > 100) fullMsg.take(97) + "..." else fullMsg
-                _lastErrorFlow.value = "Failed to load ${file.name}: ${cause::class.java.simpleName}: $cleanMsg"
+                val methodRegex = Regex("""No (?:virtual|static|direct) method ([^(\s]+)(\([^)]*\)[^(\s]+) in class (L[^;]+;)""")
+                val matched = methodRegex.find(fullMsg)
+                val cleanDetail = if (matched != null) {
+                    val mName = matched.groupValues[1]
+                    val mSig = matched.groupValues[2]
+                    val mCls = matched.groupValues[3].substringAfterLast('/').removeSuffix(";")
+                    "Missing: $mCls.$mName$mSig"
+                } else {
+                    val fallbackRegex = Regex("""(No (?:virtual|static|direct) method [^\s]+)""")
+                    fallbackRegex.find(fullMsg)?.groupValues?.getOrNull(1)
+                        ?: "${cause::class.java.simpleName}: ${cause.message?.take(50)}"
+                }
+                _lastErrorFlow.value = "[${file.nameWithoutExtension}] $cleanDetail"
             }
 
             try {
