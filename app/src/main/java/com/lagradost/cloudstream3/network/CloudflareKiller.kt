@@ -16,6 +16,19 @@ class CloudflareKiller : Interceptor {
 
     val savedCookies: MutableMap<String, Map<String, String>> = mutableMapOf()
 
+    fun getCookieHeaders(url: String): okhttp3.Headers {
+        val cookie = try {
+            CookieManager.getInstance()?.getCookie(url)
+        } catch (_: Exception) {
+            null
+        }
+        val builder = okhttp3.Headers.Builder()
+        if (!cookie.isNullOrBlank()) {
+            builder.add("Cookie", cookie)
+        }
+        return builder.build()
+    }
+
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val url = request.url.toString()

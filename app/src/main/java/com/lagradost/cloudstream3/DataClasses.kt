@@ -60,6 +60,9 @@ data class Score(
             val d = score ?: return null
             return Score(d, 10.0)
         }
+
+        fun from10(score: Float?): Score? = score?.let { Score(it.toDouble(), 10.0) }
+        fun from10(score: Int?): Score? = score?.let { Score(it.toDouble(), 10.0) }
     }
 }
 
@@ -87,6 +90,7 @@ interface SearchResponse {
     var apiName: String
     var type: TvType?
     var posterUrl: String?
+    var posterHeaders: Map<String, String>?
     var year: Int?
     var id: Int?
     var quality: SearchQuality?
@@ -99,6 +103,7 @@ data class AnimeSearchResponse(
     override var apiName: String,
     override var type: TvType? = TvType.Anime,
     override var posterUrl: String? = null,
+    override var posterHeaders: Map<String, String>? = null,
     override var year: Int? = null,
     override var id: Int? = null,
     override var quality: SearchQuality? = null,
@@ -115,6 +120,7 @@ data class MovieSearchResponse(
     override var apiName: String,
     override var type: TvType? = TvType.Movie,
     override var posterUrl: String? = null,
+    override var posterHeaders: Map<String, String>? = null,
     override var year: Int? = null,
     override var id: Int? = null,
     override var quality: SearchQuality? = null,
@@ -127,6 +133,7 @@ data class TvSeriesSearchResponse(
     override var apiName: String,
     override var type: TvType? = TvType.TvSeries,
     override var posterUrl: String? = null,
+    override var posterHeaders: Map<String, String>? = null,
     override var year: Int? = null,
     override var id: Int? = null,
     override var quality: SearchQuality? = null,
@@ -140,6 +147,7 @@ data class LiveSearchResponse(
     override var apiName: String,
     override var type: TvType? = TvType.LiveStream,
     override var posterUrl: String? = null,
+    override var posterHeaders: Map<String, String>? = null,
     override var year: Int? = null,
     override var id: Int? = null,
     override var quality: SearchQuality? = null,
@@ -153,6 +161,7 @@ interface LoadResponse {
     var apiName: String
     var type: TvType
     var posterUrl: String?
+    var posterHeaders: Map<String, String>?
     var year: Int?
     var plot: String?
     var rating: Int?
@@ -163,9 +172,18 @@ interface LoadResponse {
     var backgroundPosterUrl: String?
     var duration: Int?
     var logoUrl: String?
+    var contentRating: String?
 
     companion object {
         fun addTMDbId(response: LoadResponse, tmdbId: String?) {}
+        fun addActorsOnly(response: LoadResponse, actors: List<String>?) {}
+        @Suppress("RedundantSuspendModifier")
+        suspend fun addTrailer(
+            response: LoadResponse,
+            trailerUrl: String?,
+            referer: String? = null,
+            addRaw: Boolean = false,
+        ) {}
     }
 }
 
@@ -213,6 +231,7 @@ data class AnimeLoadResponse(
     override var apiName: String,
     override var type: TvType = TvType.Anime,
     override var posterUrl: String? = null,
+    override var posterHeaders: Map<String, String>? = null,
     override var year: Int? = null,
     override var plot: String? = null,
     override var rating: Int? = null,
@@ -223,6 +242,7 @@ data class AnimeLoadResponse(
     override var backgroundPosterUrl: String? = null,
     override var duration: Int? = null,
     override var logoUrl: String? = null,
+    override var contentRating: String? = null,
     var episodes: MutableMap<DubStatus, List<Episode>> = mutableMapOf(),
     var japName: String? = null,
     var engName: String? = null,
@@ -246,6 +266,7 @@ data class MovieLoadResponse(
     override var apiName: String,
     override var type: TvType = TvType.Movie,
     override var posterUrl: String? = null,
+    override var posterHeaders: Map<String, String>? = null,
     override var year: Int? = null,
     override var plot: String? = null,
     override var rating: Int? = null,
@@ -256,6 +277,7 @@ data class MovieLoadResponse(
     override var backgroundPosterUrl: String? = null,
     override var duration: Int? = null,
     override var logoUrl: String? = null,
+    override var contentRating: String? = null,
     var dataUrl: String = url,
 ) : LoadResponse
 
@@ -265,6 +287,7 @@ data class TvSeriesLoadResponse(
     override var apiName: String,
     override var type: TvType = TvType.TvSeries,
     override var posterUrl: String? = null,
+    override var posterHeaders: Map<String, String>? = null,
     override var year: Int? = null,
     override var plot: String? = null,
     override var rating: Int? = null,
@@ -275,6 +298,7 @@ data class TvSeriesLoadResponse(
     override var backgroundPosterUrl: String? = null,
     override var duration: Int? = null,
     override var logoUrl: String? = null,
+    override var contentRating: String? = null,
     var episodes: List<Episode> = emptyList(),
     override var showStatus: ShowStatus? = null,
     override var nextAiring: NextAiring? = null,
@@ -287,6 +311,7 @@ data class LiveStreamLoadResponse(
     override var apiName: String,
     var dataUrl: String = url,
     override var posterUrl: String? = null,
+    override var posterHeaders: Map<String, String>? = null,
     override var year: Int? = null,
     override var plot: String? = null,
     override var type: TvType = TvType.LiveStream,
@@ -298,6 +323,7 @@ data class LiveStreamLoadResponse(
     override var rating: Int? = null,
     override var backgroundPosterUrl: String? = null,
     override var logoUrl: String? = null,
+    override var contentRating: String? = null,
 ) : LoadResponse
 
 data class SubtitleFile(
@@ -331,4 +357,6 @@ data class HomePageResponse(
 data class SearchResponseList(
     val list: List<SearchResponse>,
     val hasNext: Boolean = false,
-)
+) {
+    val items: List<SearchResponse> get() = list
+}

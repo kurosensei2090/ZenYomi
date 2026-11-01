@@ -16,6 +16,15 @@ object Coroutines {
         }
     }
 
+    fun <T> T.ioSafe(work: suspend (CoroutineScope.(T) -> Unit)): Job {
+        val value = this
+        return CoroutineScope(Dispatchers.IO).launch {
+            try {
+                work(value)
+            } catch (_: Throwable) {}
+        }
+    }
+
     suspend fun <T, V> V.ioWork(work: suspend (CoroutineScope.(V) -> T)): T {
         val value = this
         return withContext(Dispatchers.IO) {

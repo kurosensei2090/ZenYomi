@@ -273,10 +273,58 @@ suspend fun MainAPI.newAnimeLoadResponse(
     builder: suspend AnimeLoadResponse.() -> Unit,
 ): AnimeLoadResponse = newAnimeLoadResponse(name, url, TvType.Anime, true, builder)
 
+fun SearchResponse.addPoster(url: String?, headers: Map<String, String>? = null) {
+    this.posterUrl = url
+    this.posterHeaders = headers
+}
+
 fun newEpisode(data: Any?, builder: Episode.() -> Unit = {}): Episode {
     val ep = Episode(data = data?.toString() ?: "")
     builder(ep)
     return ep
+}
+
+fun MainAPI.newEpisode(
+    data: String,
+    builder: Episode.() -> Unit = {},
+    fix: Boolean = false,
+): Episode {
+    val ep = Episode(data = if (fix) fixUrl(data) else data)
+    builder(ep)
+    return ep
+}
+
+fun MainAPI.newLiveSearchResponse(
+    name: String,
+    url: String,
+    type: TvType = TvType.LiveStream,
+    fix: Boolean = false,
+    builder: LiveSearchResponse.() -> Unit = {},
+): LiveSearchResponse {
+    val res = LiveSearchResponse(
+        name = name,
+        url = if (fix) fixUrl(url) else url,
+        apiName = this.name,
+        type = type,
+    )
+    builder(res)
+    return res
+}
+
+suspend fun MainAPI.newLiveStreamLoadResponse(
+    name: String,
+    url: String,
+    dataUrl: String = url,
+    builder: suspend LiveStreamLoadResponse.() -> Unit = {},
+): LiveStreamLoadResponse {
+    val res = LiveStreamLoadResponse(
+        name = name,
+        url = fixUrl(url),
+        apiName = this.name,
+        dataUrl = fixUrl(dataUrl),
+    )
+    builder(res)
+    return res
 }
 
 fun MainAPI.newMovieSearchResponse(

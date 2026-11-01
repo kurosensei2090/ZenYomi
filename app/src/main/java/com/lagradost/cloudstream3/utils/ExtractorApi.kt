@@ -6,6 +6,9 @@ import com.lagradost.cloudstream3.app
 
 val extractorApis = mutableListOf<ExtractorApi>()
 
+val INFER_TYPE: ExtractorLinkType? = null
+val schemaStripRegex: Regex = Regex("""^(https:|)//(www\.|)""")
+
 open class ExtractorApi {
     open var name: String = ""
     open var mainUrl: String = ""

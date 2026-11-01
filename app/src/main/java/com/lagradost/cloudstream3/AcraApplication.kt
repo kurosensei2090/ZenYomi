@@ -25,10 +25,25 @@ open class AcraApplication : Application() {
 
 class CloudStreamApp {
     companion object {
+        private val keyStore = mutableMapOf<String, Any?>()
+
         var context: Context?
             get() = AcraApplication.context
             set(value) {
                 AcraApplication.context = value
             }
+
+        fun setKey(path: String, value: Any?) {
+            keyStore[path] = value
+        }
+
+        fun <T> getKey(path: String, def: T? = null): T? {
+            @Suppress("UNCHECKED_CAST")
+            return (keyStore[path] as? T) ?: def
+        }
+
+        fun removeKey(path: String) {
+            keyStore.remove(path)
+        }
     }
 }
