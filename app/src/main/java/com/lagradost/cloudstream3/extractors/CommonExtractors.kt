@@ -31,3 +31,13 @@ open class Voe : ExtractorApi() {
     override var name = "Voe"
     override var mainUrl = "voe.sx"
 }
+
+open class Gdriveplayer : ExtractorApi() {
+    override var name = "Gdriveplayer"
+    override var mainUrl = "gdriveplayer.to"
+}
+
+open class DoodLaExtractor : ExtractorApi() {
+    override var name = "DoodStream"
+    override var mainUrl = "dood.la"
+}

@@ -76,6 +76,7 @@ class AndroidAnimeSourceManager(
                 }
                 csSources.forEach { csSource ->
                     mutableMap[csSource.id] = csSource
+                    registerStubSource(StubAnimeSource(csSource.id, csSource.lang, csSource.name))
                 }
                 sourcesMapFlow.value = mutableMap
                 _isInitialized.value = true

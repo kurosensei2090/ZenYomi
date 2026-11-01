@@ -251,7 +251,9 @@ class CloudStreamManager(
             ?: _availablePluginsFlow.value.find { it.internalName.equals(pluginName, ignoreCase = true) || it.name.equals(pluginName, ignoreCase = true) }?.repoUrl
             ?: map.entries.find { pluginName.contains(it.key, ignoreCase = true) || it.key.contains(pluginName, ignoreCase = true) }?.value
         if (repoUrl != null) {
-            return _repositoriesFlow.value.find { it.url == repoUrl }
+            val normTarget = normalizeRepoUrl(repoUrl).trimEnd('/')
+            return _repositoriesFlow.value.find { normalizeRepoUrl(it.url).trimEnd('/') == normTarget }
+                ?: _repositoriesFlow.value.find { it.url == repoUrl }
                 ?: _repositoriesFlow.value.find { it.url.contains(repoUrl) || repoUrl.contains(it.url) }
         }
         return null
@@ -433,7 +435,7 @@ class CloudStreamManager(
         }
     }
 
-    private fun normalizeRepoUrl(raw: String): String {
+    fun normalizeRepoUrl(raw: String): String {
         var url = raw.trim()
         if (url.startsWith("cloudstreamrepo://", ignoreCase = true)) {
             url = url.substring("cloudstreamrepo://".length)
@@ -659,6 +661,14 @@ class CloudStreamManager(
             current.addAll(newSources)
             _installedSourcesFlow.value = current.distinctBy { it.id }
 
+            _availablePluginsFlow.value = _availablePluginsFlow.value.map { item ->
+                if (item.internalName == plugin.internalName || item.internalName == safeName || item.name == plugin.name) {
+                    item.copy(isInstalled = true)
+                } else {
+                    item
+                }
+            }
+
             refreshRepositories()
             return@withContext true
         } catch (e: Exception) {
@@ -697,6 +707,18 @@ class CloudStreamManager(
                 it.api.name.equals(internalName, ignoreCase = true)
         }
         _installedSourcesFlow.value = currentSources
+
+        _availablePluginsFlow.value = _availablePluginsFlow.value.map { item ->
+            if (item.internalName.equals(internalName, ignoreCase = true) ||
+                item.internalName.equals(safeName, ignoreCase = true) ||
+                item.name.equals(internalName, ignoreCase = true)
+            ) {
+                item.copy(isInstalled = false)
+            } else {
+                item
+            }
+        }
+
         refreshRepositories()
     }
 

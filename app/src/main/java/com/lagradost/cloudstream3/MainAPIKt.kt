@@ -401,6 +401,11 @@ fun MainAPI.newTvSeriesSearchResponse(
     return res
 }
 
-fun List<SearchResponse>.toNewSearchResponseList(hasNext: Boolean = false): SearchResponseList {
+fun addQuality(response: SearchResponse, quality: String) {
+    val q = SearchQuality.values().find { it.name.equals(quality, ignoreCase = true) }
+    response.quality = q
+}
+
+fun List<SearchResponse>.toNewSearchResponseList(hasNext: Boolean? = false): SearchResponseList {
     return SearchResponseList(this)
 }

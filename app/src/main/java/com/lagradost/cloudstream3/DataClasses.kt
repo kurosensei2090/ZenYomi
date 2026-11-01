@@ -174,8 +174,12 @@ interface LoadResponse {
     var duration: Int?
     var logoUrl: String?
     var contentRating: String?
+    var comingSoon: Boolean
+        get() = false
+        set(value) {}
 
     companion object {
+        fun addActorNames(response: LoadResponse, actors: List<String>?) {}
         fun addTMDbId(response: LoadResponse, tmdbId: String?) {}
         fun addImdbId(response: LoadResponse, imdbId: String?) {}
         fun addAniListId(response: LoadResponse, id: Int?) {}
@@ -284,6 +288,7 @@ data class AnimeLoadResponse(
     override var showStatus: ShowStatus? = null,
     override var nextAiring: NextAiring? = null,
     override var seasonNames: List<SeasonData>? = null,
+    override var comingSoon: Boolean = false,
 ) : LoadResponse, EpisodeResponse {
     fun addEpisodes(status: DubStatus, episodes: List<Episode>) {
         val list = this.episodes.getOrPut(status) { mutableListOf() }.toMutableList()
@@ -311,7 +316,7 @@ data class MovieLoadResponse(
     override var logoUrl: String? = null,
     override var contentRating: String? = null,
     var dataUrl: String = url,
-    var comingSoon: Boolean = false,
+    override var comingSoon: Boolean = false,
 ) : LoadResponse
 
 data class TvSeriesLoadResponse(
@@ -336,6 +341,7 @@ data class TvSeriesLoadResponse(
     override var showStatus: ShowStatus? = null,
     override var nextAiring: NextAiring? = null,
     override var seasonNames: List<SeasonData>? = null,
+    override var comingSoon: Boolean = false,
 ) : LoadResponse, EpisodeResponse
 
 data class LiveStreamLoadResponse(
@@ -357,6 +363,7 @@ data class LiveStreamLoadResponse(
     override var backgroundPosterUrl: String? = null,
     override var logoUrl: String? = null,
     override var contentRating: String? = null,
+    override var comingSoon: Boolean = false,
 ) : LoadResponse
 
 data class SubtitleFile(

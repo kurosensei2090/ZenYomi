@@ -99,13 +99,15 @@ fun Screen.csSourcesTab(): TabContent {
 
             var selectedRepoUrl by remember { mutableStateOf<String?>(null) }
 
-            val filteredSources = remember(sources, selectedRepoUrl) {
+            val filteredSources = remember(sources, selectedRepoUrl, repos) {
                 if (selectedRepoUrl == null) {
                     sources
                 } else {
+                    val normSelected = manager.normalizeRepoUrl(selectedRepoUrl!!).trimEnd('/')
                     sources.filter { source ->
                         val repo = manager.getRepoForPlugin(source.pluginName)
-                        repo?.url == selectedRepoUrl
+                        val repoNorm = repo?.url?.let { manager.normalizeRepoUrl(it).trimEnd('/') }
+                        repoNorm == normSelected || repo?.url == selectedRepoUrl
                     }
                 }
             }

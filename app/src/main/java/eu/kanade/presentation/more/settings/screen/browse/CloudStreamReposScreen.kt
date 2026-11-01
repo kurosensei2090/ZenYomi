@@ -1,5 +1,6 @@
 package eu.kanade.presentation.more.settings.screen.browse
 
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -50,6 +51,7 @@ import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.extension.anime.cloudstream.CloudStreamManager
 import eu.kanade.tachiyomi.extension.anime.cloudstream.CloudStreamPluginItem
 import eu.kanade.tachiyomi.extension.anime.cloudstream.CloudStreamRepo
+import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.launch
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.padding
@@ -208,10 +210,21 @@ class CloudStreamReposScreen : Screen() {
                     PluginItemCard(
                         plugin = plugin,
                         onInstall = {
-                            scope.launch { manager.installPlugin(plugin) }
+                            scope.launch {
+                                val success = manager.installPlugin(plugin)
+                                if (success) {
+                                    context.toast("Installed ${plugin.name} successfully")
+                                } else {
+                                    val err = manager.lastErrorFlow.value ?: "Failed to load providers from ${plugin.name}"
+                                    context.toast(err, Toast.LENGTH_LONG)
+                                }
+                            }
                         },
                         onUninstall = {
-                            scope.launch { manager.uninstallPlugin(plugin.internalName) }
+                            scope.launch {
+                                manager.uninstallPlugin(plugin.internalName)
+                                context.toast("Uninstalled ${plugin.name}")
+                            }
                         },
                     )
                 }

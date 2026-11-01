@@ -19,4 +19,23 @@ object SubtitleHelper {
             else -> code
         }
     }
+
+    fun fromTwoLettersToLanguage(code: String): String {
+        return when (code.lowercase()) {
+            "en" -> "English"
+            "ar" -> "Arabic"
+            "es" -> "Spanish"
+            "fr" -> "French"
+            "de" -> "German"
+            "it" -> "Italian"
+            "pt" -> "Portuguese"
+            "ru" -> "Russian"
+            "ja" -> "Japanese"
+            "ko" -> "Korean"
+            "zh" -> "Chinese"
+            "hi" -> "Hindi"
+            "id" -> "Indonesian"
+            else -> code
+        }
+    }
 }
