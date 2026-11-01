@@ -896,7 +896,11 @@ class CloudStreamManager(
             } catch (t: Throwable) {
                 val cause = t.cause ?: t
                 logcat(LogPriority.WARN, cause) { "Error calling load() on $pluginName: ${cause.message}" }
-                _lastErrorFlow.value = "Error during plugin.load(): ${cause::class.java.simpleName}: ${cause.message}"
+                val fullMsg = cause.message?.takeIf { it.isNotBlank() } ?: cause.toString()
+                val methodRegex = Regex("""(No (?:virtual|static|direct) method [^(\s]+\([^)]*\)[^(\s]+)""")
+                val matched = methodRegex.find(fullMsg)?.groupValues?.getOrNull(1)
+                val cleanMsg = matched ?: if (fullMsg.length > 100) fullMsg.take(97) + "..." else fullMsg
+                _lastErrorFlow.value = "Failed to load ${file.name}: ${cause::class.java.simpleName}: $cleanMsg"
             }
 
             try {
@@ -999,7 +1003,9 @@ class CloudStreamManager(
         } catch (e: Throwable) {
             val cause = e.cause ?: e
             val fullMsg = cause.message?.takeIf { it.isNotBlank() } ?: cause.toString()
-            val cleanMsg = if (fullMsg.length > 100) fullMsg.take(97) + "..." else fullMsg
+            val methodRegex = Regex("""(No (?:virtual|static|direct) method [^(\s]+\([^)]*\)[^(\s]+)""")
+            val matched = methodRegex.find(fullMsg)?.groupValues?.getOrNull(1)
+            val cleanMsg = matched ?: if (fullMsg.length > 100) fullMsg.take(97) + "..." else fullMsg
             val errMsg = "Failed to load ${file.name}: ${cause::class.java.simpleName}: $cleanMsg"
             logcat(LogPriority.ERROR, e) { errMsg }
             _lastErrorFlow.value = errMsg
