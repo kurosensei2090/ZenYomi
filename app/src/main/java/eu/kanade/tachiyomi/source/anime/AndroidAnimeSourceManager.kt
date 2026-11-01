@@ -45,7 +45,7 @@ class AndroidAnimeSourceManager(
     private val stubSourcesMap = ConcurrentHashMap<Long, StubAnimeSource>()
 
     override val sources: Flow<List<AnimeSource>> = sourcesMapFlow.map { map ->
-        map.values.filterNot { it is eu.kanade.tachiyomi.extension.anime.cloudstream.CloudStreamAnimeSource }
+        map.values.toList()
     }
 
     init {
@@ -108,8 +108,7 @@ class AndroidAnimeSourceManager(
         }
     }
 
-    override fun getAll(): List<AnimeSource> = sourcesMapFlow.value.values
-        .filterNot { it is eu.kanade.tachiyomi.extension.anime.cloudstream.CloudStreamAnimeSource }
+    override fun getAll(): List<AnimeSource> = sourcesMapFlow.value.values.toList()
 
     override fun getOnlineSources(): List<AnimeHttpSource> {
         return sourcesMapFlow.value.values.filterIsInstance<AnimeHttpSource>()

@@ -1,6 +1,22 @@
 package com.lagradost.cloudstream3.utils
 
 object SubtitleHelper {
-    fun fromTwoLettersToLanguage(twoLetters: String?): String? = twoLetters
-    fun fromLanguageToTwoLetters(language: String?): String? = language
+    fun fromThreeLettersToLanguage(code: String): String {
+        return when (code.lowercase()) {
+            "eng" -> "English"
+            "ara" -> "Arabic"
+            "spa" -> "Spanish"
+            "fre", "fra" -> "French"
+            "ger", "deu" -> "German"
+            "ita" -> "Italian"
+            "por" -> "Portuguese"
+            "rus" -> "Russian"
+            "jpn" -> "Japanese"
+            "kor" -> "Korean"
+            "chi", "zho" -> "Chinese"
+            "hin" -> "Hindi"
+            "ind" -> "Indonesian"
+            else -> code
+        }
+    }
 }

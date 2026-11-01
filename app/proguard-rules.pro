@@ -4,22 +4,30 @@
 -keep,allowoptimization class tachiyomi.**
 -keep,allowoptimization class mihon.**
 
-# Keep common dependencies used in extensions
--keep,allowoptimization class androidx.preference.** { public protected *; }
--keep,allowoptimization class android.content.** { *; }
--keep,allowoptimization class uy.kohesive.injekt.** { public protected *; }
--keep,allowoptimization class android.test.base.** { *; }
--keep,allowoptimization class kotlin.** { public protected *; }
--keep,allowoptimization class kotlinx.coroutines.** { public protected *; }
--keep,allowoptimization class kotlinx.serialization.** { public protected *; }
--keep,allowoptimization class okhttp3.** { public protected *; }
--keep,allowoptimization class okio.** { public protected *; }
--keep,allowoptimization class org.jsoup.** { public protected *; }
--keep,allowoptimization class rx.** { public protected *; }
--keep,allowoptimization class app.cash.quickjs.** { public protected *; }
--keep,allowoptimization class uy.kohesive.injekt.** { public protected *; }
--keep,allowoptimization class is.xyz.mpv.** { public protected *; }
--keep,allowoptimization class com.arthenica.** { public protected *; }
+# Keep common dependencies used in extensions and dynamically loaded CloudStream plugins
+-keep class androidx.preference.** { *; }
+-keep class androidx.appcompat.** { *; }
+-keep class androidx.fragment.** { *; }
+-keep class androidx.recyclerview.** { *; }
+-keep class com.google.android.material.** { *; }
+-keep class android.content.** { *; }
+-keep class uy.kohesive.injekt.** { *; }
+-keep class android.test.base.** { *; }
+-keep class kotlin.** { *; }
+-keepclassmembers class kotlin.** { *; }
+-keep class kotlinx.coroutines.** { *; }
+-keepclassmembers class kotlinx.coroutines.** { *; }
+-keep class kotlinx.serialization.** { *; }
+-keep class okhttp3.** { *; }
+-keepclassmembers class okhttp3.** { *; }
+-keep class okio.** { *; }
+-keepclassmembers class okio.** { *; }
+-keep class org.jsoup.** { *; }
+-keepclassmembers class org.jsoup.** { *; }
+-keep class rx.** { *; }
+-keep class app.cash.quickjs.** { *; }
+-keep class is.xyz.mpv.** { *; }
+-keep class com.arthenica.** { *; }
 
 # From extensions-lib
 -keep,allowoptimization class eu.kanade.tachiyomi.network.interceptor.RateLimitInterceptorKt { public protected *; }

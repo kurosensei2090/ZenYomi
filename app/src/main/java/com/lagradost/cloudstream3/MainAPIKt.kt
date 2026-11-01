@@ -86,6 +86,29 @@ fun AnimeLoadResponse.addEpisodes(status: DubStatus, episodes: List<Episode>) {
     this.episodes[status] = list
 }
 
+fun toRatingInt(str: String?): Int? {
+    if (str == null) return null
+    val digits = str.filter { it.isDigit() }
+    return digits.toIntOrNull()
+}
+
+suspend fun MainAPI.newMovieLoadResponse(
+    name: String,
+    url: String,
+    type: TvType,
+    data: Any?,
+    initializer: suspend MovieLoadResponse.() -> Unit = {},
+): MovieLoadResponse {
+    val res = MovieLoadResponse(
+        name = name,
+        url = url,
+        apiName = this.name,
+        type = type,
+    )
+    res.initializer()
+    return res
+}
+
 fun base64Decode(str: String): String {
     return try {
         String(Base64.decode(str, Base64.DEFAULT), Charsets.UTF_8)

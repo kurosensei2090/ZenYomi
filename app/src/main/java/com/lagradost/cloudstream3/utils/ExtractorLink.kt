@@ -49,4 +49,67 @@ data class ExtractorLink(
     var headers: Map<String, String> = emptyMap(),
     var extractorData: String? = null,
     var type: ExtractorLinkType = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO,
-)
+) {
+    constructor(
+        source: String,
+        name: String,
+        url: String,
+        referer: String,
+        quality: Int,
+        type: ExtractorLinkType,
+        headers: Map<String, String> = emptyMap(),
+        extractorData: String? = null,
+    ) : this(
+        source = source,
+        name = name,
+        url = url,
+        referer = referer,
+        quality = quality,
+        isM3u8 = type == ExtractorLinkType.M3U8,
+        headers = headers,
+        extractorData = extractorData,
+        type = type,
+    )
+
+    constructor(
+        source: String,
+        name: String,
+        url: String,
+        referer: String,
+        quality: Int,
+        headers: Map<String, String>,
+        extractorData: String?,
+        type: ExtractorLinkType,
+    ) : this(
+        source = source,
+        name = name,
+        url = url,
+        referer = referer,
+        quality = quality,
+        isM3u8 = type == ExtractorLinkType.M3U8,
+        headers = headers,
+        extractorData = extractorData,
+        type = type,
+    )
+
+    constructor(
+        source: String,
+        name: String,
+        url: String,
+        referer: String,
+        quality: Int,
+        isM3u8: Boolean,
+        headers: Map<String, String>,
+        extractorData: String?,
+    ) : this(
+        source = source,
+        name = name,
+        url = url,
+        referer = referer,
+        quality = quality,
+        isM3u8 = isM3u8,
+        headers = headers,
+        extractorData = extractorData,
+        type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO,
+    )
+}

@@ -9,6 +9,23 @@ val extractorApis = mutableListOf<ExtractorApi>()
 val INFER_TYPE: ExtractorLinkType? = null
 val schemaStripRegex: Regex = Regex("""^(https:|)//(www\.|)""")
 
+fun httpsify(url: String): String {
+    return when {
+        url.startsWith("//") -> "https:$url"
+        url.startsWith("http://") -> "https://" + url.substring("http://".length)
+        !url.startsWith("https://") -> "https://$url"
+        else -> url
+    }
+}
+
+fun getPacked(script: String): String {
+    return com.lagradost.cloudstream3.utils.JsUnpacker.unpack(script) ?: script
+}
+
+fun getAndUnpack(script: String): String {
+    return com.lagradost.cloudstream3.utils.JsUnpacker.unpack(script) ?: script
+}
+
 open class ExtractorApi {
     open var name: String = ""
     open var mainUrl: String = ""

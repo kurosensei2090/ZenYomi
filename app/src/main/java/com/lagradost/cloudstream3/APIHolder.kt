@@ -47,4 +47,14 @@ object APIHolder {
     }
 
     fun initAll() {}
+
+    fun capitalize(str: String): String {
+        return str.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+    }
+
+    suspend fun getCaptchaToken(
+        key: String,
+        url: String,
+        type: String? = null,
+    ): String = ""
 }

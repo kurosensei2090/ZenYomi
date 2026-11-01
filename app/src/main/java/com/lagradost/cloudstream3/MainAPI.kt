@@ -4,6 +4,10 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.nicehttp.Requests
 
 abstract class MainAPI {
+    companion object {
+        @JvmStatic
+        val settingsForProvider: SettingsJson = SettingsJson()
+    }
     open var mainUrl: String = ""
     open var name: String = ""
     open var supportedTypes: Set<TvType> = setOf(TvType.Anime, TvType.Movie, TvType.TvSeries)

@@ -417,7 +417,12 @@ class CloudStreamManager(
                     ?.toSet() ?: emptySet()
 
                 val marked = pluginsList.distinctBy { "${it.repoUrl}_${it.internalName}" }.map { item ->
-                    item.copy(isInstalled = installedNames.contains(item.internalName))
+                    val safe = item.internalName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                    val isInst = installedNames.contains(item.internalName) ||
+                        installedNames.contains(safe) ||
+                        installedNames.contains(item.name) ||
+                        installedNames.contains(item.name.replace(Regex("[^a-zA-Z0-9._-]"), "_"))
+                    item.copy(isInstalled = isInst)
                 }
                 _availablePluginsFlow.value = marked
             } finally {
@@ -602,8 +607,9 @@ class CloudStreamManager(
                 targetFile.setWritable(true)
                 targetFile.delete()
             }
+            val downloadUrl = plugin.url.trim().replace(" ", "%20")
             val request = Request.Builder()
-                .url(plugin.url)
+                .url(downloadUrl)
                 .header("User-Agent", USER_AGENT)
                 .build()
             val response = client.newCall(request).execute()
@@ -707,28 +713,11 @@ class CloudStreamManager(
     }
 
     fun loadInstalledPlugins() {
-        val repos = _repositoriesFlow.value
-        if (repos.isEmpty()) {
-            pluginsFolder.listFiles()?.forEach { file ->
-                try {
-                    file.setWritable(true)
-                    file.delete()
-                } catch (_: Throwable) {}
-            }
-            context.codeCacheDir.listFiles { f -> f.extension == "jar" || f.extension == "dex" }?.forEach { f ->
-                try {
-                    f.setWritable(true)
-                    f.delete()
-                } catch (_: Throwable) {}
-            }
-            com.lagradost.cloudstream3.APIHolder.allProviders.clear()
-            com.lagradost.cloudstream3.APIHolder.apis.clear()
+        val cs3Files = pluginsFolder.listFiles { file -> file.extension.equals("cs3", ignoreCase = true) }
+        if (cs3Files.isNullOrEmpty()) {
             _installedSourcesFlow.value = emptyList()
-            _lastErrorFlow.value = null
             return
         }
-
-        val cs3Files = pluginsFolder.listFiles { file -> file.extension.equals("cs3", ignoreCase = true) } ?: return
         com.lagradost.cloudstream3.APIHolder.allProviders.clear()
         com.lagradost.cloudstream3.APIHolder.apis.clear()
         com.lagradost.cloudstream3.APIHolder.apiMap.clear()

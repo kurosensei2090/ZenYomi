@@ -112,6 +112,7 @@ data class AnimeSearchResponse(
     var episodes: Map<String, Int>? = null,
     var sub: Int? = null,
     var dub: Int? = null,
+    var otherName: String? = null,
 ) : SearchResponse
 
 data class MovieSearchResponse(
@@ -176,11 +177,22 @@ interface LoadResponse {
 
     companion object {
         fun addTMDbId(response: LoadResponse, tmdbId: String?) {}
+        fun addImdbId(response: LoadResponse, imdbId: String?) {}
+        fun addAniListId(response: LoadResponse, id: Int?) {}
+        fun addMalId(response: LoadResponse, id: Int?) {}
         fun addActorsOnly(response: LoadResponse, actors: List<String>?) {}
+        fun addActorsRole(response: LoadResponse, actors: List<Any>?) {}
         @Suppress("RedundantSuspendModifier")
         suspend fun addTrailer(
             response: LoadResponse,
             trailerUrl: String?,
+            referer: String? = null,
+            addRaw: Boolean = false,
+        ) {}
+        @Suppress("RedundantSuspendModifier")
+        suspend fun addTrailer(
+            response: LoadResponse,
+            trailers: List<Any>?,
             referer: String? = null,
             addRaw: Boolean = false,
         ) {}
@@ -223,6 +235,26 @@ data class Episode(
         set(value) { data = value }
 
     constructor(data: String) : this(data = data, name = null)
+
+    constructor(
+        data: String,
+        name: String? = null,
+        season: Int? = null,
+        episode: Int? = null,
+        posterUrl: String? = null,
+        rating: Int? = null,
+        description: String? = null,
+        date: Long? = null,
+    ) : this(
+        data = data,
+        name = name,
+        season = season,
+        episode = episode,
+        posterUrl = posterUrl,
+        rating = rating,
+        description = description,
+        date = date?.toString(),
+    )
 }
 
 data class AnimeLoadResponse(
@@ -279,6 +311,7 @@ data class MovieLoadResponse(
     override var logoUrl: String? = null,
     override var contentRating: String? = null,
     var dataUrl: String = url,
+    var comingSoon: Boolean = false,
 ) : LoadResponse
 
 data class TvSeriesLoadResponse(
