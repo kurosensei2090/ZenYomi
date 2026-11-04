@@ -302,7 +302,9 @@ fun Screen.csSourcesTab(): TabContent {
                                         Spacer(modifier = Modifier.size(12.dp))
 
                                         Column {
-                                            if (repo != null && repos.size > 1) {
+                                            val extensionTag = repo?.cleanName?.takeIf { it.isNotBlank() }
+                                                ?: source.pluginName.removeSuffix(".cs3").takeIf { it.isNotBlank() }
+                                            if (extensionTag != null) {
                                                 Surface(
                                                     shape = RoundedCornerShape(4.dp),
                                                     color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f),
@@ -320,7 +322,7 @@ fun Screen.csSourcesTab(): TabContent {
                                                         )
                                                         Spacer(modifier = Modifier.width(3.dp))
                                                         Text(
-                                                            text = repo.cleanName,
+                                                            text = extensionTag,
                                                             style = MaterialTheme.typography.labelSmall,
                                                             fontWeight = FontWeight.Medium,
                                                             color = MaterialTheme.colorScheme.onSecondaryContainer,

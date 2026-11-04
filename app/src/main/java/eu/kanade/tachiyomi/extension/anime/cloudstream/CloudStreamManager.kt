@@ -50,20 +50,7 @@ data class CloudStreamRepo(
     val url: String,
 ) {
     val cleanName: String
-        get() {
-            val firstLine = name.lineSequence().firstOrNull()?.trim().orEmpty()
-            if (firstLine.isBlank() || firstLine.startsWith("http://", ignoreCase = true) || firstLine.startsWith("https://", ignoreCase = true)) {
-                val clean = url.trimEnd('/')
-                val lastPart = clean.substringAfterLast('/').substringBefore(".json")
-                return if (lastPart.isNotBlank() && lastPart != "repo" && lastPart != "plugins") {
-                    lastPart
-                } else {
-                    clean.substringBeforeLast('/').substringAfterLast('/')
-                }.ifBlank { "CloudStream Repo" }
-            }
-            val stripped = firstLine.split(Regex("\\s+https?://")).first().trim()
-            return stripped.ifBlank { firstLine }
-        }
+        get() = CloudStreamManager.extractCleanRepoName(url, name)
 }
 
 @Serializable
@@ -88,6 +75,61 @@ class CloudStreamManager(
         private const val PLUGINS_DIR = "cloudstream_plugins"
         private const val USER_AGENT =
             "Mozilla/5.0 (Linux; Android 14; ZenYomi) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+
+        private val GENERIC_REPO_NAMES = setOf(
+            "main", "master", "builds", "build", "repo", "plugins", "release", "releases",
+            "cloudstream repo", "cloudstream repo.", "cloudstream", "cs repo", "cs3"
+        )
+
+        private val URL_IGNORE_SEGMENTS = setOf(
+            "http:", "https:", "raw.githubusercontent.com", "github.com", "gitlab.com",
+            "repo.json", "plugins.json", "builds", "main", "master", "build", "release",
+            "releases", "raw", "pages", "gh-pages", "refs", "heads", "tree", "blob"
+        )
+
+        fun isUrlLike(s: String): Boolean {
+            val trimmed = s.trim()
+            if (trimmed.isBlank() || trimmed.contains(" ")) return false
+            return trimmed.startsWith("http://", ignoreCase = true) ||
+                trimmed.startsWith("https://", ignoreCase = true) ||
+                trimmed.startsWith("cloudstreamrepo://", ignoreCase = true) ||
+                trimmed.contains("raw.githubusercontent.com", ignoreCase = true) ||
+                trimmed.contains("github.com", ignoreCase = true) ||
+                trimmed.endsWith(".json", ignoreCase = true) ||
+                trimmed.endsWith("/repo", ignoreCase = true)
+        }
+
+        fun extractCleanRepoName(url: String, rawName: String): String {
+            val firstLine = rawName.lineSequence().firstOrNull()?.trim().orEmpty()
+            val stripped = firstLine.split(Regex("\\s+https?://")).first().trim()
+
+            // If a custom or detected name was provided and is not a generic branch or URL, keep it!
+            if (stripped.isNotBlank() && !isUrlLike(stripped) && stripped.lowercase() !in GENERIC_REPO_NAMES) {
+                return stripped
+            }
+
+            // Otherwise extract the meaningful repository/extension name from the URL
+            val clean = url.substringBefore('?').substringBefore('#').trimEnd('/')
+            val parts = clean.split('/').filter { it.isNotBlank() }
+
+            val meaningful = parts.map { it.removeSuffix(".json") }.filter { part ->
+                val lower = part.lowercase()
+                lower !in URL_IGNORE_SEGMENTS &&
+                    !lower.endsWith(".com") &&
+                    !lower.endsWith(".io") &&
+                    !lower.endsWith(".org") &&
+                    !lower.endsWith(".net")
+            }
+
+            if (meaningful.isNotEmpty()) {
+                val candidate = meaningful.last()
+                if (candidate.isNotBlank() && candidate.lowercase() !in GENERIC_REPO_NAMES) {
+                    return candidate
+                }
+            }
+
+            return stripped.ifBlank { "CloudStream Repo" }
+        }
 
         @Volatile
         private var instance: CloudStreamManager? = null
@@ -153,18 +195,6 @@ class CloudStreamManager(
         }
     }
 
-    private fun isUrlLike(s: String): Boolean {
-        val trimmed = s.trim()
-        if (trimmed.isBlank() || trimmed.contains(" ")) return false
-        return trimmed.startsWith("http://", ignoreCase = true) ||
-            trimmed.startsWith("https://", ignoreCase = true) ||
-            trimmed.startsWith("cloudstreamrepo://", ignoreCase = true) ||
-            trimmed.contains("raw.githubusercontent.com", ignoreCase = true) ||
-            trimmed.contains("github.com", ignoreCase = true) ||
-            trimmed.endsWith(".json", ignoreCase = true) ||
-            trimmed.endsWith("/repo", ignoreCase = true)
-    }
-
     private fun loadSavedRepositories() {
         val raw = prefs.getString(PREF_REPOS, null)
         val repos = if (!raw.isNullOrBlank()) {
@@ -177,22 +207,15 @@ class CloudStreamManager(
             emptyList()
         }
 
-        // Auto-repair any swapped or messy repos saved previously (e.g. where name had newlines, URLs or swapped)
+        // Auto-repair any swapped, messy, or generic branch names saved previously (e.g. main, builds, master, URLs)
         var hasRepairs = false
         val repaired = repos.map { repo ->
             var newName = repo.name.lines().firstOrNull()?.trim().orEmpty()
-            if (newName.isBlank() || isUrlLike(newName)) {
-                val clean = repo.url.trimEnd('/')
-                val lastPart = clean.substringAfterLast('/').substringBefore(".json")
-                newName = if (lastPart.isNotBlank() && lastPart != "repo" && lastPart != "plugins") {
-                    lastPart
-                } else {
-                    clean.substringBeforeLast('/').substringAfterLast('/')
-                }.ifBlank { "CloudStream Repo" }
+            if (newName.isBlank() || isUrlLike(newName) || newName.lowercase() in GENERIC_REPO_NAMES) {
+                newName = extractCleanRepoName(repo.url, "")
             }
-            // Strip any URL that got appended to name
             val stripped = newName.split(Regex("\\s+https?://")).first().trim()
-            if (stripped.isNotBlank()) {
+            if (stripped.isNotBlank() && stripped.lowercase() !in GENERIC_REPO_NAMES) {
                 newName = stripped
             }
 
@@ -289,15 +312,7 @@ class CloudStreamManager(
         if (normalized.isBlank()) return
         val current = _repositoriesFlow.value.toMutableList()
         if (current.none { it.url == normalized }) {
-            val displayName = rawName.ifBlank {
-                val clean = normalized.trimEnd('/')
-                val lastPart = clean.substringAfterLast('/').substringBefore(".json")
-                if (lastPart.isNotBlank() && lastPart != "repo" && lastPart != "plugins") {
-                    lastPart
-                } else {
-                    clean.substringBeforeLast('/').substringAfterLast('/')
-                }.ifBlank { "CloudStream Repo" }
-            }
+            val displayName = extractCleanRepoName(normalized, rawName)
             current.add(CloudStreamRepo(name = displayName, url = normalized))
             saveRepositories(current)
             refreshRepositories()
@@ -399,12 +414,15 @@ class CloudStreamManager(
                 for ((index, repo) in repos.withIndex()) {
                     try {
                         val result = resolvePluginUrls(repo.url)
-                        if (!result.detectedName.isNullOrBlank() &&
-                            (repo.name.isBlank() || isUrlLike(repo.name) || repo.name == "CloudStream Repo" || repo.name == "repo")
-                        ) {
-                            val cleanDetected = result.detectedName.lines().firstOrNull()?.trim().orEmpty()
-                            if (cleanDetected.isNotBlank()) {
-                                updatedRepos[index] = repo.copy(name = cleanDetected)
+                        val cleanDetected = result.detectedName?.lines()?.firstOrNull()?.trim().orEmpty()
+                        val isGenericName = repo.name.isBlank() || isUrlLike(repo.name) || repo.name.lowercase() in GENERIC_REPO_NAMES
+                        if (cleanDetected.isNotBlank() && isGenericName) {
+                            updatedRepos[index] = repo.copy(name = cleanDetected)
+                            reposChanged = true
+                        } else if (isGenericName) {
+                            val cleanExtracted = extractCleanRepoName(repo.url, "")
+                            if (cleanExtracted != repo.name && cleanExtracted.lowercase() !in GENERIC_REPO_NAMES) {
+                                updatedRepos[index] = repo.copy(name = cleanExtracted)
                                 reposChanged = true
                             }
                         }
@@ -509,10 +527,6 @@ class CloudStreamManager(
                 if (!response.isSuccessful) continue
                 val body = response.body.string()
                 if (body.isBlank()) continue
-
-                if (candidate.endsWith("plugins.json", ignoreCase = true)) {
-                    return RepoResolveResult(listOf(candidate))
-                }
 
                 try {
                     val parsed = json.parseToJsonElement(body)
