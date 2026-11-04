@@ -58,7 +58,15 @@ open class Plugin : BasePlugin() {
         super.registerMainAPI(api)
     }
 
+    override fun registerMainAPI(api: Any) {
+        super.registerMainAPI(api)
+    }
+
     override fun registerExtractorAPI(api: ExtractorApi) {
+        super.registerExtractorAPI(api)
+    }
+
+    override fun registerExtractorAPI(api: Any) {
         super.registerExtractorAPI(api)
     }
 }

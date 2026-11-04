@@ -84,22 +84,30 @@ class BrowseMangaSourceScreenModel(
                 var query: String? = null
                 var listing = it.listing
 
+                val filters = try {
+                    source.getFilterList()
+                } catch (_: Throwable) {
+                    eu.kanade.tachiyomi.source.model.FilterList()
+                }
+
                 if (listing is Listing.Search) {
                     query = listing.query
-                    listing = Listing.Search(query, source.getFilterList())
+                    listing = Listing.Search(query, filters)
                 }
 
                 it.copy(
                     listing = listing,
-                    filters = source.getFilterList(),
+                    filters = filters,
                     toolbarQuery = query,
                 )
             }
         }
 
-        if (!getIncognitoState.await(source.id)) {
-            sourcePreferences.lastUsedMangaSource().set(source.id)
-        }
+        try {
+            if (!getIncognitoState.await(source.id)) {
+                sourcePreferences.lastUsedMangaSource().set(source.id)
+            }
+        } catch (_: Throwable) {}
     }
 
     /**
@@ -147,7 +155,12 @@ class BrowseMangaSourceScreenModel(
     fun resetFilters() {
         if (source !is CatalogueSource) return
 
-        mutableState.update { it.copy(filters = source.getFilterList()) }
+        val filters = try {
+            source.getFilterList()
+        } catch (_: Throwable) {
+            FilterList()
+        }
+        mutableState.update { it.copy(filters = filters) }
     }
 
     fun setListing(listing: Listing) {
@@ -167,8 +180,13 @@ class BrowseMangaSourceScreenModel(
     fun search(query: String? = null, filters: FilterList? = null) {
         if (source !is CatalogueSource) return
 
+        val defaultFilters = try {
+            source.getFilterList()
+        } catch (_: Throwable) {
+            FilterList()
+        }
         val input = state.value.listing as? Listing.Search
-            ?: Listing.Search(query = null, filters = source.getFilterList())
+            ?: Listing.Search(query = null, filters = defaultFilters)
 
         mutableState.update {
             it.copy(
@@ -184,7 +202,11 @@ class BrowseMangaSourceScreenModel(
     fun searchGenre(genreName: String) {
         if (source !is CatalogueSource) return
 
-        val defaultFilters = source.getFilterList()
+        val defaultFilters = try {
+            source.getFilterList()
+        } catch (_: Throwable) {
+            FilterList()
+        }
         var genreExists = false
 
         filter@ for (sourceFilter in defaultFilters) {

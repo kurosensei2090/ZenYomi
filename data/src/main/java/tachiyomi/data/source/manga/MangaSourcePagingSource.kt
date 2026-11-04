@@ -52,8 +52,8 @@ abstract class SourcePagingSource(
                     .takeIf { it.mangas.isNotEmpty() }
                     ?: throw NoChaptersException()
             }
-        } catch (e: Exception) {
-            return LoadResult.Error(e)
+        } catch (e: Throwable) {
+            return if (e is Exception) LoadResult.Error(e) else LoadResult.Error(Exception(e))
         }
 
         return LoadResult.Page(

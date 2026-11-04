@@ -846,6 +846,11 @@ class CloudStreamManager(
                 } catch (_: NoSuchMethodException) {
                     clazz.constructors.firstOrNull() ?: return emptyList()
                 }
+            } catch (t: Throwable) {
+                logcat(LogPriority.ERROR, t) { "Error inspecting constructor of $pluginClassName: ${t.message}" }
+                val cause = t.cause ?: t
+                _lastErrorFlow.value = "[${file.nameWithoutExtension}] ${cause::class.java.simpleName}: ${cause.message}"
+                return emptyList()
             }
             constructor.isAccessible = true
             val instance = try {
