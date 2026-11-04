@@ -72,6 +72,7 @@ class AnimeSourcesScreenModel(
     }
 
     private fun collectLatestAnimeSources(sources: List<AnimeSource>) {
+        val nonCsSources = sources.filterNot { it.name.endsWith(" [CS]") || it.name.contains("[CS]") }
         mutableState.update { state ->
             val map = TreeMap<String, MutableList<AnimeSource>> { d1, d2 ->
                 // Sources without a lang defined will be placed at the end
@@ -85,7 +86,7 @@ class AnimeSourcesScreenModel(
                     else -> d1.compareTo(d2)
                 }
             }
-            val byLang = sources.groupByTo(map) {
+            val byLang = nonCsSources.groupByTo(map) {
                 when {
                     it.isUsedLast -> LAST_USED_KEY
                     Pin.Actual in it.pin -> PINNED_KEY

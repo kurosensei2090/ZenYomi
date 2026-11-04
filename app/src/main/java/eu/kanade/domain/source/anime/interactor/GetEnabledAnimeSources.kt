@@ -26,6 +26,7 @@ class GetEnabledAnimeSources(
             sources
                 .filter { it.lang in enabledLanguages || it.id == LocalAnimeSource.ID }
                 .filterNot { it.id.toString() in disabledSources }
+                .filterNot { it.name.endsWith(" [CS]") || it.name.contains("[CS]") }
                 .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
                 .flatMap {
                     val flag = if ("${it.id}" in pinnedSourceIds) Pins.pinned else Pins.unpinned

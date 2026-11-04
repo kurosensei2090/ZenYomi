@@ -19,7 +19,9 @@ class GetLanguagesWithAnimeSources(
             preferences.disabledAnimeSources().changes(),
             repository.getOnlineAnimeSources(),
         ) { enabledLanguage, disabledSource, onlineSources ->
-            val sortedSources = onlineSources.sortedWith(
+            val sortedSources = onlineSources
+                .filterNot { it.name.endsWith(" [CS]") || it.name.contains("[CS]") }
+                .sortedWith(
                 compareBy<AnimeSource> { it.id.toString() in disabledSource }
                     .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name },
             )
