@@ -1,42 +1,107 @@
 package com.lagradost.cloudstream3
 
-enum class TvType {
-    Movie,
-    TvSeries,
-    Anime,
-    AnimeMovie,
-    OVA,
-    Cartoon,
-    Documentary,
-    LiveStream,
-    NSFW,
-    Others,
+@Suppress("UNUSED_PARAMETER")
+enum class TvType(val value: Int? = null) {
+    Movie(1),
+    AnimeMovie(2),
+    TvSeries(3),
+    Cartoon(4),
+    Anime(5),
+    OVA(6),
+    Torrent(7),
+    Documentary(8),
+    AsianDrama(9),
+    Live(10),
+    NSFW(11),
+    Others(12),
+    Music(13),
+    AudioBook(14),
+
+    /** Won't load the built in player, make your own interaction */
+    CustomMedia(15),
+
+    Audio(16),
+    Podcast(17),
+    Video(18),
+
+    // Backward-compatible alias
+    LiveStream(10);
+
+    companion object {
+        infix fun getEnum(value: Int): TvType? =
+            values().firstOrNull { it.value == value }
+    }
 }
 
-enum class SearchQuality {
-    Cam,
-    CamRip,
-    HdCam,
-    Telesync,
-    Telecine,
-    Workprint,
-    Sd,
-    Hdtv,
-    Dvd,
-    Hd,
-    FullHd,
-    Uhd,
-    FourK,
-    BlueRay,
+fun TvType.isMovieType(): Boolean {
+    return when (this) {
+        TvType.AnimeMovie,
+        TvType.Live,
+        TvType.Movie,
+        TvType.Torrent,
+        TvType.Video -> true
+
+        else -> false
+    }
 }
 
-enum class DubStatus {
-    Dubbed,
-    Subbed,
-    Dub,
-    Sub,
-    Both,
-    None,
+fun TvType.isAudioType(): Boolean {
+    return when (this) {
+        TvType.Audio,
+        TvType.AudioBook,
+        TvType.Music,
+        TvType.Podcast -> true
+
+        else -> false
+    }
+}
+
+fun TvType.isLiveStream(): Boolean {
+    return this == TvType.Live || this == TvType.LiveStream
+}
+
+fun TvType.isAnimeOp(): Boolean {
+    return this == TvType.Anime || this == TvType.OVA
+}
+
+@Suppress("UNUSED_PARAMETER")
+enum class SearchQuality(val value: Int? = null) {
+    Cam(1),
+    CamRip(2),
+    HdCam(3),
+    Telesync(4), // TS
+    WorkPrint(5),
+    Telecine(6), // TC
+    HQ(7),
+    HD(8),
+    HDR(9), // high dynamic range
+    BlueRay(10),
+    DVD(11),
+    SD(12),
+    FourK(13),
+    UHD(14),
+    SDR(15), // standard dynamic range
+    WebRip(16),
+
+    // Aliases to support older/variant plugins:
+    Workprint(5),
+    Sd(12),
+    Hdtv(8),
+    Dvd(11),
+    Hd(8),
+    FullHd(8),
+    Uhd(14);
+}
+
+enum class DubStatus(val id: Int = -1) {
+    None(-1),
+    Dubbed(1),
+    Subbed(0),
+
+    // Aliases
+    Dub(1),
+    Sub(0),
+    Both(2);
 }
 
 enum class ShowStatus {
@@ -44,6 +109,17 @@ enum class ShowStatus {
     Ongoing,
     Upcoming,
     None,
+}
+
+enum class ProviderType {
+    MetaProvider,
+    DirectProvider,
+}
+
+enum class VPNStatus {
+    None,
+    MightBeNeeded,
+    Torrent,
 }
 
 data class Score(

@@ -11,6 +11,8 @@ abstract class MainAPI {
     open var mainUrl: String = ""
     open var name: String = ""
     open var supportedTypes: Set<TvType> = setOf(TvType.Anime, TvType.Movie, TvType.TvSeries)
+    open val vpnStatus: VPNStatus = VPNStatus.None
+    open val providerType: ProviderType = ProviderType.DirectProvider
     open var lang: String = "en"
     open var mainPage: List<MainPageData> = emptyList()
     open var hasMainPage: Boolean = false
