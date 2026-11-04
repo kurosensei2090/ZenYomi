@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.network.newCachelessCallWithProgress
 import eu.kanade.tachiyomi.source.CatalogueSource
+import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -27,7 +28,7 @@ import java.security.MessageDigest
  * A simple implementation for sources from a website.
  */
 @Suppress("unused")
-abstract class HttpSource : CatalogueSource {
+abstract class HttpSource : CatalogueSource, Source {
 
     /**
      * Network service.

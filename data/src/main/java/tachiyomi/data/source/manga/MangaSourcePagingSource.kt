@@ -10,7 +10,7 @@ import tachiyomi.domain.items.chapter.model.NoChaptersException
 import tachiyomi.domain.source.manga.repository.SourcePagingSourceType
 
 class SourceSearchPagingSource(
-    source: CatalogueSource,
+    source: CatalogueSource?,
     val query: String,
     val filters: FilterList,
 ) :
@@ -18,24 +18,27 @@ class SourceSearchPagingSource(
         source,
     ) {
     override suspend fun requestNextPage(currentPage: Int): MangasPage {
-        return source.getSearchManga(currentPage, query, filters)
+        val s = source ?: throw IllegalStateException("Source not found")
+        return s.getSearchManga(currentPage, query, filters)
     }
 }
 
-class SourcePopularPagingSource(source: CatalogueSource) : SourcePagingSource(source) {
+class SourcePopularPagingSource(source: CatalogueSource?) : SourcePagingSource(source) {
     override suspend fun requestNextPage(currentPage: Int): MangasPage {
-        return source.getPopularManga(currentPage)
+        val s = source ?: throw IllegalStateException("Source not found")
+        return s.getPopularManga(currentPage)
     }
 }
 
-class SourceLatestPagingSource(source: CatalogueSource) : SourcePagingSource(source) {
+class SourceLatestPagingSource(source: CatalogueSource?) : SourcePagingSource(source) {
     override suspend fun requestNextPage(currentPage: Int): MangasPage {
-        return source.getLatestUpdates(currentPage)
+        val s = source ?: throw IllegalStateException("Source not found")
+        return s.getLatestUpdates(currentPage)
     }
 }
 
 abstract class SourcePagingSource(
-    protected val source: CatalogueSource,
+    protected val source: CatalogueSource?,
 ) : SourcePagingSourceType() {
 
     abstract suspend fun requestNextPage(currentPage: Int): MangasPage

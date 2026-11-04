@@ -111,5 +111,5 @@ interface MangaSource {
         throw IllegalStateException("Not used")
 }
 
-typealias Source = MangaSource
+interface Source : MangaSource
 

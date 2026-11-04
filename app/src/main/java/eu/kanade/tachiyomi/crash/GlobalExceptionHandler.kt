@@ -30,9 +30,14 @@ class GlobalExceptionHandler private constructor(
     }
 
     override fun uncaughtException(thread: Thread, exception: Throwable) {
-        logcat(priority = LogPriority.ERROR, throwable = exception)
-        launchActivity(applicationContext, activityToBeLaunched, exception)
-        defaultHandler.uncaughtException(thread, exception)
+        try {
+            logcat(priority = LogPriority.ERROR, throwable = exception)
+            launchActivity(applicationContext, activityToBeLaunched, exception)
+            android.os.Process.killProcess(android.os.Process.myPid())
+            kotlin.system.exitProcess(10)
+        } catch (t: Throwable) {
+            defaultHandler.uncaughtException(thread, exception)
+        }
     }
 
     private fun launchActivity(

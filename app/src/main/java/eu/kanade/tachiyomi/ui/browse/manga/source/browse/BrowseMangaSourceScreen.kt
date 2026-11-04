@@ -172,7 +172,7 @@ data class BrowseMangaSourceScreen(
                                 Text(text = stringResource(MR.strings.popular))
                             },
                         )
-                        if ((screenModel.source as CatalogueSource).supportsLatest) {
+                        if ((screenModel.source as? CatalogueSource)?.supportsLatest == true) {
                             FilterChip(
                                 selected = state.listing == Listing.Latest,
                                 onClick = {

@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import rx.Observable
 import tachiyomi.core.common.util.lang.awaitSingle
 
-interface CatalogueSource : MangaSource {
+interface CatalogueSource : Source, MangaSource {
 
     /**
      * An ISO 639-1 compliant language code (two letters in lower case).
