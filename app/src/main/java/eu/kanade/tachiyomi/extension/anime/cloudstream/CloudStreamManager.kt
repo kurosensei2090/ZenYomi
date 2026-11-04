@@ -29,13 +29,20 @@ import logcat.LogPriority
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.json.JSONObject
 import tachiyomi.core.common.util.system.logcat
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.ZipFile
+
+@Serializable
+private data class PluginManifest(
+    val pluginClassName: String = "",
+    val name: String = "",
+    val version: Int = 1,
+    val requiresResources: Boolean = false,
+)
 
 @Serializable
 data class CloudStreamRepo(
@@ -818,11 +825,21 @@ class CloudStreamManager(
                 return emptyList()
             }
 
-            val manifestJson = JSONObject(manifestText)
-            val pluginClassName = manifestJson.optString("pluginClassName", "").trim()
-            val pluginVersion = manifestJson.optInt("version", 1)
-            val pluginName = manifestJson.optString("name", file.nameWithoutExtension)
-            val requiresResources = manifestJson.optBoolean("requiresResources", false)
+            val manifest = runCatching {
+                json.decodeFromString<PluginManifest>(manifestText.orEmpty())
+            }.getOrNull()
+            val pluginClassName = manifest?.pluginClassName?.trim().orEmpty().ifBlank {
+                Regex(""""pluginClassName"\s*:\s*"([^"]+)"""").find(manifestText.orEmpty())?.groupValues?.getOrNull(1)?.trim().orEmpty()
+            }
+            val pluginVersion = manifest?.version ?: (
+                Regex(""""version"\s*:\s*(\d+)""").find(manifestText.orEmpty())?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 1
+            )
+            val pluginName = manifest?.name?.takeIf { it.isNotBlank() } ?: (
+                Regex(""""name"\s*:\s*"([^"]+)"""").find(manifestText.orEmpty())?.groupValues?.getOrNull(1)?.trim().orEmpty()
+            ).ifBlank { file.nameWithoutExtension }
+            val requiresResources = manifest?.requiresResources ?: (
+                Regex(""""requiresResources"\s*:\s*(true|false)""").find(manifestText.orEmpty())?.groupValues?.getOrNull(1)?.toBooleanStrictOrNull() ?: false
+            )
 
             if (pluginClassName.isBlank()) {
                 _lastErrorFlow.value = "pluginClassName empty in manifest of ${file.name}"

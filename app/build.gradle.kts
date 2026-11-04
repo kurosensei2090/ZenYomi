@@ -19,7 +19,7 @@ android {
     defaultConfig {
         applicationId = "xyz.zenyomi.app"
 
-        versionCode = 15
+        versionCode = 16
         versionName = "1.0.2"
 
         buildConfigField("String", "COMMIT_COUNT", "\"${getCommitCount()}\"")
@@ -200,6 +200,10 @@ kotlin {
             "-opt-in=kotlinx.serialization.ExperimentalSerializationApi",
         )
     }
+}
+
+configurations.all {
+    exclude(group = "org.json", module = "json")
 }
 
 dependencies {

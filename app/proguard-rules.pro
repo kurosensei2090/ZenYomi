@@ -124,3 +124,9 @@
 -keep class kotlin.coroutines.intrinsics.** { *; }
 -keep class kotlin.coroutines.jvm.internal.** { *; }
 
+# org.json (used by CloudStream plugins and NiceHttp; must match Android framework)
+-dontwarn org.json.**
+-keep class org.json.** { *; }
+-keepclassmembers class org.json.** { *; }
+
+
