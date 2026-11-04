@@ -30,6 +30,10 @@
 -keep class com.arthenica.** { *; }
 
 # From extensions-lib
+-keep class eu.kanade.tachiyomi.network.interceptor.** { *; }
+-keepclassmembers class eu.kanade.tachiyomi.network.interceptor.** { *; }
+-keep class com.squareup.zstd.** { *; }
+-keepclassmembers class com.squareup.zstd.** { *; }
 -keep,allowoptimization class eu.kanade.tachiyomi.network.interceptor.RateLimitInterceptorKt { public protected *; }
 -keep,allowoptimization class eu.kanade.tachiyomi.network.interceptor.SpecificHostRateLimitInterceptorKt { public protected *; }
 -keep,allowoptimization class eu.kanade.tachiyomi.network.NetworkHelper { public protected *; }

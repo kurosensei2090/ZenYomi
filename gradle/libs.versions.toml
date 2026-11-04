@@ -10,6 +10,7 @@ sqlite = "2.4.0"
 voyager = "2.2.21-1.10.3"
 spotless = "7.0.2"
 ktlint-core = "1.7.0"
+zstd-kmp = "0.4.0"
 
 [libraries]
 desugar = "com.android.tools:desugar_jdk_libs:2.1.5"
@@ -22,6 +23,8 @@ okhttp-logging = { module = "com.squareup.okhttp3:logging-interceptor", version.
 okhttp-zstd = { module = "com.squareup.okhttp3:okhttp-zstd", version.ref = "okhttp_version" }
 okhttp-brotli = { module = "com.squareup.okhttp3:okhttp-brotli", version.ref = "okhttp_version" }
 okhttp-dnsoverhttps = { module = "com.squareup.okhttp3:okhttp-dnsoverhttps", version.ref = "okhttp_version" }
+zstd-kmp-okio = { module = "com.squareup.zstd:zstd-kmp-okio", version.ref = "zstd-kmp" }
+
 okio = "com.squareup.okio:okio:3.10.2"
 
 conscrypt-android = "org.conscrypt:conscrypt-android:2.5.3"

@@ -28,6 +28,7 @@ dependencies {
     api(libs.okhttp.logging)
     api(libs.okhttp.brotli)
     api(libs.okhttp.dnsoverhttps)
+    api(libs.zstd.kmp.okio)
     api(libs.okio)
 
     implementation(libs.image.decoder)
