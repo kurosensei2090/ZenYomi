@@ -2,6 +2,7 @@
 package com.lagradost.cloudstream3
 
 import android.util.Base64
+import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.json.JsonMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import kotlinx.serialization.json.Json
@@ -25,6 +26,12 @@ val json: Json = Json {
 
 val mapper: JsonMapper = JsonMapper.builder()
     .addModule(KotlinModule.Builder().build())
+    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+    .configure(DeserializationFeature.FAIL_ON_IGNORED_PROPERTIES, false)
+    .configure(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES, false)
+    .configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true)
+    .configure(DeserializationFeature.ACCEPT_EMPTY_STRING_AS_NULL_OBJECT, true)
+    .configure(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_AS_NULL, true)
     .build()
 
 fun MainAPI.fixUrl(url: String): String {

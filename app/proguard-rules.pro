@@ -66,7 +66,10 @@
 ##---------------End: proguard configuration for okhttp  ----------
 
 ##---------------Begin: proguard configuration for kotlinx.serialization  ----------
--keepattributes *Annotation*, InnerClasses
+-keepattributes *Annotation*,InnerClasses,EnclosingMethod,Signature
+-keep class kotlin.reflect.** { *; }
+-keepclassmembers class kotlin.reflect.** { *; }
+-keep class kotlin.Metadata { *; }
 -dontnote kotlinx.serialization.** # core serialization annotations
 
 # kotlinx-serialization-json specific. Add this if you have java.lang.NoClassDefFoundError kotlinx.serialization.json.JsonObjectSerializer

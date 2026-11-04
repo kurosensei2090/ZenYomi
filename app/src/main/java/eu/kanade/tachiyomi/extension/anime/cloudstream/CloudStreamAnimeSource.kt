@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.anime.cloudstream
 import com.lagradost.cloudstream3.AnimeLoadResponse
 import com.lagradost.cloudstream3.Episode
 import com.lagradost.cloudstream3.EpisodeResponse
+import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.MovieLoadResponse
@@ -173,12 +174,7 @@ class CloudStreamAnimeSource(
     }
 
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
-        val details = try {
-            api.load(anime.url)
-        } catch (e: Throwable) {
-            logcat(LogPriority.ERROR, e) { "Failed to load anime details for ${anime.title} from ${anime.url}" }
-            null
-        } ?: return anime
+        val details = loadDetailsSafely(anime.url) ?: return anime
 
         anime.title = details.name
         details.posterUrl?.let { anime.thumbnail_url = it }
@@ -212,12 +208,7 @@ class CloudStreamAnimeSource(
     }
 
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
-        val details = try {
-            api.load(anime.url)
-        } catch (e: Throwable) {
-            logcat(LogPriority.ERROR, e) { "Failed to load episodes for ${anime.title} from ${anime.url}" }
-            null
-        } ?: return emptyList()
+        val details = loadDetailsSafely(anime.url) ?: return emptyList()
 
         val episodes = mutableListOf<SEpisode>()
 
@@ -226,53 +217,99 @@ class CloudStreamAnimeSource(
                 var order = 1f
                 val hasMultipleStatuses = details.episodes.size > 1
                 for ((status, epList) in details.episodes) {
-                    val statusSuffix = if (hasMultipleStatuses) " (${status.name})" else ""
-                    epList.forEach { ep ->
-                        val baseName = ep.name ?: "Episode ${ep.episode ?: order.toInt()}"
-                        val sEpisode = ep.toSEpisode(order++)
-                        if (hasMultipleStatuses && !baseName.contains(status.name, ignoreCase = true)) {
-                            sEpisode.name = "$baseName$statusSuffix"
+                    val statusSuffix = if (hasMultipleStatuses) " (${status?.name ?: status.toString()})" else ""
+                    epList?.forEach { ep ->
+                        if (ep != null) {
+                            val baseName = ep.name ?: "Episode ${ep.episode ?: order.toInt()}"
+                            val sEpisode = ep.toSEpisode(order++)
+                            if (hasMultipleStatuses && !baseName.contains(status?.name ?: "", ignoreCase = true)) {
+                                sEpisode.name = "$baseName$statusSuffix"
+                            }
+                            episodes.add(sEpisode)
                         }
-                        episodes.add(sEpisode)
                     }
                 }
             }
             is TvSeriesLoadResponse -> {
                 var order = 1f
-                details.episodes.forEach { ep ->
-                    episodes.add(ep.toSEpisode(order++))
+                details.episodes?.forEach { ep ->
+                    if (ep != null) {
+                        episodes.add(ep.toSEpisode(order++))
+                    }
                 }
             }
             is MovieLoadResponse -> {
                 val ep = SEpisode.create().apply {
                     name = "Full Movie"
-                    url = details.dataUrl
+                    url = details.dataUrl.ifBlank { details.url }
                     episode_number = 1f
                 }
                 episodes.add(ep)
             }
-            else -> {
-                try {
-                    for (m in details.javaClass.methods) {
-                        if (m.name.equals("getEpisodes", ignoreCase = true) && m.parameterTypes.isEmpty()) {
-                            val result = m.invoke(details)
-                            if (result is Map<*, *>) {
-                                var order = 1f
-                                result.values.filterIsInstance<List<*>>().flatten().filterIsInstance<Episode>().forEach { ep ->
-                                    episodes.add(ep.toSEpisode(order++))
-                                }
-                            } else if (result is List<*>) {
-                                var order = 1f
-                                result.filterIsInstance<Episode>().forEach { ep ->
-                                    episodes.add(ep.toSEpisode(order++))
-                                }
+            else -> {}
+        }
+
+        if (episodes.isEmpty()) {
+            try {
+                for (m in details.javaClass.methods) {
+                    if (m.name.equals("getEpisodes", ignoreCase = true) && m.parameterTypes.isEmpty()) {
+                        val result = m.invoke(details)
+                        if (result is Map<*, *>) {
+                            var order = 1f
+                            result.values.filterIsInstance<Collection<*>>().flatten().forEach { item ->
+                                toSEpisodeFromAny(item, order++)?.let { episodes.add(it) }
                             }
+                        } else if (result is Collection<*>) {
+                            var order = 1f
+                            result.forEach { item ->
+                                toSEpisodeFromAny(item, order++)?.let { episodes.add(it) }
+                            }
+                        }
+                        if (episodes.isNotEmpty()) break
+                    }
+                }
+
+                if (episodes.isEmpty()) {
+                    var c: Class<*>? = details.javaClass
+                    var f: java.lang.reflect.Field? = null
+                    while (c != null && c != Any::class.java) {
+                        try {
+                            f = c.getDeclaredField("episodes")
                             break
+                        } catch (_: NoSuchFieldException) {
+                            c = c.superclass
                         }
                     }
-                } catch (t: Throwable) {
-                    logcat(LogPriority.WARN, t) { "Reflection fallback failed for ${details.javaClass.name}" }
+                    f?.isAccessible = true
+                    val result = f?.get(details)
+                    if (result is Map<*, *>) {
+                        var order = 1f
+                        result.values.filterIsInstance<Collection<*>>().flatten().forEach { item ->
+                            toSEpisodeFromAny(item, order++)?.let { episodes.add(it) }
+                        }
+                    } else if (result is Collection<*>) {
+                        var order = 1f
+                        result.forEach { item ->
+                            toSEpisodeFromAny(item, order++)?.let { episodes.add(it) }
+                        }
+                    }
                 }
+
+                if (episodes.isEmpty()) {
+                    val dataUrl = runCatching {
+                        details.javaClass.methods.firstOrNull { it.name.equals("getDataUrl", ignoreCase = true) }?.invoke(details) as? String
+                    }.getOrNull() ?: details.url
+                    if (dataUrl.isNotBlank()) {
+                        val ep = SEpisode.create().apply {
+                            name = "Full Movie / Stream"
+                            url = dataUrl
+                            episode_number = 1f
+                        }
+                        episodes.add(ep)
+                    }
+                }
+            } catch (t: Throwable) {
+                logcat(LogPriority.WARN, t) { "Reflection fallback failed for ${details.javaClass.name}" }
             }
         }
 
@@ -338,10 +375,52 @@ class CloudStreamAnimeSource(
         return videos.toList()
     }
 
+    private suspend fun loadDetailsSafely(url: String): LoadResponse? {
+        val candidates = linkedSetOf<String>()
+        candidates.add(url)
+        val fixed = api.fixUrl(url)
+        candidates.add(fixed)
+        if (url.startsWith(baseUrl, ignoreCase = true)) {
+            val rel = url.removePrefix(baseUrl).trimStart('/')
+            if (rel.isNotBlank()) candidates.add(rel)
+        }
+        for (candidate in candidates) {
+            try {
+                val resp = api.load(candidate)
+                if (resp != null) return resp
+            } catch (e: Throwable) {
+                logcat(LogPriority.DEBUG, e) { "api.load failed for candidate '$candidate' in ${api.name}" }
+            }
+        }
+        return null
+    }
+
+    private fun toSEpisodeFromAny(obj: Any?, order: Float): SEpisode? {
+        if (obj == null) return null
+        if (obj is Episode) {
+            return obj.toSEpisode(order)
+        }
+        return try {
+            val sEpisode = SEpisode.create()
+            val name = obj.javaClass.methods.firstOrNull { it.name == "getName" }?.invoke(obj) as? String
+            val data = (obj.javaClass.methods.firstOrNull { it.name == "getData" }?.invoke(obj) as? String)
+                ?: (obj.javaClass.methods.firstOrNull { it.name == "getUrl" }?.invoke(obj) as? String)
+                ?: ""
+            val epNum = (obj.javaClass.methods.firstOrNull { it.name == "getEpisode" }?.invoke(obj) as? Int)?.toFloat()
+                ?: order
+            sEpisode.name = name ?: "Episode ${epNum.toInt()}"
+            sEpisode.url = data
+            sEpisode.episode_number = epNum
+            sEpisode
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
     private fun SearchResponse.toSAnime(): SAnime {
         val sAnime = SAnime.create()
         sAnime.title = name
-        sAnime.url = api.fixUrl(url)
+        sAnime.url = url
         posterUrl?.let { sAnime.thumbnail_url = api.fixUrl(it) }
         return sAnime
     }
@@ -349,7 +428,7 @@ class CloudStreamAnimeSource(
     private fun Episode.toSEpisode(index: Float): SEpisode {
         val sEpisode = SEpisode.create()
         sEpisode.name = this.name ?: "Episode ${this.episode ?: index.toInt()}"
-        sEpisode.url = api.fixUrl(this.data)
+        sEpisode.url = this.data.ifBlank { this.url }
         sEpisode.episode_number = (this.episode ?: index.toInt()).toFloat()
         return sEpisode
     }
