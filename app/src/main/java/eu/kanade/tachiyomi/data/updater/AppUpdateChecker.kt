@@ -42,9 +42,9 @@ class AppUpdateChecker {
 
 val GITHUB_REPO: String by lazy {
     if (isPreviewBuildType) {
-        "zenyomiapp/zenyomi-preview"
+        "kurosensei2090/ZenYomi-preview"
     } else {
-        "zenyomiapp/zenyomi"
+        "kurosensei2090/ZenYomi"
     }
 }
 

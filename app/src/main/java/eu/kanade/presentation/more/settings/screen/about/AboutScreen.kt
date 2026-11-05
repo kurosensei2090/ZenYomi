@@ -36,6 +36,7 @@ import eu.kanade.tachiyomi.util.CrashLogUtil
 import eu.kanade.tachiyomi.util.lang.toDateTimestampString
 import eu.kanade.tachiyomi.util.system.copyToClipboard
 import eu.kanade.tachiyomi.util.system.isPreviewBuildType
+import eu.kanade.tachiyomi.util.system.openInBrowser
 import eu.kanade.tachiyomi.util.system.toast
 import eu.kanade.tachiyomi.util.system.updaterEnabled
 import kotlinx.coroutines.launch
@@ -96,43 +97,51 @@ object AboutScreen : Screen() {
                     )
                 }
 
-                if (updaterEnabled) {
-                    item {
-                        TextPreferenceWidget(
-                            title = stringResource(MR.strings.check_for_updates),
-                            widget = {
-                                AnimatedVisibility(visible = isCheckingUpdates) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(28.dp),
-                                        strokeWidth = 3.dp,
+                item {
+                    TextPreferenceWidget(
+                        title = stringResource(MR.strings.check_for_updates),
+                        widget = {
+                            AnimatedVisibility(visible = isCheckingUpdates) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(28.dp),
+                                    strokeWidth = 3.dp,
+                                )
+                            }
+                        },
+                        onPreferenceClick = {
+                            if (!isCheckingUpdates) {
+                                scope.launch {
+                                    isCheckingUpdates = true
+
+                                    checkVersion(
+                                        context = context,
+                                        onAvailableUpdate = { result ->
+                                            val updateScreen = NewUpdateScreen(
+                                                versionName = result.release.version,
+                                                changelogInfo = result.release.info,
+                                                releaseLink = result.release.releaseLink,
+                                                downloadLink = result.release.downloadLink,
+                                            )
+                                            navigator.push(updateScreen)
+                                        },
+                                        onFinish = {
+                                            isCheckingUpdates = false
+                                        },
                                     )
                                 }
-                            },
-                            onPreferenceClick = {
-                                if (!isCheckingUpdates) {
-                                    scope.launch {
-                                        isCheckingUpdates = true
+                            }
+                        },
+                    )
+                }
 
-                                        checkVersion(
-                                            context = context,
-                                            onAvailableUpdate = { result ->
-                                                val updateScreen = NewUpdateScreen(
-                                                    versionName = result.release.version,
-                                                    changelogInfo = result.release.info,
-                                                    releaseLink = result.release.releaseLink,
-                                                    downloadLink = result.release.downloadLink,
-                                                )
-                                                navigator.push(updateScreen)
-                                            },
-                                            onFinish = {
-                                                isCheckingUpdates = false
-                                            },
-                                        )
-                                    }
-                                }
-                            },
-                        )
-                    }
+                item {
+                    TextPreferenceWidget(
+                        title = stringResource(MR.strings.whats_new),
+                        onPreferenceClick = {
+                            val url = "https://github.com/kurosensei2090/ZenYomi/releases"
+                            context.openInBrowser(url)
+                        },
+                    )
                 }
 
                 item {
@@ -140,6 +149,26 @@ object AboutScreen : Screen() {
                         title = stringResource(MR.strings.licenses),
                         onPreferenceClick = { navigator.push(OpenSourceLicensesScreen()) },
                     )
+                }
+
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        LinkIcon(
+                            label = "GitHub",
+                            icon = CustomIcons.Github,
+                            url = "https://github.com/kurosensei2090/ZenYomi",
+                        )
+                        LinkIcon(
+                            label = stringResource(MR.strings.whats_new),
+                            icon = Icons.Outlined.Public,
+                            url = "https://github.com/kurosensei2090/ZenYomi/releases",
+                        )
+                    }
                 }
             }
         }
