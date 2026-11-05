@@ -1,6 +1,7 @@
 package com.lagradost.cloudstream3.plugins
 
 import android.content.Context
+import android.content.res.Resources
 import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.utils.ExtractorApi
@@ -11,7 +12,7 @@ annotation class CloudstreamPlugin
 
 open class BasePlugin {
     var filename: String? = null
-    var resources: Any? = null
+    var resources: Resources? = null
     val registeredAPIs = mutableListOf<MainAPI>()
 
     open fun load(context: Context) {

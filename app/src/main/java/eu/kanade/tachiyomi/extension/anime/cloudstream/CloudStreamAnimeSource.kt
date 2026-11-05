@@ -15,6 +15,8 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.Hoster
+import eu.kanade.tachiyomi.animesource.model.Hoster.Companion.toHosterList
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Track
@@ -24,6 +26,7 @@ import logcat.LogPriority
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.Headers.Companion.toHeaders
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -348,24 +351,28 @@ class CloudStreamAnimeSource(
         }
 
         try {
-            api.loadLinks(
-                data = episode.url,
-                isCasting = false,
-                subtitleCallback = onSubtitle,
-                callback = onLink,
-            )
+            withTimeoutOrNull(30_000L) {
+                api.loadLinks(
+                    data = episode.url,
+                    isCasting = false,
+                    subtitleCallback = onSubtitle,
+                    callback = onLink,
+                )
+            }
         } catch (e: Throwable) {
             logcat(LogPriority.ERROR, e) { "Failed to load links for ${episode.name}" }
         }
 
         if (videos.isEmpty() && episode.url.isNotBlank()) {
             try {
-                com.lagradost.cloudstream3.utils.loadExtractor(
-                    url = episode.url,
-                    referer = baseUrl,
-                    subtitleCallback = onSubtitle,
-                    callback = onLink,
-                )
+                withTimeoutOrNull(15_000L) {
+                    com.lagradost.cloudstream3.utils.loadExtractor(
+                        url = episode.url,
+                        referer = baseUrl,
+                        subtitleCallback = onSubtitle,
+                        callback = onLink,
+                    )
+                }
             } catch (e: Throwable) {
                 logcat(LogPriority.DEBUG, e) { "Direct loadExtractor fallback failed for ${episode.name}" }
             }
@@ -373,6 +380,10 @@ class CloudStreamAnimeSource(
 
         logcat(LogPriority.INFO) { "Loaded ${videos.size} videos for ${episode.name} from ${api.name}" }
         return videos.toList()
+    }
+
+    override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
+        return getVideoList(episode).toHosterList()
     }
 
     private suspend fun loadDetailsSafely(url: String): LoadResponse? {

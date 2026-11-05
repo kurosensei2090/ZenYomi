@@ -57,14 +57,56 @@ open class Hoster(
         const val NO_HOSTER_LIST = "no_hoster_list"
 
         fun List<Video>.toHosterList(): List<Hoster> {
-            return listOf(
+            if (this.isEmpty()) return emptyList()
+
+            val serverGroups = LinkedHashMap<String, MutableList<Video>>()
+            var hasServerPrefix = false
+
+            for (video in this) {
+                val title = video.videoTitle.trim()
+                val dashIdx = title.indexOf(" - ")
+                val bracketIdx = if (title.startsWith("[")) title.indexOf("]") else -1
+
+                if (dashIdx > 0) {
+                    val sName = title.substring(0, dashIdx).trim()
+                    val qName = title.substring(dashIdx + 3).trim()
+                    if (sName.isNotEmpty() && qName.isNotEmpty()) {
+                        hasServerPrefix = true
+                        serverGroups.getOrPut(sName) { mutableListOf() }.add(video.copy(videoTitle = qName))
+                        continue
+                    }
+                } else if (bracketIdx > 1) {
+                    val sName = title.substring(1, bracketIdx).trim()
+                    val qName = title.substring(bracketIdx + 1).trim()
+                    if (sName.isNotEmpty() && qName.isNotEmpty()) {
+                        hasServerPrefix = true
+                        serverGroups.getOrPut(sName) { mutableListOf() }.add(video.copy(videoTitle = qName))
+                        continue
+                    }
+                }
+
+                serverGroups.getOrPut(NO_HOSTER_LIST) { mutableListOf() }.add(video)
+            }
+
+            if (!hasServerPrefix || (serverGroups.size == 1 && serverGroups.containsKey(NO_HOSTER_LIST))) {
+                return listOf(
+                    Hoster(
+                        hosterUrl = "",
+                        hosterName = NO_HOSTER_LIST,
+                        videoList = this,
+                        memo = JsonObject.EMPTY,
+                    ),
+                )
+            }
+
+            return serverGroups.map { (name, vList) ->
                 Hoster(
                     hosterUrl = "",
-                    hosterName = NO_HOSTER_LIST,
-                    videoList = this,
+                    hosterName = name,
+                    videoList = vList,
                     memo = JsonObject.EMPTY,
-                ),
-            )
+                )
+            }
         }
     }
 }

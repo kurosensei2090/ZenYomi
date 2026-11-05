@@ -1137,17 +1137,22 @@ class PlayerActivity : BaseActivity() {
     }
 
     /**
-     * Called from the presenter if the initial load couldn't load the videos of the episode. In
-     * this case the activity is closed and a toast is shown to the user.
+     * Called from the presenter if the initial load couldn't load the videos of the episode.
+     * Displays a toast and resets loading state without closing the player so the user can choose
+     * another server or retry.
      */
     private fun setInitialEpisodeError(error: Throwable) {
         if (error is PlayerViewModel.ExceptionWithStringResource) {
             toast(error.stringResource)
-        } else {
+        } else if (!error.message.isNullOrBlank()) {
             toast(error.message)
+        } else {
+            toast(AYMR.strings.video_list_empty_error)
         }
         logcat(LogPriority.ERROR, error)
-        finish()
+        viewModel.updateIsLoadingEpisode(false)
+        viewModel.updateIsLoadingHosters(false)
+        viewModel.isLoading.update { false }
     }
 
     private suspend fun torrentLinkHandler(videoUrl: String, title: String, videoOptions: String) {
