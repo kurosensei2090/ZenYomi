@@ -64,6 +64,9 @@ data class CloudStreamPluginItem(
     val language: String = "en",
     val repoUrl: String = "",
     val isInstalled: Boolean = false,
+    val installedVersion: Int? = null,
+    val installedRepoUrl: String? = null,
+    val hasUpdate: Boolean = false,
 )
 
 class CloudStreamManager(
@@ -72,6 +75,7 @@ class CloudStreamManager(
     companion object {
         private const val PREF_REPOS = "zenyomi.cloudstream.repos"
         private const val PREF_PLUGIN_REPOS = "zenyomi.cloudstream.plugin_repos_map"
+        private const val PREF_PLUGIN_VERSIONS = "zenyomi.cloudstream.plugin_versions_map"
         private const val PLUGINS_DIR = "cloudstream_plugins"
         private const val USER_AGENT =
             "Mozilla/5.0 (Linux; Android 14; ZenYomi) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
@@ -270,6 +274,33 @@ class CloudStreamManager(
         }
     }
 
+    private fun getPluginVersionMap(): MutableMap<String, Int> {
+        val raw = prefs.getString(PREF_PLUGIN_VERSIONS, null) ?: return mutableMapOf()
+        return try {
+            json.decodeFromString<Map<String, Int>>(raw).toMutableMap()
+        } catch (_: Exception) {
+            mutableMapOf()
+        }
+    }
+
+    private fun savePluginVersionMap(map: Map<String, Int>) {
+        prefs.edit().putString(PREF_PLUGIN_VERSIONS, json.encodeToString(map)).apply()
+    }
+
+    private fun recordPluginVersion(pluginName: String, version: Int) {
+        if (pluginName.isBlank() || version <= 0) return
+        val map = getPluginVersionMap()
+        map[pluginName] = version
+        savePluginVersionMap(map)
+    }
+
+    private fun removePluginVersion(pluginName: String) {
+        val map = getPluginVersionMap()
+        if (map.remove(pluginName) != null) {
+            savePluginVersionMap(map)
+        }
+    }
+
     private fun getPluginsForRepo(repoUrl: String): List<String> {
         val map = getPluginRepoMap()
         return map.filter { it.value.equals(repoUrl, ignoreCase = true) }.map { it.key }
@@ -439,17 +470,52 @@ class CloudStreamManager(
                     saveRepositories(updatedRepos)
                 }
 
-                val installedNames = pluginsFolder.listFiles { file -> file.extension == "cs3" }
+                val installedNames = pluginsFolder.listFiles { file -> file.extension.equals("cs3", ignoreCase = true) }
                     ?.map { it.nameWithoutExtension }
                     ?.toSet() ?: emptySet()
 
+                val repoMap = getPluginRepoMap()
+                val versionMap = getPluginVersionMap()
+                val installedSources = _installedSourcesFlow.value
+
                 val marked = pluginsList.distinctBy { "${it.repoUrl}_${it.internalName}" }.map { item ->
                     val safe = item.internalName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
-                    val isInst = installedNames.contains(item.internalName) ||
+                    val isFilePresent = installedNames.contains(item.internalName) ||
                         installedNames.contains(safe) ||
                         installedNames.contains(item.name) ||
                         installedNames.contains(item.name.replace(Regex("[^a-zA-Z0-9._-]"), "_"))
-                    item.copy(isInstalled = isInst)
+
+                    if (!isFilePresent) {
+                        item.copy(
+                            isInstalled = false,
+                            installedVersion = null,
+                            installedRepoUrl = null,
+                            hasUpdate = false,
+                        )
+                    } else {
+                        val installedRepo = repoMap[safe] ?: repoMap[item.internalName] ?: repoMap[item.name]
+                        val installedVer = versionMap[safe] ?: versionMap[item.internalName] ?: versionMap[item.name]
+                            ?: installedSources.find {
+                                it.pluginName.equals(item.name, ignoreCase = true) ||
+                                    it.pluginName.equals(item.internalName, ignoreCase = true) ||
+                                    it.pluginName.equals(safe, ignoreCase = true)
+                            }?.pluginVersion
+
+                        val matchesRepo = installedRepo != null && (
+                            installedRepo.equals(item.repoUrl, ignoreCase = true) ||
+                                (item.repoUrl.isNotBlank() && (installedRepo.contains(item.repoUrl) || item.repoUrl.contains(installedRepo)))
+                        )
+
+                        val hasUpdate = installedVer != null && item.version > installedVer
+                        val isInstalledForThis = (matchesRepo || installedRepo == null) && !hasUpdate
+
+                        item.copy(
+                            isInstalled = isInstalledForThis,
+                            installedVersion = installedVer,
+                            installedRepoUrl = installedRepo,
+                            hasUpdate = hasUpdate,
+                        )
+                    }
                 }
                 _availablePluginsFlow.value = marked
             } finally {
@@ -672,6 +738,11 @@ class CloudStreamManager(
             if (safeName != plugin.internalName) {
                 associatePluginWithRepo(plugin.internalName, plugin.repoUrl)
             }
+            associatePluginWithRepo(plugin.name, plugin.repoUrl)
+
+            recordPluginVersion(safeName, plugin.version)
+            recordPluginVersion(plugin.internalName, plugin.version)
+            recordPluginVersion(plugin.name, plugin.version)
 
             val current = _installedSourcesFlow.value.toMutableList()
             current.removeAll {
@@ -684,7 +755,13 @@ class CloudStreamManager(
 
             _availablePluginsFlow.value = _availablePluginsFlow.value.map { item ->
                 if (item.internalName == plugin.internalName || item.internalName == safeName || item.name == plugin.name) {
-                    item.copy(isInstalled = true)
+                    val matchesRepo = item.repoUrl.equals(plugin.repoUrl, ignoreCase = true)
+                    item.copy(
+                        isInstalled = matchesRepo,
+                        installedVersion = plugin.version,
+                        installedRepoUrl = plugin.repoUrl,
+                        hasUpdate = item.version > plugin.version,
+                    )
                 } else {
                     item
                 }
@@ -720,6 +797,8 @@ class CloudStreamManager(
 
         removePluginRepoAssociation(internalName)
         removePluginRepoAssociation(safeName)
+        removePluginVersion(internalName)
+        removePluginVersion(safeName)
 
         val currentSources = _installedSourcesFlow.value.toMutableList()
         currentSources.removeAll {
@@ -734,7 +813,12 @@ class CloudStreamManager(
                 item.internalName.equals(safeName, ignoreCase = true) ||
                 item.name.equals(internalName, ignoreCase = true)
             ) {
-                item.copy(isInstalled = false)
+                item.copy(
+                    isInstalled = false,
+                    installedVersion = null,
+                    installedRepoUrl = null,
+                    hasUpdate = false,
+                )
             } else {
                 item
             }
@@ -854,6 +938,12 @@ class CloudStreamManager(
             val requiresResources = manifest?.requiresResources ?: (
                 Regex(""""requiresResources"\s*:\s*(true|false)""").find(manifestText.orEmpty())?.groupValues?.getOrNull(1)?.toBooleanStrictOrNull() ?: false
             )
+
+            recordPluginVersion(file.nameWithoutExtension, pluginVersion)
+            recordPluginVersion(pluginName, pluginVersion)
+            if (pluginClassName.isNotBlank()) {
+                recordPluginVersion(pluginClassName, pluginVersion)
+            }
 
             if (pluginClassName.isBlank()) {
                 _lastErrorFlow.value = "pluginClassName empty in manifest of ${file.name}"

@@ -1022,6 +1022,8 @@ class PlayerActivity : BaseActivity() {
                         launchUI { toast(AYMR.strings.no_next_episode) }
                     }
                     viewModel.isLoading.update { _ -> false }
+                    viewModel.updateIsLoadingEpisode(false)
+                    viewModel.updateIsLoadingHosters(false)
                 }
 
                 else -> {
@@ -1044,6 +1046,12 @@ class PlayerActivity : BaseActivity() {
                         }
                     } else {
                         logcat(LogPriority.ERROR) { "Error getting links" }
+                        setInitialEpisodeError(
+                            PlayerViewModel.ExceptionWithStringResource(
+                                "Failed to load video links",
+                                AYMR.strings.no_hosters,
+                            ),
+                        )
                     }
 
                     if (isInPictureInPictureMode && pipEpisodeToasts) {

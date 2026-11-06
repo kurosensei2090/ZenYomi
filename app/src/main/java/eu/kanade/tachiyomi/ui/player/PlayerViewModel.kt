@@ -1628,6 +1628,7 @@ class PlayerViewModel @JvmOverloads constructor(
         updateEpisode(chosenEpisode)
 
         return withIOContext {
+            currentHosterList = null
             try {
                 val currentEpisode =
                     currentEpisode.value

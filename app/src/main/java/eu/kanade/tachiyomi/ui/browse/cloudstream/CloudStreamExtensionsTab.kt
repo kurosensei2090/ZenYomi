@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
@@ -81,7 +82,7 @@ fun Screen.csExtensionsTab(): TabContent {
 
     return TabContent(
         titleRes = AYMR.strings.label_cs_extensions,
-        badgeNumber = if (badgePlugins.isNotEmpty()) badgePlugins.count { !it.isInstalled } else null,
+        badgeNumber = if (badgePlugins.isNotEmpty()) badgePlugins.count { it.hasUpdate }.takeIf { it > 0 } else null,
         actions = persistentListOf(
             AppBar.Action(
                 title = "Add Repository",
@@ -292,6 +293,15 @@ fun Screen.csExtensionsTab(): TabContent {
                                 repos.find { it.url == plugin.repoUrl }?.cleanName
                                     ?: repos.find { plugin.repoUrl.isNotBlank() && (it.url.contains(plugin.repoUrl) || plugin.repoUrl.contains(it.url)) }?.cleanName
                             }
+                            val installedRepoName = remember(plugin.installedRepoUrl, repos) {
+                                if (!plugin.installedRepoUrl.isNullOrBlank()) {
+                                    repos.find { it.url == plugin.installedRepoUrl }?.cleanName
+                                        ?: repos.find { it.url.contains(plugin.installedRepoUrl) || plugin.installedRepoUrl.contains(it.url) }?.cleanName
+                                        ?: "another repo"
+                                } else {
+                                    null
+                                }
+                            }
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = CardDefaults.cardColors(
@@ -315,28 +325,39 @@ fun Screen.csExtensionsTab(): TabContent {
                                                 .size(42.dp)
                                                 .clip(CircleShape)
                                                 .background(
-                                                    if (plugin.isInstalled) {
-                                                        MaterialTheme.colorScheme.primaryContainer
-                                                    } else {
-                                                        MaterialTheme.colorScheme.secondaryContainer
+                                                    when {
+                                                        plugin.hasUpdate -> MaterialTheme.colorScheme.tertiaryContainer
+                                                        plugin.isInstalled -> MaterialTheme.colorScheme.primaryContainer
+                                                        else -> MaterialTheme.colorScheme.secondaryContainer
                                                     },
                                                 ),
                                             contentAlignment = Alignment.Center,
                                         ) {
-                                            if (plugin.isInstalled) {
-                                                Icon(
-                                                    imageVector = Icons.Outlined.Check,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(20.dp),
-                                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                )
-                                            } else {
-                                                Icon(
-                                                    imageVector = Icons.Outlined.Download,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(20.dp),
-                                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                )
+                                            when {
+                                                plugin.hasUpdate -> {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.ArrowUpward,
+                                                        contentDescription = "Update Available",
+                                                        modifier = Modifier.size(20.dp),
+                                                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                    )
+                                                }
+                                                plugin.isInstalled -> {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.Check,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(20.dp),
+                                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                    )
+                                                }
+                                                else -> {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.Download,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(20.dp),
+                                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                    )
+                                                }
                                             }
                                         }
 
@@ -383,6 +404,22 @@ fun Screen.csExtensionsTab(): TabContent {
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 maxLines = 1,
                                             )
+                                            if (plugin.hasUpdate) {
+                                                Text(
+                                                    text = "Update available: v${plugin.installedVersion ?: "?"} → v${plugin.version}",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.padding(top = 2.dp),
+                                                )
+                                            } else if (!plugin.isInstalled && plugin.installedVersion != null) {
+                                                Text(
+                                                    text = "Installed v${plugin.installedVersion}" + if (!installedRepoName.isNullOrBlank()) " ($installedRepoName)" else "",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.outline,
+                                                    modifier = Modifier.padding(top = 2.dp),
+                                                )
+                                            }
                                         }
                                     }
 
@@ -390,6 +427,39 @@ fun Screen.csExtensionsTab(): TabContent {
 
                                     if (isCurrentlyInstalling) {
                                         CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 2.5.dp)
+                                    } else if (plugin.hasUpdate) {
+                                        Button(
+                                            onClick = {
+                                                scope.launch {
+                                                    installingInternalName = plugin.internalName
+                                                    try {
+                                                        val success = manager.installPlugin(plugin)
+                                                        if (success) {
+                                                            context.toast("Updated ${plugin.name} to v${plugin.version}")
+                                                        } else {
+                                                            val err = manager.lastErrorFlow.value ?: "Failed to update ${plugin.name}"
+                                                            context.toast(err, Toast.LENGTH_LONG)
+                                                        }
+                                                    } finally {
+                                                        installingInternalName = null
+                                                    }
+                                                }
+                                            },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = MaterialTheme.colorScheme.primary,
+                                                contentColor = MaterialTheme.colorScheme.onPrimary,
+                                            ),
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.ArrowUpward,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(16.dp),
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text("Update")
+                                            }
+                                        }
                                     } else if (plugin.isInstalled) {
                                         OutlinedButton(
                                             onClick = {
@@ -423,7 +493,7 @@ fun Screen.csExtensionsTab(): TabContent {
                                                 }
                                             },
                                         ) {
-                                            Text("Install")
+                                            Text(if (plugin.installedVersion != null) "Reinstall" else "Install")
                                         }
                                     }
                                 }

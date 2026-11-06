@@ -353,9 +353,29 @@ class CloudStreamReposScreen : Screen() {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    if (plugin.hasUpdate) {
+                        Text(
+                            text = "Update available (v${plugin.installedVersion ?: "?"} → v${plugin.version})",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
                 }
 
-                if (plugin.isInstalled) {
+                if (plugin.hasUpdate) {
+                    Button(
+                        onClick = onInstall,
+                        shape = RoundedCornerShape(20.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                        ),
+                    ) {
+                        Text("Update")
+                    }
+                } else if (plugin.isInstalled) {
                     OutlinedButton(
                         onClick = onUninstall,
                         shape = RoundedCornerShape(20.dp),
@@ -367,7 +387,7 @@ class CloudStreamReposScreen : Screen() {
                         onClick = onInstall,
                         shape = RoundedCornerShape(20.dp),
                     ) {
-                        Text("Install")
+                        Text(if (plugin.installedVersion != null) "Reinstall" else "Install")
                     }
                 }
             }
