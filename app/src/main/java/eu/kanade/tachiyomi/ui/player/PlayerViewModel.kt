@@ -1452,8 +1452,26 @@ class PlayerViewModel @JvmOverloads constructor(
                 }
 
                 throw e
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR, e) { "Failed to load hoster videos: ${e.message}" }
+                updateIsLoadingHosters(false)
+                updateIsLoadingEpisode(false)
+                isLoading.update { false }
+                withUIContext {
+                    activity.setInitialEpisodeError(e)
+                }
+            } finally {
+                updateIsLoadingHosters(false)
             }
         }
+    }
+
+    fun clearHosters() {
+        _hosterList.update { emptyList() }
+        _hosterState.update { emptyList() }
+        _hosterExpandedList.update { emptyList() }
+        _selectedHosterVideoIndex.update { Pair(-1, -1) }
+        updateIsLoadingHosters(false)
     }
 
     private suspend fun loadVideo(source: AnimeSource?, video: Video, hosterIndex: Int, videoIndex: Int): Boolean {
@@ -1544,13 +1562,21 @@ class PlayerViewModel @JvmOverloads constructor(
         }
 
         viewModelScope.launchIO {
-            val success = loadVideo(currentSource.value, video, hosterIndex, videoIndex)
-            if (success) {
-                if (sheetShown.value == Sheets.QualityTracks) {
-                    dismissSheet()
+            try {
+                val success = loadVideo(currentSource.value, video, hosterIndex, videoIndex)
+                if (success) {
+                    if (sheetShown.value == Sheets.QualityTracks) {
+                        dismissSheet()
+                    }
+                } else {
+                    updateIsLoadingEpisode(false)
                 }
-            } else {
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR, e) { "Failed onVideoClicked: ${e.message}" }
                 updateIsLoadingEpisode(false)
+                withUIContext {
+                    activity.setInitialEpisodeError(e)
+                }
             }
         }
     }

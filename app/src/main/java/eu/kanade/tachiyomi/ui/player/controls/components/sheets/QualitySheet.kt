@@ -134,7 +134,36 @@ fun QualitySheet(
                         targetOffsetY = { it / 2 },
                     ),
             ) {
-                if (hosterState.size == 1 &&
+                val hasAnyVideos = hosterState.any {
+                    it is HosterState.Ready && it.videoList.isNotEmpty()
+                }
+
+                if (!hasAnyVideos && hosterState.none { it is HosterState.Loading }) {
+                    Box(
+                        modifier = modifier
+                            .fillMaxWidth()
+                            .padding(vertical = MaterialTheme.padding.large, horizontal = MaterialTheme.padding.medium),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ErrorOutline,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(32.dp),
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = stringResource(AYMR.strings.no_available_videos),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                } else if (hosterState.size == 1 &&
                     hosterState.first().name == Hoster.NO_HOSTER_LIST &&
                     hosterState.first() is HosterState.Ready
                 ) {

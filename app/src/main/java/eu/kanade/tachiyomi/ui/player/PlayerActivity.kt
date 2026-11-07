@@ -1029,12 +1029,15 @@ class PlayerActivity : BaseActivity() {
                 else -> {
                     if (switchMethod.hosterList != null) {
                         when {
-                            switchMethod.hosterList.isEmpty() -> setInitialEpisodeError(
-                                PlayerViewModel.ExceptionWithStringResource(
-                                    "Hoster list is empty",
-                                    AYMR.strings.no_hosters,
-                                ),
-                            )
+                            switchMethod.hosterList.isEmpty() -> {
+                                viewModel.clearHosters()
+                                setInitialEpisodeError(
+                                    PlayerViewModel.ExceptionWithStringResource(
+                                        "Hoster list is empty",
+                                        AYMR.strings.no_hosters,
+                                    ),
+                                )
+                            }
                             else -> {
                                 viewModel.loadHosters(
                                     source = switchMethod.source,
@@ -1046,6 +1049,7 @@ class PlayerActivity : BaseActivity() {
                         }
                     } else {
                         logcat(LogPriority.ERROR) { "Error getting links" }
+                        viewModel.clearHosters()
                         setInitialEpisodeError(
                             PlayerViewModel.ExceptionWithStringResource(
                                 "Failed to load video links",
@@ -1149,7 +1153,7 @@ class PlayerActivity : BaseActivity() {
      * Displays a toast and resets loading state without closing the player so the user can choose
      * another server or retry.
      */
-    private fun setInitialEpisodeError(error: Throwable) {
+    fun setInitialEpisodeError(error: Throwable) {
         if (error is PlayerViewModel.ExceptionWithStringResource) {
             toast(error.stringResource)
         } else if (!error.message.isNullOrBlank()) {

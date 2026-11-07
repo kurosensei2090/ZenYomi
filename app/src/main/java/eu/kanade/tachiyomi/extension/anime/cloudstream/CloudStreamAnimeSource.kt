@@ -364,7 +364,7 @@ class CloudStreamAnimeSource(
             logcat(LogPriority.ERROR, e) { "Failed to load links for ${episode.name}" }
         }
 
-        if (videos.isEmpty() && episode.url.isNotBlank()) {
+        if (videos.isEmpty() && episode.url.isNotBlank() && (episode.url.startsWith("http://", ignoreCase = true) || episode.url.startsWith("https://", ignoreCase = true))) {
             try {
                 withTimeoutOrNull(15_000L) {
                     com.lagradost.cloudstream3.utils.loadExtractor(
