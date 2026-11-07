@@ -331,7 +331,12 @@ class CloudStreamAnimeSource(
 
         val onLink: (ExtractorLink) -> Unit = { link ->
             if (link.url.isNotBlank()) {
-                val qualityName = "${link.name} - ${Qualities.getStringByInt(link.quality)}"
+                val qualityStr = Qualities.getStringByInt(link.quality)
+                val qualityName = if (qualityStr.equals("Unknown", ignoreCase = true) || link.name.contains(qualityStr, ignoreCase = true)) {
+                    link.name
+                } else {
+                    "${link.name} - $qualityStr"
+                }
                 val okhttpHeaders = link.headers.toMutableMap()
                 if (link.referer.isNotEmpty()) {
                     okhttpHeaders["Referer"] = link.referer
@@ -364,9 +369,28 @@ class CloudStreamAnimeSource(
             logcat(LogPriority.ERROR, e) { "Failed to load links for ${episode.name}" }
         }
 
+        // Check if any video was added as an embed URL that needs second-pass extraction
+        val embedsToExtract = videos.filter { v ->
+            v.videoUrl.contains("pixeldrain.com/u/") ||
+                v.videoUrl.contains("uqload") ||
+                v.videoUrl.contains("streamwish") ||
+                v.videoUrl.contains("voe.sx")
+        }
+        for (embed in embedsToExtract) {
+            videos.remove(embed)
+            try {
+                com.lagradost.cloudstream3.utils.loadExtractor(
+                    url = embed.videoUrl,
+                    referer = baseUrl,
+                    subtitleCallback = onSubtitle,
+                    callback = onLink,
+                )
+            } catch (_: Throwable) {}
+        }
+
         if (videos.isEmpty() && episode.url.isNotBlank() && (episode.url.startsWith("http://", ignoreCase = true) || episode.url.startsWith("https://", ignoreCase = true))) {
             try {
-                withTimeoutOrNull(15_000L) {
+                withTimeoutOrNull(20_000L) {
                     com.lagradost.cloudstream3.utils.loadExtractor(
                         url = episode.url,
                         referer = baseUrl,

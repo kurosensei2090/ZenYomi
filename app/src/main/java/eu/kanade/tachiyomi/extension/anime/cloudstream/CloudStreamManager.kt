@@ -193,6 +193,7 @@ class CloudStreamManager(
         } catch (t: Throwable) {
             logcat(LogPriority.WARN, t) { "Failed to bind baseClient to CloudStream app" }
         }
+        com.lagradost.cloudstream3.extractors.registerCommonExtractors()
         loadSavedRepositories()
         scope.launch {
             loadInstalledPlugins()

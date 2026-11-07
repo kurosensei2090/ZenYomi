@@ -86,6 +86,10 @@ suspend fun loadExtractor(
 ): Boolean {
     if (url.isBlank()) return false
 
+    if (extractorApis.isEmpty()) {
+        com.lagradost.cloudstream3.extractors.registerCommonExtractors()
+    }
+
     // 1. Check registered extractors
     for (extractor in extractorApis.toList()) {
         val matchesDomain = extractor.mainUrl.isNotBlank() && url.contains(extractor.mainUrl, ignoreCase = true)
@@ -200,6 +204,21 @@ suspend fun loadExtractor(
                 ),
             )
             emitted = true
+        }
+
+        // Check if the page contains iframes to other video hosters
+        val iframeRegex = Regex("""<iframe[^>]+src=["'](https?://[^"']+)["']""", RegexOption.IGNORE_CASE)
+        val iframes = iframeRegex.findAll(html).map { it.groupValues[1] }.distinct().toList()
+        for (iframeUrl in iframes) {
+            val lower = iframeUrl.lowercase()
+            if (iframeUrl != cleanUrl &&
+                !lower.contains("google.com/recaptcha") &&
+                !lower.contains("facebook.com") &&
+                !lower.contains("disqus.com")
+            ) {
+                val resolved = loadExtractor(iframeUrl, cleanUrl, subtitleCallback, callback)
+                if (resolved) emitted = true
+            }
         }
 
         return emitted

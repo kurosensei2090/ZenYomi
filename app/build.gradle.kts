@@ -19,7 +19,7 @@ android {
     defaultConfig {
         applicationId = "xyz.zenyomi.app"
 
-        versionCode = 30
+        versionCode = 31
         versionName = "1.0.3"
 
         buildConfigField("String", "COMMIT_COUNT", "\"${getCommitCount()}\"")
