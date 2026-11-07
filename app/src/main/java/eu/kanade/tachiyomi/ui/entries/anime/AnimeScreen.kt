@@ -135,8 +135,12 @@ class AnimeScreen(
             navigateUp = navigator::pop,
             onEpisodeClicked = { episode, alt ->
                 scope.launchIO {
-                    if (screenModel.isTorrentEnabled() && successState.source.isSourceForTorrents()) {
-                        TorrentServerService.start()
+                    try {
+                        if (screenModel.isTorrentEnabled() && successState.source.isSourceForTorrents()) {
+                            TorrentServerService.start()
+                        }
+                    } catch (e: Exception) {
+                        logcat(LogPriority.ERROR, e) { "Failed to start torrent server" }
                     }
                     val extPlayer = screenModel.alwaysUseExternalPlayer != alt
                     openEpisode(context, episode, extPlayer)

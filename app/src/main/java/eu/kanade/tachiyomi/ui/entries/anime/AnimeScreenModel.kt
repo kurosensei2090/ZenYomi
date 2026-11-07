@@ -657,10 +657,14 @@ class AnimeScreenModel(
     }
 
     private suspend fun startTorrentServer(source: AnimeSource?) {
-        if (isTorrentEnabled() && source.isSourceForTorrents()) {
-            TorrentServerService.start()
-            TorrentServerService.wait(10)
-            torrentServerUtils.setTrackersList()
+        try {
+            if (isTorrentEnabled() && source.isSourceForTorrents()) {
+                TorrentServerService.start()
+                TorrentServerService.wait(10)
+                torrentServerUtils.setTrackersList()
+            }
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e) { "Failed to start torrent server" }
         }
     }
 
