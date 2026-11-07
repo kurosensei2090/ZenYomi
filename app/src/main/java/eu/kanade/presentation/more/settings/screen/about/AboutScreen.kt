@@ -214,7 +214,7 @@ object AboutScreen : Screen() {
     }
 
     fun getVersionName(withBuildDate: Boolean = false): String {
-        return "v${BuildConfig.VERSION_NAME}"
+        return "v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})"
     }
 
     internal fun getFormattedBuildTime(): String {

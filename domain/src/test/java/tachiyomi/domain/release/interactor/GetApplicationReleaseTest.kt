@@ -113,7 +113,7 @@ class GetApplicationReleaseTest {
     }
 
     @Test
-    fun `When now is before three days expect no new update`() = runTest {
+    fun `When now is before one hour expect no new update`() = runTest {
         every { preference.get() } returns Instant.now().toEpochMilli()
         every { preference.set(any()) }.answers { }
 
@@ -137,5 +137,89 @@ class GetApplicationReleaseTest {
 
         coVerify(exactly = 0) { releaseService.latest(any()) }
         result shouldBe GetApplicationRelease.Result.NoNewUpdate
+    }
+
+    @Test
+    fun `When version is same but remote build code is higher expect new update`() = runTest {
+        every { preference.get() } returns 0
+        every { preference.set(any()) }.answers { }
+
+        val release = Release(
+            "v1.0.2 (Build 26)",
+            "info",
+            "http://example.com/release_link",
+            "http://example.com/release_link.apk",
+            buildCode = 26,
+        )
+
+        coEvery { releaseService.latest(any()) } returns release
+
+        val result = getApplicationRelease.await(
+            GetApplicationRelease.Arguments(
+                isPreview = false,
+                commitCount = 0,
+                versionName = "1.0.2",
+                repository = "test",
+                versionCode = 25,
+            ),
+        )
+
+        (result as GetApplicationRelease.Result.NewUpdate).release shouldBe release
+    }
+
+    @Test
+    fun `When version is same and remote build code is same expect no new update`() = runTest {
+        every { preference.get() } returns 0
+        every { preference.set(any()) }.answers { }
+
+        val release = Release(
+            "v1.0.2 (Build 26)",
+            "info",
+            "http://example.com/release_link",
+            "http://example.com/release_link.apk",
+            buildCode = 26,
+        )
+
+        coEvery { releaseService.latest(any()) } returns release
+
+        val result = getApplicationRelease.await(
+            GetApplicationRelease.Arguments(
+                isPreview = false,
+                commitCount = 0,
+                versionName = "1.0.2",
+                repository = "test",
+                versionCode = 26,
+            ),
+        )
+
+        result shouldBe GetApplicationRelease.Result.NoNewUpdate
+    }
+
+    @Test
+    fun `When version is same and remote build code is parsed from tag fallback expect new update`() = runTest {
+        every { preference.get() } returns 0
+        every { preference.set(any()) }.answers { }
+
+        val release = Release(
+            "v1.0.2 (Build 27)",
+            "info",
+            "http://example.com/release_link",
+            "http://example.com/release_link.apk",
+            buildCode = null,
+        )
+
+        coEvery { releaseService.latest(any()) } returns release
+
+        val result = getApplicationRelease.await(
+            GetApplicationRelease.Arguments(
+                isPreview = false,
+                commitCount = 0,
+                versionName = "1.0.2",
+                repository = "test",
+                versionCode = 26,
+            ),
+        )
+
+        (result as GetApplicationRelease.Result.NewUpdate).release shouldBe release
     }
 }

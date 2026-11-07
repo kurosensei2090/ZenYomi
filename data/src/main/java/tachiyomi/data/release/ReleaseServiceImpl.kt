@@ -24,14 +24,52 @@ class ReleaseServiceImpl(
         }
         val downloadLink = getDownloadLink(release = release) ?: return null
 
+        val buildCode = extractBuildCode(release.name, release.version, release.info)
+        val formattedVersion = if (buildCode != null && !release.version.contains("build", ignoreCase = true) && !release.version.contains("b$buildCode", ignoreCase = true)) {
+            "${release.version} (Build $buildCode)"
+        } else {
+            release.version
+        }
+
         return Release(
-            version = release.version,
+            version = formattedVersion,
             info = release.info.replace(gitHubUsernameMentionRegex) { mention ->
                 "[${mention.value}](https://github.com/${mention.value.substring(1)})"
             },
             releaseLink = release.releaseLink,
             downloadLink = downloadLink,
+            buildCode = buildCode,
         )
+    }
+
+    private fun extractBuildCode(name: String?, tag: String?, info: String?): Int? {
+        val regex = Regex("""(?i)\bbuild\s*[:#\-]?\s*(\d+)\b|\bb(\d+)\b""")
+
+        // 1. Release title / name
+        name?.let {
+            val match = regex.find(it)
+            val code = match?.groupValues?.getOrNull(1)?.toIntOrNull()
+                ?: match?.groupValues?.getOrNull(2)?.toIntOrNull()
+            if (code != null) return code
+        }
+
+        // 2. Release tag
+        tag?.let {
+            val match = regex.find(it)
+            val code = match?.groupValues?.getOrNull(1)?.toIntOrNull()
+                ?: match?.groupValues?.getOrNull(2)?.toIntOrNull()
+            if (code != null) return code
+        }
+
+        // 3. First few lines of release body
+        info?.lines()?.take(5)?.forEach { line ->
+            val match = regex.find(line)
+            val code = match?.groupValues?.getOrNull(1)?.toIntOrNull()
+                ?: match?.groupValues?.getOrNull(2)?.toIntOrNull()
+            if (code != null) return code
+        }
+
+        return null
     }
 
     private fun getDownloadLink(release: GithubRelease): String? {

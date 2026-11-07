@@ -20,11 +20,12 @@ class AppUpdateChecker {
         return withIOContext {
             val result = getApplicationRelease.await(
                 GetApplicationRelease.Arguments(
-                    isPreviewBuildType,
-                    BuildConfig.COMMIT_COUNT.toInt(),
-                    BuildConfig.VERSION_NAME,
-                    GITHUB_REPO,
-                    forceCheck,
+                    isPreview = isPreviewBuildType,
+                    commitCount = BuildConfig.COMMIT_COUNT.toIntOrNull() ?: 0,
+                    versionName = BuildConfig.VERSION_NAME,
+                    repository = GITHUB_REPO,
+                    forceCheck = forceCheck,
+                    versionCode = BuildConfig.VERSION_CODE,
                 ),
             )
 

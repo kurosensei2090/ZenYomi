@@ -19,10 +19,10 @@ class GetApplicationRelease(
     suspend fun await(arguments: Arguments): Result {
         val now = Instant.now()
 
-        // Limit checks to once every 3 days at most
+        // Limit checks to once every 1 hour at most when not force checked
         if (!arguments.forceCheck &&
             now.isBefore(
-                Instant.ofEpochMilli(lastChecked.get()).plus(3, ChronoUnit.DAYS),
+                Instant.ofEpochMilli(lastChecked.get()).plus(1, ChronoUnit.HOURS),
             )
         ) {
             return Result.NoNewUpdate
@@ -34,10 +34,12 @@ class GetApplicationRelease(
 
         // Check if latest version is different from current version
         val isNewVersion = isNewVersion(
-            arguments.isPreview,
-            arguments.commitCount,
-            arguments.versionName,
-            release.version,
+            isPreview = arguments.isPreview,
+            commitCount = arguments.commitCount,
+            versionName = arguments.versionName,
+            versionCode = arguments.versionCode,
+            versionTag = release.version,
+            remoteBuildCode = release.buildCode,
         )
         return when {
             isNewVersion -> Result.NewUpdate(release)
@@ -49,23 +51,46 @@ class GetApplicationRelease(
         isPreview: Boolean,
         commitCount: Int,
         versionName: String,
+        versionCode: Int,
         versionTag: String,
+        remoteBuildCode: Int?,
     ): Boolean {
-        // Removes prefixes like "r" or "v"
-        val newVersion = versionTag.replace("[^\\d.]".toRegex(), "")
-        return if (isPreview) {
-            newVersion.toIntOrNull()?.let { it > commitCount } ?: false
-        } else {
-            val oldVersion = versionName.replace("[^\\d.]".toRegex(), "")
+        // Removes prefixes and extra annotations (e.g. "v1.0.2 (Build 26)" -> "1.0.2")
+        val cleanRemote = versionTag
+            .substringBefore(" ")
+            .substringBefore("(")
+            .substringBefore("-")
+            .replace("[^\\d.]".toRegex(), "")
 
-            val newParts = newVersion.split(".").mapNotNull { it.toIntOrNull() }
-            val oldParts = oldVersion.split(".").mapNotNull { it.toIntOrNull() }
+        return if (isPreview) {
+            cleanRemote.toIntOrNull()?.let { it > commitCount } ?: false
+        } else {
+            val cleanOld = versionName
+                .substringBefore(" ")
+                .substringBefore("(")
+                .substringBefore("-")
+                .replace("[^\\d.]".toRegex(), "")
+
+            val newParts = cleanRemote.split(".").mapNotNull { it.toIntOrNull() }
+            val oldParts = cleanOld.split(".").mapNotNull { it.toIntOrNull() }
             val maxLen = maxOf(newParts.size, oldParts.size)
             for (i in 0 until maxLen) {
                 val n = newParts.getOrElse(i) { 0 }
                 val o = oldParts.getOrElse(i) { 0 }
                 if (n > o) return true
                 if (n < o) return false
+            }
+
+            // If major.minor.patch are equal, check build number / version code
+            val effectiveRemoteBuildCode = remoteBuildCode ?: run {
+                val regex = Regex("""(?i)\bbuild\s*[:#\-]?\s*(\d+)\b|\bb(\d+)\b""")
+                val match = regex.find(versionTag)
+                match?.groupValues?.getOrNull(1)?.toIntOrNull()
+                    ?: match?.groupValues?.getOrNull(2)?.toIntOrNull()
+            }
+
+            if (effectiveRemoteBuildCode != null && effectiveRemoteBuildCode > versionCode) {
+                return true
             }
 
             false
@@ -78,6 +103,7 @@ class GetApplicationRelease(
         val versionName: String,
         val repository: String,
         val forceCheck: Boolean = false,
+        val versionCode: Int = 0,
     )
 
     sealed interface Result {
