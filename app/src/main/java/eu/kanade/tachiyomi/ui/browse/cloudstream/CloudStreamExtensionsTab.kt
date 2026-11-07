@@ -57,13 +57,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
+import coil3.compose.AsyncImage
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.TabContent
+import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.extension.anime.cloudstream.CloudStreamManager
 import eu.kanade.tachiyomi.extension.anime.cloudstream.CloudStreamPluginItem
 import eu.kanade.tachiyomi.extension.anime.cloudstream.CloudStreamRepo
@@ -320,43 +324,77 @@ fun Screen.csExtensionsTab(): TabContent {
                                         verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier.weight(1f),
                                     ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(42.dp)
-                                                .clip(CircleShape)
-                                                .background(
-                                                    when {
-                                                        plugin.hasUpdate -> MaterialTheme.colorScheme.tertiaryContainer
-                                                        plugin.isInstalled -> MaterialTheme.colorScheme.primaryContainer
-                                                        else -> MaterialTheme.colorScheme.secondaryContainer
-                                                    },
-                                                ),
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            when {
-                                                plugin.hasUpdate -> {
-                                                    Icon(
-                                                        imageVector = Icons.Outlined.ArrowUpward,
-                                                        contentDescription = "Update Available",
-                                                        modifier = Modifier.size(20.dp),
-                                                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                                                    )
+                                        if (!plugin.iconUrl.isNullOrBlank()) {
+                                            Box(
+                                                modifier = Modifier.size(42.dp),
+                                                contentAlignment = Alignment.BottomEnd,
+                                            ) {
+                                                AsyncImage(
+                                                    model = plugin.iconUrl,
+                                                    contentDescription = plugin.name,
+                                                    placeholder = painterResource(R.mipmap.ic_default_source),
+                                                    error = painterResource(R.mipmap.ic_default_source),
+                                                    modifier = Modifier
+                                                        .size(42.dp)
+                                                        .clip(RoundedCornerShape(8.dp)),
+                                                    contentScale = ContentScale.Crop,
+                                                )
+                                                if (plugin.hasUpdate) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(16.dp)
+                                                            .clip(CircleShape)
+                                                            .background(MaterialTheme.colorScheme.tertiary),
+                                                        contentAlignment = Alignment.Center,
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Outlined.ArrowUpward,
+                                                            contentDescription = "Update Available",
+                                                            modifier = Modifier.size(11.dp),
+                                                            tint = MaterialTheme.colorScheme.onTertiary,
+                                                        )
+                                                    }
                                                 }
-                                                plugin.isInstalled -> {
-                                                    Icon(
-                                                        imageVector = Icons.Outlined.Check,
-                                                        contentDescription = null,
-                                                        modifier = Modifier.size(20.dp),
-                                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                    )
-                                                }
-                                                else -> {
-                                                    Icon(
-                                                        imageVector = Icons.Outlined.Download,
-                                                        contentDescription = null,
-                                                        modifier = Modifier.size(20.dp),
-                                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                    )
+                                            }
+                                        } else {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(42.dp)
+                                                    .clip(CircleShape)
+                                                    .background(
+                                                        when {
+                                                            plugin.hasUpdate -> MaterialTheme.colorScheme.tertiaryContainer
+                                                            plugin.isInstalled -> MaterialTheme.colorScheme.primaryContainer
+                                                            else -> MaterialTheme.colorScheme.secondaryContainer
+                                                        },
+                                                    ),
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                when {
+                                                    plugin.hasUpdate -> {
+                                                        Icon(
+                                                            imageVector = Icons.Outlined.ArrowUpward,
+                                                            contentDescription = "Update Available",
+                                                            modifier = Modifier.size(20.dp),
+                                                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                        )
+                                                    }
+                                                    plugin.isInstalled -> {
+                                                        Icon(
+                                                            imageVector = Icons.Outlined.Check,
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(20.dp),
+                                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                        )
+                                                    }
+                                                    else -> {
+                                                        Icon(
+                                                            imageVector = Icons.Outlined.Download,
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(20.dp),
+                                                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }

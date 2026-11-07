@@ -76,6 +76,7 @@ class CloudStreamManager(
         private const val PREF_REPOS = "zenyomi.cloudstream.repos"
         private const val PREF_PLUGIN_REPOS = "zenyomi.cloudstream.plugin_repos_map"
         private const val PREF_PLUGIN_VERSIONS = "zenyomi.cloudstream.plugin_versions_map"
+        private const val PREF_PLUGIN_ICONS = "zenyomi.cloudstream.plugin_icons_map"
         private const val PLUGINS_DIR = "cloudstream_plugins"
         private const val USER_AGENT =
             "Mozilla/5.0 (Linux; Android 14; ZenYomi) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
@@ -299,6 +300,37 @@ class CloudStreamManager(
         if (map.remove(pluginName) != null) {
             savePluginVersionMap(map)
         }
+    }
+
+    private fun getPluginIconMap(): MutableMap<String, String> {
+        val raw = prefs.getString(PREF_PLUGIN_ICONS, null) ?: return mutableMapOf()
+        return try {
+            json.decodeFromString<Map<String, String>>(raw).toMutableMap()
+        } catch (_: Exception) {
+            mutableMapOf()
+        }
+    }
+
+    private fun savePluginIconMap(map: Map<String, String>) {
+        prefs.edit().putString(PREF_PLUGIN_ICONS, json.encodeToString(map)).apply()
+    }
+
+    fun getPluginIconUrl(pluginName: String): String? {
+        if (pluginName.isBlank()) return null
+        val clean = pluginName.removeSuffix(".cs3").removeSuffix(" [CS]").trim()
+        val map = getPluginIconMap()
+        return map[pluginName] ?: map[clean] ?: map["$clean.cs3"]
+    }
+
+    fun recordPluginIcon(pluginName: String, rawIconUrl: String?) {
+        if (pluginName.isBlank() || rawIconUrl.isNullOrBlank()) return
+        val iconUrl = rawIconUrl.replace("%size%", "128")
+        val map = getPluginIconMap()
+        map[pluginName] = iconUrl
+        val clean = pluginName.removeSuffix(".cs3").removeSuffix(" [CS]").trim()
+        map[clean] = iconUrl
+        map["$clean.cs3"] = iconUrl
+        savePluginIconMap(map)
     }
 
     private fun getPluginsForRepo(repoUrl: String): List<String> {
@@ -663,10 +695,16 @@ class CloudStreamManager(
                     ?: obj["jarUrl"]?.jsonPrimitive?.contentOrNull
                     ?: continue
                 val pluginUrl = resolveUrl(url, rawUrl)
-                val iconUrl = obj["iconUrl"]?.jsonPrimitive?.contentOrNull?.let { resolveUrl(url, it) }
+                val rawIcon = obj["iconUrl"]?.jsonPrimitive?.contentOrNull?.let { resolveUrl(url, it) }
+                val iconUrl = rawIcon?.replace("%size%", "128")
                 val version = obj["version"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 1
                 val lang = obj["language"]?.jsonPrimitive?.contentOrNull ?: "en"
                 val tvTypes = obj["tvTypes"]?.jsonArray?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList()
+
+                if (!iconUrl.isNullOrBlank()) {
+                    recordPluginIcon(internalName, iconUrl)
+                    recordPluginIcon(name, iconUrl)
+                }
 
                 results.add(
                     CloudStreamPluginItem(
@@ -743,6 +781,12 @@ class CloudStreamManager(
             recordPluginVersion(safeName, plugin.version)
             recordPluginVersion(plugin.internalName, plugin.version)
             recordPluginVersion(plugin.name, plugin.version)
+
+            if (!plugin.iconUrl.isNullOrBlank()) {
+                recordPluginIcon(safeName, plugin.iconUrl)
+                recordPluginIcon(plugin.internalName, plugin.iconUrl)
+                recordPluginIcon(plugin.name, plugin.iconUrl)
+            }
 
             val current = _installedSourcesFlow.value.toMutableList()
             current.removeAll {
@@ -913,6 +957,27 @@ class CloudStreamManager(
                         if (entry != null) {
                             manifestText = zip.getInputStream(entry).bufferedReader().use { it.readText() }
                         }
+                        val iconEntry = zip.entries().asSequence().find {
+                            it.name.equals("icon.png", ignoreCase = true) ||
+                                it.name.equals("icon.webp", ignoreCase = true) ||
+                                it.name.endsWith("/icon.png", ignoreCase = true) ||
+                                it.name.endsWith("/icon.webp", ignoreCase = true)
+                        }
+                        if (iconEntry != null) {
+                            try {
+                                val safeName = file.nameWithoutExtension.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                                val iconDir = File(context.filesDir, "cs_icons").apply { mkdirs() }
+                                val iconFile = File(iconDir, "$safeName.png")
+                                if (!iconFile.exists() || iconFile.length() != iconEntry.size) {
+                                    zip.getInputStream(iconEntry).use { input ->
+                                        iconFile.outputStream().use { output -> input.copyTo(output) }
+                                    }
+                                }
+                                val localPath = iconFile.absolutePath
+                                recordPluginIcon(file.nameWithoutExtension, localPath)
+                                recordPluginIcon(file.name, localPath)
+                            } catch (_: Throwable) {}
+                        }
                     }
                 } catch (_: Throwable) {}
             }
@@ -943,6 +1008,12 @@ class CloudStreamManager(
             recordPluginVersion(pluginName, pluginVersion)
             if (pluginClassName.isNotBlank()) {
                 recordPluginVersion(pluginClassName, pluginVersion)
+            }
+
+            val manifestIcon = Regex(""""iconUrl"\s*:\s*"([^"]+)"""").find(manifestText.orEmpty())?.groupValues?.getOrNull(1)?.trim()
+            if (!manifestIcon.isNullOrBlank()) {
+                recordPluginIcon(file.nameWithoutExtension, manifestIcon)
+                recordPluginIcon(pluginName, manifestIcon)
             }
 
             if (pluginClassName.isBlank()) {
@@ -1060,13 +1131,26 @@ class CloudStreamManager(
                 _lastErrorFlow.value = "[${file.nameWithoutExtension}] $cleanDetail"
             }
 
+            fun createSource(api: MainAPI): CloudStreamAnimeSource {
+                val apiName = runCatching { api.name }.getOrDefault("")
+                val resolvedIcon = getPluginIconUrl(file.nameWithoutExtension)
+                    ?: getPluginIconUrl(pluginName)
+                    ?: getPluginIconUrl(apiName)
+                return CloudStreamAnimeSource(
+                    api = api,
+                    pluginName = pluginName,
+                    pluginVersion = pluginVersion,
+                    iconUrl = resolvedIcon,
+                )
+            }
+
             try {
                 if (instance is com.lagradost.cloudstream3.plugins.BasePlugin) {
                     for (api in instance.registeredAPIs) {
                         try {
                             val apiName = runCatching { api.name }.getOrNull() ?: ""
                             if (sources.none { runCatching { it.api.name }.getOrDefault("") == apiName }) {
-                                sources.add(CloudStreamAnimeSource(api, pluginName = pluginName, pluginVersion = pluginVersion))
+                                sources.add(createSource(api))
                             }
                         } catch (t: Throwable) {
                             logcat(LogPriority.WARN, t) { "Failed to create source for API in registeredAPIs of $pluginName" }
@@ -1088,7 +1172,7 @@ class CloudStreamManager(
                             if (item is MainAPI) {
                                 val itemApiName = runCatching { item.name }.getOrNull() ?: ""
                                 if (sources.none { runCatching { it.api.name }.getOrDefault("") == itemApiName }) {
-                                    sources.add(CloudStreamAnimeSource(item, pluginName = pluginName, pluginVersion = pluginVersion))
+                                    sources.add(createSource(item))
                                 }
                             }
                         }
@@ -1107,7 +1191,7 @@ class CloudStreamManager(
                 for (api in newApis) {
                     val apiName = runCatching { api.name }.getOrNull() ?: ""
                     if (sources.none { runCatching { it.api.name }.getOrDefault("") == apiName }) {
-                        sources.add(CloudStreamAnimeSource(api, pluginName = pluginName, pluginVersion = pluginVersion))
+                        sources.add(createSource(api))
                     }
                 }
             } catch (t: Throwable) {
@@ -1118,7 +1202,7 @@ class CloudStreamManager(
                 if (instance is MainAPI) {
                     val instName = runCatching { instance.name }.getOrNull() ?: ""
                     if (sources.none { runCatching { it.api.name }.getOrDefault("") == instName }) {
-                        sources.add(CloudStreamAnimeSource(instance, pluginName = pluginName, pluginVersion = pluginVersion))
+                        sources.add(createSource(instance))
                     }
                 }
             } catch (t: Throwable) {
@@ -1135,13 +1219,13 @@ class CloudStreamManager(
                             if (obj is MainAPI) {
                                 val objName = runCatching { obj.name }.getOrNull() ?: ""
                                 if (sources.none { runCatching { it.api.name }.getOrDefault("") == objName }) {
-                                    sources.add(CloudStreamAnimeSource(obj, pluginName = pluginName, pluginVersion = pluginVersion))
+                                    sources.add(createSource(obj))
                                 }
                             } else if (obj is Collection<*>) {
                                 obj.filterIsInstance<MainAPI>().forEach { api ->
                                     val apiName = runCatching { api.name }.getOrNull() ?: ""
                                     if (sources.none { runCatching { it.api.name }.getOrDefault("") == apiName }) {
-                                        sources.add(CloudStreamAnimeSource(api, pluginName = pluginName, pluginVersion = pluginVersion))
+                                        sources.add(createSource(api))
                                     }
                                 }
                             }

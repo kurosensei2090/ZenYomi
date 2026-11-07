@@ -45,6 +45,27 @@ fun AnimeSourceIcon(
     source: AnimeSource,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+    val csIcon = (source as? eu.kanade.tachiyomi.extension.anime.cloudstream.CloudStreamAnimeSource)?.iconUrl
+        ?: if (source.name.endsWith(" [CS]")) {
+            val manager = androidx.compose.runtime.remember { eu.kanade.tachiyomi.extension.anime.cloudstream.CloudStreamManager.getInstance(context) }
+            manager.getPluginIconUrl(source.name.removeSuffix(" [CS]").trim())
+        } else null
+
+    if (!csIcon.isNullOrBlank()) {
+        AsyncImage(
+            model = csIcon,
+            contentDescription = null,
+            placeholder = painterResource(R.mipmap.ic_default_source),
+            error = painterResource(R.mipmap.ic_default_source),
+            modifier = modifier
+                .then(defaultModifier)
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp)),
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+        )
+        return
+    }
+
     val icon = source.icon
 
     when {

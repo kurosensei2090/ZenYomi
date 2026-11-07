@@ -40,6 +40,7 @@ class CloudStreamAnimeSource(
     val api: MainAPI,
     val pluginName: String = runCatching { api.name }.getOrDefault("CS-Plugin"),
     val pluginVersion: Int = 1,
+    var iconUrl: String? = null,
 ) : AnimeHttpSource() {
 
     override val id: Long = abs(runCatching { api.name }.getOrDefault(pluginName).hashCode().toLong() xor 0x43534C00L)
