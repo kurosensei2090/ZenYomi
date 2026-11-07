@@ -614,14 +614,6 @@ class MainActivity : BaseActivity() {
             hosterList: List<Hoster>? = null,
         ) {
             if (extPlayer) {
-                val sourceId = sourceId ?: (Injekt.get<GetAnime>().await(animeId)?.source ?: -1L)
-                val (success, port) = startHttpServerService(context, sourceId)
-                if (!success) {
-                    withUIContext { Injekt.get<Application>().toast(AYMR.strings.http_server_start_failure) }
-                    return
-                }
-
-                val video = video?.copyHttpServer(port)
                 val intent = try {
                     ExternalIntents.newIntent(context, animeId, episodeId, video)
                 } catch (e: Exception) {
@@ -629,7 +621,11 @@ class MainActivity : BaseActivity() {
                     withUIContext { Injekt.get<Application>().toast(e.message) }
                     null
                 } ?: return
-                externalPlayerResult?.launch(intent) ?: return
+                if (externalPlayerResult != null) {
+                    externalPlayerResult?.launch(intent)
+                } else {
+                    context.startActivity(intent)
+                }
             } else {
                 context.startActivity(
                     PlayerActivity.newIntent(

@@ -299,11 +299,14 @@ class ExternalIntents {
             val headers = video.headers ?: (source as? AnimeHttpSource)?.headers
             if (headers != null) {
                 var headersArray = arrayOf<String>()
+                val headersBundle = android.os.Bundle()
                 for (header in headers) {
                     headersArray += arrayOf(header.first, header.second)
+                    headersBundle.putString(header.first, header.second)
                 }
                 putExtra("headers", headersArray)
-                val headersString = headersArray.drop(2).joinToString(": ")
+                putExtra("android.media.intent.extra.HTTP_HEADERS", headersBundle)
+                val headersString = headers.joinToString("\r\n") { "${it.first}: ${it.second}" }
                 if (!isSupportedPlayer) putExtra("http-header-fields", headersString)
             }
         }

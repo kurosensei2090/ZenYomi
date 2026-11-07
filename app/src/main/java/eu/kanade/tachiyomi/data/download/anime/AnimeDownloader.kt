@@ -576,15 +576,21 @@ class AnimeDownloader(
         val ffmpegFilename = { videoFile.uri.toFFmpegString(context) }
 
         val headers = video.headers ?: download.source.headers
-        val headerOptions = headers.joinToString("", "-headers '", "'") {
-            "${it.first}: ${it.second}\r\n"
+        val headerOptions = if (headers.size > 0) {
+            headers.joinToString("", "-headers '", "'") {
+                "${it.first}: ${it.second}\r\n"
+            }
+        } else {
+            ""
         }
 
         FFmpegKitConfig.setLogRedirectionStrategy(LogRedirectionStrategy.ALWAYS_PRINT_LOGS)
         val ffmpegOptions = getFFmpegOptions(video, headerOptions, ffmpegFilename())
         val ffprobeCommand = { file: String, ffprobeHeaders: String? ->
+            val headersArg = if (!ffprobeHeaders.isNullOrBlank()) "$ffprobeHeaders " else ""
             FFmpegKitConfig.parseArguments(
-                "${ffprobeHeaders?.plus(" ") ?: ""}-v quiet -show_entries " +
+                "-protocol_whitelist \"file,http,https,tcp,tls,crypto,data\" " +
+                    "${headersArg}-v quiet -show_entries " +
                     "format=duration -of default=noprint_wrappers=1:nokey=1 \"$file\"",
             )
         }
@@ -607,7 +613,12 @@ class AnimeDownloader(
             }
         }
 
-        duration = getDuration(ffprobeCommand(video.videoUrl, headerOptions))?.toLong() ?: 0L
+        duration = try {
+            getDuration(ffprobeCommand(video.videoUrl, headerOptions))?.toLong() ?: 0L
+        } catch (e: Exception) {
+            logcat(LogPriority.WARN, e) { "Failed to probe duration for ${video.videoUrl}" }
+            0L
+        }
 
         suspendCancellableCoroutine { continuation ->
             val session = FFmpegKit.executeWithArgumentsAsync(
@@ -634,7 +645,8 @@ class AnimeDownloader(
     private fun getFFmpegOptions(video: Video, headerOptions: String, ffmpegFilename: String): Array<String> {
         fun formatInputs(tracks: List<Track>) = tracks.joinToString(" ", postfix = " ") {
             buildList {
-                if (it.url.startsWith("http")) {
+                add("-protocol_whitelist \"file,http,https,tcp,tls,crypto,data\"")
+                if (it.url.startsWith("http") && headerOptions.isNotBlank()) {
                     add(headerOptions)
                 }
                 add("-i")
@@ -666,7 +678,8 @@ class AnimeDownloader(
         }
 
         val videoInput = buildList {
-            if (video.videoUrl.startsWith("http")) {
+            add("-protocol_whitelist \"file,http,https,tcp,tls,crypto,data\"")
+            if (video.videoUrl.startsWith("http") && headerOptions.isNotBlank()) {
                 add(headerOptions)
             }
             add(sourceStreamOptions)
@@ -790,10 +803,15 @@ class AnimeDownloader(
                     }
                 }
             } else {
+                val headers = (video.headers ?: source.headers)
+                val bundle = Bundle()
+                headers.forEach { (k, v) -> bundle.putString(k, v) }
                 intent = Intent(Intent.ACTION_VIEW).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     setDataAndType(video.videoUrl.toUri(), "video/*")
                     putExtra("extra_filename", filename)
+                    putExtra("android.media.intent.extra.HTTP_HEADERS", bundle)
                 }
             }
             context.startActivity(intent)
