@@ -1095,16 +1095,18 @@ class CloudStreamManager(
 
             val apisBefore = com.lagradost.cloudstream3.APIHolder.allProviders.toList()
 
+            val activeAct = com.lagradost.cloudstream3.CommonActivity.activity
+            val loadContext = activeAct ?: context
             try {
                 if (instance is com.lagradost.cloudstream3.plugins.Plugin) {
-                    instance.load(context)
+                    instance.load(loadContext)
                 } else if (instance is com.lagradost.cloudstream3.plugins.BasePlugin) {
                     instance.load()
                 } else {
                     try {
                         val m = clazz.getMethod("load", Context::class.java)
                         m.isAccessible = true
-                        m.invoke(instance, context)
+                        m.invoke(instance, loadContext)
                     } catch (_: NoSuchMethodException) {
                         try {
                             val m = clazz.getMethod("load")

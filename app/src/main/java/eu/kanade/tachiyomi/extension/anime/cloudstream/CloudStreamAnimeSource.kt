@@ -1,5 +1,8 @@
 package eu.kanade.tachiyomi.extension.anime.cloudstream
 
+import android.app.Activity
+import android.content.Context
+import android.webkit.CookieManager
 import com.lagradost.cloudstream3.AnimeLoadResponse
 import com.lagradost.cloudstream3.Episode
 import com.lagradost.cloudstream3.EpisodeResponse
@@ -57,6 +60,27 @@ class CloudStreamAnimeSource(
         }
     }
 
+    private fun bindActivityContext(targetApi: MainAPI = api) {
+        val activity = com.lagradost.cloudstream3.CommonActivity.activity ?: return
+        try {
+            var clazz: Class<*>? = targetApi.javaClass
+            while (clazz != null && clazz != Any::class.java) {
+                for (field in clazz.declaredFields) {
+                    if (Context::class.java.isAssignableFrom(field.type)) {
+                        field.isAccessible = true
+                        val current = field.get(targetApi)
+                        if (current !is Activity) {
+                            field.set(targetApi, activity)
+                        }
+                    }
+                }
+                clazz = clazz.superclass
+            }
+        } catch (t: Throwable) {
+            logcat(LogPriority.DEBUG, t) { "Failed to bind activity context to ${targetApi.name}" }
+        }
+    }
+
     override fun popularAnimeRequest(page: Int): Request {
         val target = if (baseUrl.startsWith("http://", ignoreCase = true) || baseUrl.startsWith("https://", ignoreCase = true)) baseUrl else "https://$baseUrl"
         return Request.Builder().url(target).build()
@@ -67,6 +91,7 @@ class CloudStreamAnimeSource(
     }
 
     override suspend fun getPopularAnime(page: Int): AnimesPage {
+        bindActivityContext()
         val list = mutableListOf<SearchResponse>()
         var hasNext = false
 
@@ -128,6 +153,7 @@ class CloudStreamAnimeSource(
     override fun latestUpdatesParse(response: Response): AnimesPage = popularAnimeParse(response)
 
     override suspend fun getLatestUpdates(page: Int): AnimesPage {
+        bindActivityContext()
         val list = mutableListOf<SearchResponse>()
         var hasNext = false
 
@@ -162,6 +188,7 @@ class CloudStreamAnimeSource(
     override fun searchAnimeParse(response: Response): AnimesPage = popularAnimeParse(response)
 
     override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
+        bindActivityContext()
         if (query.isBlank()) {
             return getPopularAnime(page)
         }
@@ -322,6 +349,11 @@ class CloudStreamAnimeSource(
     }
 
     override suspend fun getVideoList(episode: SEpisode): List<Video> {
+        bindActivityContext()
+        try {
+            CookieManager.getInstance()?.flush()
+        } catch (_: Exception) {}
+
         val videos = CopyOnWriteArrayList<Video>()
         val subtitles = CopyOnWriteArrayList<Track>()
 
@@ -343,6 +375,15 @@ class CloudStreamAnimeSource(
                 }
                 if (!okhttpHeaders.containsKey("User-Agent")) {
                     okhttpHeaders["User-Agent"] = com.lagradost.cloudstream3.USER_AGENT
+                }
+                val cm = CookieManager.getInstance()
+                val cookieForUrl = try {
+                    cm?.getCookie(link.url) ?: if (link.referer.isNotEmpty()) cm?.getCookie(link.referer) else null
+                } catch (_: Exception) {
+                    null
+                }
+                if (!cookieForUrl.isNullOrBlank() && !okhttpHeaders.containsKey("Cookie")) {
+                    okhttpHeaders["Cookie"] = cookieForUrl
                 }
 
                 val video = Video(
@@ -412,6 +453,7 @@ class CloudStreamAnimeSource(
     }
 
     private suspend fun loadDetailsSafely(url: String): LoadResponse? {
+        bindActivityContext()
         val candidates = linkedSetOf<String>()
         candidates.add(url)
         val fixed = api.fixUrl(url)

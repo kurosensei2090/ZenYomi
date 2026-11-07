@@ -38,17 +38,37 @@ class CloudflareKiller : Interceptor {
             null
         }
 
-        val newReq = if (!cookie.isNullOrBlank()) {
-            val cookieMap = parseCookieMap(cookie)
+        val reqBuilder = request.newBuilder()
+        if (!request.headers.names().any { it.equals("User-Agent", ignoreCase = true) }) {
+            reqBuilder.header("User-Agent", com.lagradost.cloudstream3.USER_AGENT)
+        }
+
+        val existingCookie = request.header("Cookie")
+        val mergedCookie = when {
+            cookie.isNullOrBlank() -> existingCookie
+            existingCookie.isNullOrBlank() -> cookie
+            else -> {
+                val existingPairs = existingCookie.split(";").map { it.trim() }
+                val cmPairs = cookie.split(";").map { it.trim() }
+                val combined = (existingPairs + cmPairs).distinctBy { it.substringBefore("=") }
+                combined.joinToString("; ")
+            }
+        }
+
+        if (!mergedCookie.isNullOrBlank()) {
+            val cookieMap = parseCookieMap(mergedCookie)
             request.url.host.let { host ->
                 savedCookies[host] = cookieMap
             }
-            request.newBuilder()
-                .header("Cookie", cookie)
-                .build()
-        } else {
-            request
+            reqBuilder.header("Cookie", mergedCookie)
         }
-        return chain.proceed(newReq)
+
+        val response = chain.proceed(reqBuilder.build())
+        if (response.headers("Set-Cookie").isNotEmpty()) {
+            try {
+                CookieManager.getInstance()?.flush()
+            } catch (_: Exception) {}
+        }
+        return response
     }
 }

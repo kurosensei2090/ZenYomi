@@ -3,15 +3,25 @@ package com.lagradost.cloudstream3
 import android.app.Activity
 import android.widget.Toast
 import java.lang.ref.WeakReference
+import java.util.concurrent.CopyOnWriteArrayList
 
 object CommonActivity {
-    var activityRef: WeakReference<Activity>? = null
+    private val activityStack = CopyOnWriteArrayList<WeakReference<Activity>>()
 
     var activity: Activity?
-        get() = activityRef?.get()
+        get() = activityStack.asReversed()
+            .mapNotNull { it.get() }
+            .firstOrNull { !it.isFinishing && !it.isDestroyed }
         set(value) {
-            activityRef = if (value != null) WeakReference(value) else null
+            if (value != null) {
+                activityStack.removeAll { it.get() == null || it.get() === value }
+                activityStack.add(WeakReference(value))
+            }
         }
+
+    fun removeActivity(act: Activity) {
+        activityStack.removeAll { it.get() == null || it.get() === act }
+    }
 
     fun setActivityInstance(newActivity: Activity?) {
         activity = newActivity
@@ -31,4 +41,5 @@ object CommonActivity {
         }
     }
 }
+
 

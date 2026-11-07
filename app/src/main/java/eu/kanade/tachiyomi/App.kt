@@ -102,9 +102,7 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
             override fun onActivityStopped(activity: Activity) {}
             override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
             override fun onActivityDestroyed(activity: Activity) {
-                if (com.lagradost.cloudstream3.CommonActivity.activity === activity) {
-                    com.lagradost.cloudstream3.CommonActivity.activity = null
-                }
+                com.lagradost.cloudstream3.CommonActivity.removeActivity(activity)
             }
         })
 
