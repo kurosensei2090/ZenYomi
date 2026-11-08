@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -135,7 +136,7 @@ fun AnimeDiscoverContent(
                                     contentPadding = PaddingValues(horizontal = 16.dp),
                                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 ) {
-                                    items(state.popularAnime, key = { "pop_${it.id}" }) { anime ->
+                                    itemsIndexed(state.popularAnime, key = { idx, anime -> "pop_${anime.id}_$idx" }) { _, anime ->
                                         DiscoverAnimeCard(
                                             anime = anime,
                                             onClick = { onAnimeClick(anime) },
@@ -163,7 +164,7 @@ fun AnimeDiscoverContent(
                                     contentPadding = PaddingValues(horizontal = 16.dp),
                                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 ) {
-                                    items(state.latestAnime, key = { "lat_${it.id}" }) { anime ->
+                                    itemsIndexed(state.latestAnime, key = { idx, anime -> "lat_${anime.id}_$idx" }) { _, anime ->
                                         DiscoverAnimeCard(
                                             anime = anime,
                                             onClick = { onAnimeClick(anime) },
@@ -241,7 +242,7 @@ fun AnimeDiscoverContent(
                 )
 
                 LazyColumn {
-                    items(state.sources, key = { it.id }) { source ->
+                    itemsIndexed(state.sources, key = { idx, source -> "src_${source.id}_$idx" }) { _, source ->
                         val isSelected = state.currentSource?.id == source.id
                         Row(
                             verticalAlignment = Alignment.CenterVertically,

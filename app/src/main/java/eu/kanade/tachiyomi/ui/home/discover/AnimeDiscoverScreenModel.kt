@@ -37,9 +37,11 @@ class AnimeDiscoverScreenModel(
     init {
         screenModelScope.launchIO {
             getEnabledAnimeSources.subscribe().collectLatest { enabledSources ->
-                val catalogueSources = enabledSources.filter { domainSource ->
-                    sourceManager.get(domainSource.id) is AnimeCatalogueSource
-                }
+                val catalogueSources = enabledSources
+                    .distinctBy { it.id }
+                    .filter { domainSource ->
+                        sourceManager.get(domainSource.id) is AnimeCatalogueSource
+                    }
 
                 mutableState.update { it.copy(sources = catalogueSources.toImmutableList()) }
 
@@ -101,7 +103,7 @@ class AnimeDiscoverScreenModel(
                 val popularJob = async {
                     try {
                         val page = catalogueSource.getPopularAnime(1)
-                        page.animes.map { networkToLocalAnime.await(it.toDomainAnime(sourceId)) }
+                        page.animes.map { networkToLocalAnime.await(it.toDomainAnime(sourceId)) }.distinctBy { it.id }
                     } catch (e: Throwable) {
                         logcat(LogPriority.ERROR, e) { "Failed to load popular anime from source $sourceId" }
                         emptyList()
@@ -112,7 +114,7 @@ class AnimeDiscoverScreenModel(
                     try {
                         if (catalogueSource.supportsLatest) {
                             val page = catalogueSource.getLatestUpdates(1)
-                            page.animes.map { networkToLocalAnime.await(it.toDomainAnime(sourceId)) }
+                            page.animes.map { networkToLocalAnime.await(it.toDomainAnime(sourceId)) }.distinctBy { it.id }
                         } else {
                             emptyList()
                         }
