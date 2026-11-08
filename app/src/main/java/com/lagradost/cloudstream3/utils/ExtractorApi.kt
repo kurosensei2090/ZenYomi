@@ -29,6 +29,7 @@ fun getAndUnpack(script: String): String {
 open class ExtractorApi {
     open var name: String = ""
     open var mainUrl: String = ""
+    open val mainUrls: List<String> get() = if (mainUrl.isNotBlank()) listOf(mainUrl) else emptyList()
     open val requiresReferer: Boolean = false
 
     open suspend fun getUrl(url: String, referer: String? = null): List<ExtractorLink>? = null
@@ -92,7 +93,7 @@ suspend fun loadExtractor(
 
     // 1. Check registered extractors
     for (extractor in extractorApis.toList()) {
-        val matchesDomain = extractor.mainUrl.isNotBlank() && url.contains(extractor.mainUrl, ignoreCase = true)
+        val matchesDomain = extractor.mainUrls.any { it.isNotBlank() && url.contains(it, ignoreCase = true) }
         val matchesName = extractor.name.isNotBlank() && url.contains(extractor.name, ignoreCase = true)
         if (matchesDomain || matchesName) {
             try {

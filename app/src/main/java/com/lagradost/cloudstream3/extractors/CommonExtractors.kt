@@ -84,6 +84,10 @@ open class Uqload : ExtractorApi() {
 open class StreamWish : ExtractorApi() {
     override var name = "StreamWish"
     override var mainUrl = "streamwish"
+    override val mainUrls = listOf(
+        "streamwish", "wishfast", "embedwish", "strwish", "flaswish",
+        "awish", "dwish", "mwish", "ajmid", "sfastwish", "wish",
+    )
 
     override suspend fun getUrl(
         url: String,
@@ -125,6 +129,9 @@ open class StreamWish : ExtractorApi() {
 open class VidHide : ExtractorApi() {
     override var name = "VidHide"
     override var mainUrl = "vidhide"
+    override val mainUrls = listOf(
+        "vidhide", "streamhide", "ahvsh", "kinokz", "vidhidepro", "vidhidepre",
+    )
 
     override suspend fun getUrl(
         url: String,
@@ -139,6 +146,9 @@ open class VidHide : ExtractorApi() {
 open class FileLions : ExtractorApi() {
     override var name = "FileLions"
     override var mainUrl = "filelions"
+    override val mainUrls = listOf(
+        "filelions", "fdewsdc", "alions", "azipcdn",
+    )
 
     override suspend fun getUrl(
         url: String,
@@ -158,6 +168,7 @@ open class StreamSB : ExtractorApi() {
 open class Voe : ExtractorApi() {
     override var name = "Voe"
     override var mainUrl = "voe.sx"
+    override val mainUrls = listOf("voe.sx", "voe", "repackrodeo", "audaciousdefaulthouse")
 
     override suspend fun getUrl(
         url: String,
@@ -355,6 +366,7 @@ open class VidTube : ExtractorApi() {
 open class AbyssPlayer : ExtractorApi() {
     override var name = "Abyss"
     override var mainUrl = "abyssplayer"
+    override val mainUrls = listOf("abyssplayer", "abysscdn", "abyss.to")
 
     override suspend fun getUrl(
         url: String,
@@ -363,6 +375,75 @@ open class AbyssPlayer : ExtractorApi() {
         callback: (ExtractorLink) -> Unit,
     ): List<ExtractorLink>? {
         return StreamWish().getUrl(url, referer, subtitleCallback, callback)
+    }
+}
+
+open class SaveFiles : ExtractorApi() {
+    override var name = "SaveFiles"
+    override var mainUrl = "savefiles"
+    override val mainUrls = listOf("savefiles.com", "savefiles.org", "savefiles")
+    override val requiresReferer = true
+
+    override suspend fun getUrl(
+        url: String,
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit,
+    ): List<ExtractorLink>? {
+        val embedUrl = url.trim().trimEnd('/')
+        if (embedUrl.isBlank()) return null
+
+        var fileCode = embedUrl.substringAfterLast("/").substringBefore('?').substringBefore('#')
+        if (fileCode.contains("-")) fileCode = fileCode.substringAfterLast('-')
+        fileCode = fileCode.substringBefore('.').trim()
+        if (fileCode.isBlank()) return null
+
+        val host = if (embedUrl.contains("://")) {
+            embedUrl.substringAfter("://").substringBefore("/")
+        } else {
+            "savefiles.com"
+        }
+        val origin = "https://$host"
+
+        val dlText = try {
+            app.post(
+                "$origin/dl",
+                data = mapOf(
+                    "op" to "embed",
+                    "file_code" to fileCode,
+                    "auto" to "0",
+                    "referer" to "",
+                ),
+                headers = mapOf(
+                    "User-Agent" to com.lagradost.cloudstream3.USER_AGENT,
+                    "Referer" to "$origin/",
+                    "Origin" to origin,
+                ),
+                referer = "$origin/",
+            ).text
+        } catch (_: Exception) {
+            return null
+        }
+        if (dlText.isBlank()) return null
+
+        val streamUrl = Regex("""sources:\s*\[(?:\{\s*file\s*:)?\s*['"]([^'"]+)['"]""")
+            .find(dlText)?.groupValues?.get(1)
+            ?: Regex("""file:\s*["']([^"']+\.m3u8[^"']*)["']""")
+                .find(dlText)?.groupValues?.get(1)
+            ?: Regex("""file:\s*["']([^"']+\.mp4[^"']*)["']""")
+                .find(dlText)?.groupValues?.get(1)
+        if (streamUrl.isNullOrBlank()) return null
+
+        val link = ExtractorLink(
+            source = name,
+            name = name,
+            url = streamUrl,
+            referer = "$origin/",
+            quality = Qualities.Unknown.value,
+            isM3u8 = streamUrl.contains(".m3u8"),
+        )
+        callback(link)
+        return listOf(link)
     }
 }
 
@@ -386,6 +467,7 @@ fun registerCommonExtractors() {
         MegaMax(),
         VidTube(),
         AbyssPlayer(),
+        SaveFiles(),
         Filesim(),
         GMPlayer(),
         Jeniusplay(),

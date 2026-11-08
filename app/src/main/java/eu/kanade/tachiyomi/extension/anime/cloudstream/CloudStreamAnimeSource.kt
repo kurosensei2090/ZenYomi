@@ -364,11 +364,20 @@ class CloudStreamAnimeSource(
         val onLink: (ExtractorLink) -> Unit = { link ->
             if (link.url.isNotBlank()) {
                 val qualityStr = Qualities.getStringByInt(link.quality)
-                val qualityName = if (qualityStr.equals("Unknown", ignoreCase = true) || link.name.contains(qualityStr, ignoreCase = true)) {
-                    link.name
-                } else {
-                    "${link.name} - $qualityStr"
+                val cleanQuality = if (qualityStr.equals("Unknown", ignoreCase = true)) "" else qualityStr.trim()
+                val serverName = when {
+                    link.name.isNotBlank() && !link.name.equals(cleanQuality, ignoreCase = true) -> link.name.trim()
+                    link.source.isNotBlank() -> link.source.trim()
+                    else -> "Server"
                 }
+                val qualityName = if (cleanQuality.isNotBlank() && !serverName.contains(cleanQuality, ignoreCase = true)) {
+                    "$serverName - $cleanQuality"
+                } else if (serverName.contains(" - ") || serverName.startsWith("[")) {
+                    serverName
+                } else {
+                    "$serverName - Default"
+                }
+
                 val okhttpHeaders = link.headers.toMutableMap()
                 if (link.referer.isNotEmpty()) {
                     okhttpHeaders["Referer"] = link.referer
@@ -410,23 +419,52 @@ class CloudStreamAnimeSource(
             logcat(LogPriority.ERROR, e) { "Failed to load links for ${episode.name}" }
         }
 
+        val isDirectMedia: (String) -> Boolean = { u ->
+            val clean = u.lowercase().substringBefore("?")
+            clean.endsWith(".m3u8") || clean.endsWith(".mp4") || clean.endsWith(".mkv") || clean.endsWith(".ts")
+        }
+
         // Check if any video was added as an embed URL that needs second-pass extraction
         val embedsToExtract = videos.filter { v ->
-            v.videoUrl.contains("pixeldrain.com/u/") ||
-                v.videoUrl.contains("uqload") ||
-                v.videoUrl.contains("streamwish") ||
-                v.videoUrl.contains("voe.sx")
+            !isDirectMedia(v.videoUrl) && (
+                v.videoUrl.contains("pixeldrain.com/u/", ignoreCase = true) ||
+                v.videoUrl.contains("uqload", ignoreCase = true) ||
+                v.videoUrl.contains("streamwish", ignoreCase = true) ||
+                v.videoUrl.contains("wish", ignoreCase = true) ||
+                v.videoUrl.contains("vidhide", ignoreCase = true) ||
+                v.videoUrl.contains("streamhide", ignoreCase = true) ||
+                v.videoUrl.contains("ahvsh", ignoreCase = true) ||
+                v.videoUrl.contains("filelions", ignoreCase = true) ||
+                v.videoUrl.contains("alions", ignoreCase = true) ||
+                v.videoUrl.contains("voe.sx", ignoreCase = true) ||
+                v.videoUrl.contains("mp4upload", ignoreCase = true) ||
+                v.videoUrl.contains("dood", ignoreCase = true) ||
+                v.videoUrl.contains("megamax", ignoreCase = true) ||
+                v.videoUrl.contains("savefiles", ignoreCase = true) ||
+                v.videoUrl.contains("abyss", ignoreCase = true) ||
+                v.videoUrl.contains("vidtube", ignoreCase = true) ||
+                v.videoUrl.contains("playmogo", ignoreCase = true) ||
+                v.videoUrl.contains("embed", ignoreCase = true)
+            )
         }
-        for (embed in embedsToExtract) {
-            videos.remove(embed)
-            try {
-                com.lagradost.cloudstream3.utils.loadExtractor(
-                    url = embed.videoUrl,
-                    referer = baseUrl,
-                    subtitleCallback = onSubtitle,
-                    callback = onLink,
-                )
-            } catch (_: Throwable) {}
+        if (embedsToExtract.isNotEmpty()) {
+            videos.removeAll(embedsToExtract.toSet())
+            coroutineScope {
+                embedsToExtract.map { embed ->
+                    async {
+                        try {
+                            com.lagradost.cloudstream3.utils.loadExtractor(
+                                url = embed.videoUrl,
+                                referer = baseUrl,
+                                subtitleCallback = onSubtitle,
+                                callback = onLink,
+                            )
+                        } catch (t: Throwable) {
+                            logcat(LogPriority.DEBUG, t) { "Failed deep extract for ${embed.videoUrl}" }
+                        }
+                    }
+                }.awaitAll()
+            }
         }
 
         if (videos.isEmpty() && episode.url.isNotBlank() && (episode.url.startsWith("http://", ignoreCase = true) || episode.url.startsWith("https://", ignoreCase = true))) {

@@ -60,35 +60,39 @@ open class Hoster(
             if (this.isEmpty()) return emptyList()
 
             val serverGroups = LinkedHashMap<String, MutableList<Video>>()
-            var hasServerPrefix = false
 
             for (video in this) {
                 val title = video.videoTitle.trim()
                 val dashIdx = title.indexOf(" - ")
                 val bracketIdx = if (title.startsWith("[")) title.indexOf("]") else -1
 
-                if (dashIdx > 0) {
-                    val sName = title.substring(0, dashIdx).trim()
-                    val qName = title.substring(dashIdx + 3).trim()
-                    if (sName.isNotEmpty() && qName.isNotEmpty()) {
-                        hasServerPrefix = true
-                        serverGroups.getOrPut(sName) { mutableListOf() }.add(video.copy(videoTitle = qName))
+                if (bracketIdx > 1) {
+                    val sName = title.substring(1, bracketIdx).trim()
+                    val qName = title.substring(bracketIdx + 1).trimStart('-', ' ', ':')
+                    if (sName.isNotEmpty()) {
+                        val quality = if (qName.isNotBlank()) qName else "Default"
+                        serverGroups.getOrPut(sName) { mutableListOf() }.add(video.copy(videoTitle = quality))
                         continue
                     }
-                } else if (bracketIdx > 1) {
-                    val sName = title.substring(1, bracketIdx).trim()
-                    val qName = title.substring(bracketIdx + 1).trim()
-                    if (sName.isNotEmpty() && qName.isNotEmpty()) {
-                        hasServerPrefix = true
-                        serverGroups.getOrPut(sName) { mutableListOf() }.add(video.copy(videoTitle = qName))
+                } else if (dashIdx > 0) {
+                    val sName = title.substring(0, dashIdx).trim()
+                    val qName = title.substring(dashIdx + 3).trim()
+                    if (sName.isNotEmpty()) {
+                        val quality = if (qName.isNotBlank()) qName else "Default"
+                        serverGroups.getOrPut(sName) { mutableListOf() }.add(video.copy(videoTitle = quality))
                         continue
                     }
                 }
 
-                serverGroups.getOrPut(NO_HOSTER_LIST) { mutableListOf() }.add(video)
+                // If no delimiter, but video has a distinct title that looks like a server name
+                if (title.isNotEmpty() && !title.equals("Default", ignoreCase = true) && !title.equals("Video", ignoreCase = true)) {
+                    serverGroups.getOrPut(title) { mutableListOf() }.add(video.copy(videoTitle = "Default"))
+                } else {
+                    serverGroups.getOrPut(NO_HOSTER_LIST) { mutableListOf() }.add(video)
+                }
             }
 
-            if (!hasServerPrefix || (serverGroups.size == 1 && serverGroups.containsKey(NO_HOSTER_LIST))) {
+            if (serverGroups.size == 1 && serverGroups.containsKey(NO_HOSTER_LIST)) {
                 return listOf(
                     Hoster(
                         hosterUrl = "",
