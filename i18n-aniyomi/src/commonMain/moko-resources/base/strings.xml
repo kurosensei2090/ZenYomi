@@ -614,4 +614,12 @@
     <string name="show_episode_summaries">Episode summaries</string>
     <string name="label_cs_sources">CS Sources</string>
     <string name="label_cs_extensions">CS Extensions</string>
+    <string name="tab_discover">Discover</string>
+    <string name="tab_library">Library</string>
+    <string name="action_select_source">Select source</string>
+    <string name="discover_popular">Popular Works</string>
+    <string name="discover_latest">Latest Releases</string>
+    <string name="discover_more">More</string>
+    <string name="no_sources_installed">No anime sources installed</string>
+    <string name="failed_to_load_feed">Failed to load content from source</string>
 </resources>

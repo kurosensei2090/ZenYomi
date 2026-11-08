@@ -130,6 +130,10 @@ class SourcePreferences(
 
     fun dataSaverDownloader() = preferenceStore.getBoolean("data_saver_downloader", true)
 
+    fun preferredHomeSource() = preferenceStore.getLong("preferred_home_anime_source", 0L)
+
+    fun animeHomeScreenMode() = preferenceStore.getString("anime_home_screen_mode", "DISCOVER")
+
     enum class DataSaver {
         NONE,
         BANDWIDTH_HERO,

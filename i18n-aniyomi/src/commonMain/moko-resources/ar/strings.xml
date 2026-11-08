@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="confirm_exit">اضغط مرة أخرى للخروج</string>
     <string name="action_filter_started">بدأت</string>
@@ -470,4 +470,12 @@
     <string name="player_chapter_type_opening">البداية</string>
     <string name="player_chapter_type_ending">النهاية</string>
     <string name="player_chapter_type_recap">إعادة</string>
+    <string name="tab_discover">الرئيسية</string>
+    <string name="tab_library">المكتبة</string>
+    <string name="action_select_source">اختر المصدر</string>
+    <string name="discover_popular">الأكثر شهرة</string>
+    <string name="discover_latest">آخر الحلقات والتحديثات</string>
+    <string name="discover_more">المزيد</string>
+    <string name="no_sources_installed">لم يتم تثبيت أي مصادر أنمي</string>
+    <string name="failed_to_load_feed">تعذر تحميل المحتوى من المصدر</string>
 </resources>
