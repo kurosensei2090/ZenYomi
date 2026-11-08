@@ -104,6 +104,7 @@ class GetApplicationRelease(
         val repository: String,
         val forceCheck: Boolean = false,
         val versionCode: Int = 0,
+        val installedAbi: String? = null,
     )
 
     sealed interface Result {

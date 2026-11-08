@@ -22,7 +22,7 @@ class ReleaseServiceImpl(
                 .awaitSuccess()
                 .parseAs<GithubRelease>()
         }
-        val downloadLink = getDownloadLink(release = release) ?: return null
+        val downloadLink = getDownloadLink(release = release, installedAbi = arguments.installedAbi) ?: return null
 
         val buildCode = extractBuildCode(release.name, release.version, release.info)
         val formattedVersion = if (buildCode != null && !release.version.contains("build", ignoreCase = true) && !release.version.contains("b$buildCode", ignoreCase = true)) {
@@ -72,16 +72,24 @@ class ReleaseServiceImpl(
         return null
     }
 
-    private fun getDownloadLink(release: GithubRelease): String? {
+    private fun getDownloadLink(release: GithubRelease, installedAbi: String? = null): String? {
         val map = release.assets.associate { asset ->
             BUILD_TYPES.find { "-$it" in asset.name } to asset.downloadLink
         }
 
-        return map[Build.SUPPORTED_ABIS[0]] ?: map[null]
+        if (!installedAbi.isNullOrBlank()) {
+            map[installedAbi]?.let { return it }
+        }
+
+        for (abi in Build.SUPPORTED_ABIS) {
+            map[abi]?.let { return it }
+        }
+
+        return map["universal"] ?: map[null] ?: release.assets.firstOrNull { it.name.endsWith(".apk") }?.downloadLink
     }
 
     companion object {
-        private val BUILD_TYPES = listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+        private val BUILD_TYPES = listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86", "universal")
 
         /**
          * Regular expression that matches a mention to a valid GitHub username, like it's

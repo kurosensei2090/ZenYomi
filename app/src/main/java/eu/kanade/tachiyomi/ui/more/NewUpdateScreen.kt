@@ -24,6 +24,7 @@ class NewUpdateScreen(
     private val changelogInfo: String,
     private val releaseLink: String,
     private val downloadLink: String,
+    private val buildCode: Int? = null,
 ) : Screen() {
 
     @Composable
@@ -37,14 +38,7 @@ class NewUpdateScreen(
         val downloadState by AppUpdateDownloadJob.state.collectAsState()
 
         LaunchedEffect(Unit) {
-            AppUpdateDownloadJob.checkExistingApk(context)
-        }
-
-        LaunchedEffect(downloadState) {
-            val state = downloadState
-            if (state is AppUpdateDownloadJob.State.Finished) {
-                installApk(context, state.uri)
-            }
+            AppUpdateDownloadJob.checkExistingApk(context, buildCode)
         }
 
         NewUpdateScreen(
@@ -84,6 +78,12 @@ class NewUpdateScreen(
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, "application/vnd.android.package-archive")
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+            }
+            val resolveInfos = context.packageManager.queryIntentActivities(intent, 0)
+            for (resolveInfo in resolveInfos) {
+                try {
+                    context.grantUriPermission(resolveInfo.activityInfo.packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                } catch (_: Exception) {}
             }
             context.startActivity(intent)
         } catch (e: Exception) {

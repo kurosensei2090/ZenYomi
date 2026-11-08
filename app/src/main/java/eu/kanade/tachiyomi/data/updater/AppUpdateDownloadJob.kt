@@ -160,21 +160,39 @@ class AppUpdateDownloadJob(private val context: Context, workerParams: WorkerPar
             _state.value = State.Idle
         }
 
-        fun checkExistingApk(context: Context): Uri? {
+        fun checkExistingApk(context: Context, targetBuildCode: Int? = null): Uri? {
             val cacheDir = context.externalCacheDir ?: context.cacheDir
             val apkFile = File(cacheDir, "update.apk")
-            if (!apkFile.exists() || apkFile.length() == 0L) return null
+            if (!apkFile.exists() || apkFile.length() == 0L) {
+                _state.value = State.Idle
+                return null
+            }
             return try {
                 val packageInfo = context.packageManager.getPackageArchiveInfo(apkFile.absolutePath, 0)
-                if (packageInfo != null && packageInfo.packageName == context.packageName) {
+                val isMatchingVersion = if (targetBuildCode != null && targetBuildCode > 0) {
+                    packageInfo?.let {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            it.longVersionCode.toInt() == targetBuildCode
+                        } else {
+                            @Suppress("DEPRECATION")
+                            it.versionCode == targetBuildCode
+                        }
+                    } ?: false
+                } else {
+                    packageInfo != null && packageInfo.packageName == context.packageName
+                }
+
+                if (isMatchingVersion && packageInfo != null && packageInfo.packageName == context.packageName) {
                     val uri = apkFile.getUriCompat(context)
                     _state.value = State.Finished(uri)
                     uri
                 } else {
                     apkFile.delete()
+                    _state.value = State.Idle
                     null
                 }
             } catch (_: Exception) {
+                _state.value = State.Idle
                 null
             }
         }

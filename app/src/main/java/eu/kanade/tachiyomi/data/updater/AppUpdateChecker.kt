@@ -26,6 +26,7 @@ class AppUpdateChecker {
                     repository = GITHUB_REPO,
                     forceCheck = forceCheck,
                     versionCode = BuildConfig.VERSION_CODE,
+                    installedAbi = getInstalledAbi(context),
                 ),
             )
 
@@ -37,6 +38,41 @@ class AppUpdateChecker {
             }
 
             result
+        }
+    }
+
+    companion object {
+        fun getInstalledAbi(context: Context): String {
+            try {
+                val apkFile = java.io.File(context.applicationInfo.sourceDir)
+                java.util.zip.ZipFile(apkFile).use { zip ->
+                    val entries = zip.entries()
+                    val abisInApk = mutableSetOf<String>()
+                    while (entries.hasMoreElements()) {
+                        val entryName = entries.nextElement().name
+                        if (entryName.startsWith("lib/")) {
+                            val abi = entryName.substringAfter("lib/").substringBefore("/")
+                            if (abi.isNotBlank()) {
+                                abisInApk.add(abi)
+                            }
+                        }
+                    }
+                    if (abisInApk.size > 1) {
+                        return "universal"
+                    } else if (abisInApk.size == 1) {
+                        return abisInApk.first()
+                    }
+                }
+            } catch (_: Exception) {}
+
+            val nativeLibDir = context.applicationInfo.nativeLibraryDir
+            return when {
+                nativeLibDir.contains("arm64") -> "arm64-v8a"
+                nativeLibDir.contains("arm") -> "armeabi-v7a"
+                nativeLibDir.contains("x86_64") -> "x86_64"
+                nativeLibDir.contains("x86") -> "x86"
+                else -> "universal"
+            }
         }
     }
 }
