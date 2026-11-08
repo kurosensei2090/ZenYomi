@@ -35,14 +35,20 @@ class PlayerObserver(val activity: PlayerActivity) :
     }
 
     override fun efEvent(err: String?) {
+        val hadHttpError = !httpError.isNullOrEmpty()
         var errorMessage = err ?: "Error: File ended"
-        if (!httpError.isNullOrEmpty()) {
+        if (hadHttpError) {
             errorMessage += ": $httpError"
             httpError = null
         }
         logcat(LogPriority.ERROR) { errorMessage }
-        activity.runOnUiThread {
-            activity.toast(errorMessage, Toast.LENGTH_LONG)
+        val duration = activity.player.duration ?: 0
+        val pos = activity.player.timePos ?: 0
+        val isNormalEof = !hadHttpError && (err == null || err == "eof") && duration > 5 && (duration - pos) <= 2
+        if (!isNormalEof) {
+            activity.runOnUiThread {
+                activity.onPlaybackError(errorMessage)
+            }
         }
     }
 

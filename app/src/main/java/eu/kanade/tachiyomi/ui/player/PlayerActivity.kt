@@ -1073,6 +1073,11 @@ class PlayerActivity : BaseActivity() {
         )
     }
 
+    fun onPlaybackError(errorMessage: String) {
+        if (player.isExiting) return
+        viewModel.onPlaybackError(errorMessage)
+    }
+
     fun setVideo(video: Video?, position: Long? = null) {
         if (player.isExiting) return
         if (video == null) return
@@ -1081,21 +1086,33 @@ class PlayerActivity : BaseActivity() {
 
         setHttpOptions(video)
 
-        if (viewModel.isLoadingEpisode.value) {
+        val currentPlayPosSec = player.timePos?.toFloat()
+            ?: viewModel.pos.value.takeIf { it > 0F }
+
+        val isFirstEpisodeLoad = viewModel.isLoadingEpisode.value && viewModel.currentVideo.value == null
+
+        val resumePosSec = if (position != null) {
+            position / 1000F
+        } else if (currentPlayPosSec != null && currentPlayPosSec > 0F) {
+            currentPlayPosSec
+        } else if (isFirstEpisodeLoad) {
             viewModel.currentEpisode.value?.let { episode ->
                 val preservePos = playerPreferences.preserveWatchingPosition().get()
-                val resumePosition = position
-                    ?: if (episode.seen && !preservePos) {
-                        0L
-                    } else {
-                        episode.last_second_seen
-                    }
-                MPVLib.command(arrayOf("set", "start", "${resumePosition / 1000F}"))
-            }
+                if (episode.seen && !preservePos) {
+                    0F
+                } else {
+                    episode.last_second_seen / 1000F
+                }
+            } ?: 0F
         } else {
-            player.timePos?.let {
-                MPVLib.command(arrayOf("set", "start", "${player.timePos}"))
-            }
+            viewModel.pos.value.takeIf { it > 0F } ?: 0F
+        }
+
+        // Cleanly stop any existing stream before loading a new one
+        MPVLib.command(arrayOf("stop"))
+
+        if (resumePosSec > 0F) {
+            MPVLib.command(arrayOf("set", "start", "$resumePosSec"))
         }
 
         val videoOptions = video.mpvArgs.joinToString(",") { (option, value) ->

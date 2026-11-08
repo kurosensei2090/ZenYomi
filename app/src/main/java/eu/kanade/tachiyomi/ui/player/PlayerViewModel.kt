@@ -1026,6 +1026,7 @@ class PlayerViewModel @JvmOverloads constructor(
         _hosterList.update { _ -> emptyList() }
         _hosterExpandedList.update { _ -> emptyList() }
         _selectedHosterVideoIndex.update { _ -> Pair(-1, -1) }
+        _currentVideo.update { _ -> null }
         thumbnailTileCache.clear()
         thumbnailFetchJob?.cancel()
         lastThumbnailFetch = 0L
@@ -1474,8 +1475,121 @@ class PlayerViewModel @JvmOverloads constructor(
         updateIsLoadingHosters(false)
     }
 
-    private suspend fun loadVideo(source: AnimeSource?, video: Video, hosterIndex: Int, videoIndex: Int): Boolean {
-        val selectedHosterState = (_hosterState.value[hosterIndex] as? HosterState.Ready) ?: return false
+    private val isFailingOver = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    fun findNextAvailableVideo(excludeHosterIdx: Int = -1, excludeVideoIdx: Int = -1): Pair<Int, Int>? {
+        val currentStates = _hosterState.value
+
+        fun isValidVideo(hoster: HosterState.Ready, vIdx: Int): Boolean {
+            val state = hoster.videoState.getOrNull(vIdx) ?: return false
+            val video = hoster.videoList.getOrNull(vIdx) ?: return false
+            return state != Video.State.ERROR && (video.videoUrl.isNotEmpty() || !video.initialized)
+        }
+
+        // 1. Try finding another video in the SAME hoster (after excludeVideoIdx, then before)
+        if (excludeHosterIdx in currentStates.indices) {
+            val sameHoster = currentStates[excludeHosterIdx] as? HosterState.Ready
+            if (sameHoster != null) {
+                for (vIdx in (excludeVideoIdx + 1) until sameHoster.videoList.size) {
+                    if (isValidVideo(sameHoster, vIdx)) return Pair(excludeHosterIdx, vIdx)
+                }
+                for (vIdx in 0 until excludeVideoIdx) {
+                    if (isValidVideo(sameHoster, vIdx)) return Pair(excludeHosterIdx, vIdx)
+                }
+            }
+        }
+
+        // 2. Try finding a video in subsequent hosters
+        for (hIdx in (excludeHosterIdx + 1) until currentStates.size) {
+            val hoster = currentStates[hIdx] as? HosterState.Ready ?: continue
+            val prefIdx = hoster.videoList.indexOfFirst { it.preferred && isValidVideo(hoster, hoster.videoList.indexOf(it)) }
+            if (prefIdx != -1) return Pair(hIdx, prefIdx)
+            for (vIdx in hoster.videoList.indices) {
+                if (isValidVideo(hoster, vIdx)) return Pair(hIdx, vIdx)
+            }
+        }
+
+        // 3. Try finding a video in preceding hosters
+        val maxPreceding = if (excludeHosterIdx >= 0) excludeHosterIdx else currentStates.size
+        for (hIdx in 0 until maxPreceding) {
+            val hoster = currentStates[hIdx] as? HosterState.Ready ?: continue
+            val prefIdx = hoster.videoList.indexOfFirst { it.preferred && isValidVideo(hoster, hoster.videoList.indexOf(it)) }
+            if (prefIdx != -1) return Pair(hIdx, prefIdx)
+            for (vIdx in hoster.videoList.indices) {
+                if (isValidVideo(hoster, vIdx)) return Pair(hIdx, vIdx)
+            }
+        }
+
+        return null
+    }
+
+    fun onPlaybackError(errorMessage: String) {
+        if (!isFailingOver.compareAndSet(false, true)) {
+            return
+        }
+
+        viewModelScope.launchIO {
+            try {
+                val (curHosterIdx, curVideoIdx) = _selectedHosterVideoIndex.value
+                val currentStates = _hosterState.value
+
+                if (curHosterIdx in currentStates.indices) {
+                    val hoster = currentStates[curHosterIdx] as? HosterState.Ready
+                    if (hoster != null && curVideoIdx in hoster.videoList.indices) {
+                        val failedVideo = hoster.videoList[curVideoIdx]
+                        _hosterState.updateAt(
+                            curHosterIdx,
+                            hoster.getChangedAt(curVideoIdx, failedVideo, Video.State.ERROR),
+                        )
+                    }
+                }
+
+                val next = findNextAvailableVideo(curHosterIdx, curVideoIdx)
+                if (next != null) {
+                    val (nextHosterIdx, nextVideoIdx) = next
+                    val nextHoster = _hosterState.value.getOrNull(nextHosterIdx) as? HosterState.Ready
+                    val nextVideo = nextHoster?.videoList?.getOrNull(nextVideoIdx)
+
+                    if (nextHoster != null && nextVideo != null) {
+                        withUIContext {
+                            activity.toast("Server error. Switching to ${nextHoster.name} (${nextVideo.videoTitle})...")
+                        }
+                        _pausedState.update { false }
+                        val success = loadVideo(currentSource.value, nextVideo, nextHosterIdx, nextVideoIdx, autoFailover = true)
+                        if (!success) {
+                            updateIsLoadingEpisode(false)
+                            isLoading.update { false }
+                        }
+                    } else {
+                        updateIsLoadingEpisode(false)
+                        isLoading.update { false }
+                    }
+                } else {
+                    logcat(LogPriority.WARN) { "All servers failed. No alternative servers available." }
+                    withUIContext {
+                        activity.toast("Playback error: $errorMessage. All servers failed.")
+                    }
+                    updateIsLoadingEpisode(false)
+                    isLoading.update { false }
+                }
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR, e) { "Failed during server failover: ${e.message}" }
+                updateIsLoadingEpisode(false)
+                isLoading.update { false }
+            } finally {
+                isFailingOver.set(false)
+            }
+        }
+    }
+
+    private suspend fun loadVideo(
+        source: AnimeSource?,
+        video: Video,
+        hosterIndex: Int,
+        videoIndex: Int,
+        autoFailover: Boolean = true,
+    ): Boolean {
+        val selectedHosterState = (_hosterState.value.getOrNull(hosterIndex) as? HosterState.Ready) ?: return false
         updateIsLoadingEpisode(true)
 
         val oldSelectedIndex = _selectedHosterVideoIndex.value
@@ -1490,19 +1604,35 @@ class PlayerViewModel @JvmOverloads constructor(
         updatePausedState()
         pause()
 
-        val resolvedVideo = if (selectedHosterState.videoState[videoIndex] != Video.State.READY) {
+        val resolvedVideo = if (selectedHosterState.videoState.getOrNull(videoIndex) != Video.State.READY) {
             HosterLoader.getResolvedVideo(source, video)
         } else {
             video
         }
 
         if (resolvedVideo == null || resolvedVideo.videoUrl.isEmpty()) {
-            if (currentVideo.value == null) {
-                _hosterState.updateAt(
-                    hosterIndex,
-                    selectedHosterState.getChangedAt(videoIndex, video, Video.State.ERROR),
-                )
+            _hosterState.updateAt(
+                hosterIndex,
+                selectedHosterState.getChangedAt(videoIndex, video, Video.State.ERROR),
+            )
 
+            if (autoFailover) {
+                val next = findNextAvailableVideo(excludeHosterIdx = hosterIndex, excludeVideoIdx = videoIndex)
+                if (next != null) {
+                    val (nextHosterIdx, nextVideoIdx) = next
+                    val nextHoster = _hosterState.value.getOrNull(nextHosterIdx) as? HosterState.Ready
+                    val nextVideo = nextHoster?.videoList?.getOrNull(nextVideoIdx)
+                    if (nextHoster != null && nextVideo != null) {
+                        withUIContext {
+                            activity.toast("Server down. Switching to ${nextHoster.name} (${nextVideo.videoTitle})...")
+                        }
+                        _pausedState.update { false }
+                        return loadVideo(source, nextVideo, nextHosterIdx, nextVideoIdx, autoFailover = true)
+                    }
+                }
+            }
+
+            if (currentVideo.value == null) {
                 val (newHosterIdx, newVideoIdx) = HosterLoader.selectBestVideo(hosterState.value)
                 if (newHosterIdx == -1) {
                     if (_hosterState.value.any { it is HosterState.Loading }) {
@@ -1515,13 +1645,12 @@ class PlayerViewModel @JvmOverloads constructor(
 
                 val newVideo = (hosterState.value[newHosterIdx] as HosterState.Ready).videoList[newVideoIdx]
 
-                return loadVideo(source, newVideo, newHosterIdx, newVideoIdx)
+                return loadVideo(source, newVideo, newHosterIdx, newVideoIdx, autoFailover = true)
             } else {
                 _selectedHosterVideoIndex.update { _ -> oldSelectedIndex }
-                _hosterState.updateAt(
-                    hosterIndex,
-                    selectedHosterState.getChangedAt(videoIndex, video, Video.State.ERROR),
-                )
+                withUIContext {
+                    activity.toast("Server unavailable: ${video.videoTitle}")
+                }
                 return false
             }
         }
@@ -1548,32 +1677,40 @@ class PlayerViewModel @JvmOverloads constructor(
     }
 
     fun onVideoClicked(hosterIndex: Int, videoIndex: Int) {
-        val hosterState = _hosterState.value[hosterIndex] as? HosterState.Ready
-        val video = hosterState?.videoList
-            ?.getOrNull(videoIndex)
-            ?: return // Shouldn't happen, but just in case™
-
-        val videoState = hosterState.videoState
-            .getOrNull(videoIndex)
+        val hosterState = _hosterState.value.getOrNull(hosterIndex) as? HosterState.Ready
+            ?: return
+        val video = hosterState.videoList.getOrNull(videoIndex)
+            ?: return
+        val videoState = hosterState.videoState.getOrNull(videoIndex)
             ?: return
 
-        if (videoState == Video.State.ERROR) {
+        if (videoState == Video.State.LOAD_VIDEO) {
             return
+        }
+
+        if (videoState == Video.State.ERROR) {
+            _hosterState.updateAt(
+                hosterIndex,
+                hosterState.getChangedAt(videoIndex, video, Video.State.QUEUE),
+            )
         }
 
         viewModelScope.launchIO {
             try {
-                val success = loadVideo(currentSource.value, video, hosterIndex, videoIndex)
+                _pausedState.update { false }
+                val success = loadVideo(currentSource.value, video, hosterIndex, videoIndex, autoFailover = false)
                 if (success) {
                     if (sheetShown.value == Sheets.QualityTracks) {
                         dismissSheet()
                     }
                 } else {
                     updateIsLoadingEpisode(false)
+                    isLoading.update { false }
                 }
             } catch (e: Throwable) {
                 logcat(LogPriority.ERROR, e) { "Failed onVideoClicked: ${e.message}" }
                 updateIsLoadingEpisode(false)
+                isLoading.update { false }
                 withUIContext {
                     activity.setInitialEpisodeError(e)
                 }
