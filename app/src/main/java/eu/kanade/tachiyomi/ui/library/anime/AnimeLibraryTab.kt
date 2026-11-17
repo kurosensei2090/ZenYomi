@@ -294,6 +294,7 @@ data object AnimeLibraryTab : Tab {
                             }
                         },
                         onSelectSource = discoverScreenModel::selectSource,
+                        onTogglePin = discoverScreenModel::togglePin,
                         onExploreExtensionsClick = {
                             scope.launch {
                                 HomeScreen.openTab(HomeScreen.Tab.Browse(toExtensions = true, anime = true))

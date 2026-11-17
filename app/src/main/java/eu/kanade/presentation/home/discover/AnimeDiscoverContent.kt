@@ -22,12 +22,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Whatshot
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
@@ -47,10 +50,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.browse.InLibraryBadge
+import eu.kanade.presentation.browse.anime.components.AnimeSourceIcon
 import eu.kanade.presentation.entries.components.ItemCover
 import eu.kanade.tachiyomi.ui.home.discover.AnimeDiscoverScreenModel
 import tachiyomi.domain.entries.anime.model.Anime
 import tachiyomi.domain.entries.anime.model.AnimeCover
+import tachiyomi.domain.source.anime.model.Pin
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.PullRefresh
@@ -70,6 +75,7 @@ fun AnimeDiscoverContent(
     onMorePopularClick: () -> Unit,
     onMoreLatestClick: () -> Unit,
     onSelectSource: (Long) -> Unit,
+    onTogglePin: (Long) -> Unit = {},
     onExploreExtensionsClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -205,7 +211,7 @@ fun AnimeDiscoverContent(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = state.currentSource?.name ?: stringResource(AYMR.strings.action_select_source),
+                        text = state.currentSource?.name?.removeSuffix(" [CS]")?.trim() ?: stringResource(AYMR.strings.action_select_source),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -244,6 +250,7 @@ fun AnimeDiscoverContent(
                 LazyColumn {
                     itemsIndexed(state.sources, key = { idx, source -> "src_${source.id}_$idx" }) { _, source ->
                         val isSelected = state.currentSource?.id == source.id
+                        val isPinned = Pin.Actual in source.pin
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
@@ -252,28 +259,45 @@ fun AnimeDiscoverContent(
                                     onSelectSource(source.id)
                                     showSourceSheet = false
                                 }
-                                .padding(horizontal = 24.dp, vertical = 14.dp),
+                                .padding(horizontal = 20.dp, vertical = 10.dp),
                         ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Explore,
-                                contentDescription = null,
-                                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(22.dp),
+                            AnimeSourceIcon(
+                                source = source,
+                                modifier = Modifier.size(40.dp),
                             )
                             Spacer(modifier = Modifier.width(16.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = source.name,
+                                    text = source.name.removeSuffix(" [CS]").trim(),
                                     style = MaterialTheme.typography.bodyLarge,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                     color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
-                                if (source.lang.isNotBlank()) {
-                                    Text(
-                                        text = source.lang.uppercase(),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (source.name.endsWith(" [CS]")) {
+                                        Text(
+                                            text = "CloudStream",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Medium,
+                                        )
+                                        if (source.lang.isNotBlank()) {
+                                            Text(
+                                                text = " • ",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    }
+                                    if (source.lang.isNotBlank()) {
+                                        Text(
+                                            text = source.lang.uppercase(),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
                                 }
                             }
                             if (isSelected) {
@@ -281,6 +305,22 @@ fun AnimeDiscoverContent(
                                     imageVector = Icons.Default.Check,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier
+                                        .padding(end = 4.dp)
+                                        .size(22.dp),
+                                )
+                            }
+                            IconButton(
+                                onClick = { onTogglePin(source.id) },
+                            ) {
+                                Icon(
+                                    imageVector = if (isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
+                                    contentDescription = "Pin source",
+                                    tint = if (isPinned) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                    },
                                     modifier = Modifier.size(20.dp),
                                 )
                             }

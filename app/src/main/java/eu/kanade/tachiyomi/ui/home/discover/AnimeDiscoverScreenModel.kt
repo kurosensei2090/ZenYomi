@@ -4,7 +4,6 @@ import androidx.compose.runtime.Immutable
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.domain.entries.anime.model.toDomainAnime
-import eu.kanade.domain.source.anime.interactor.GetEnabledAnimeSources
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.animesource.AnimeCatalogueSource
 import kotlinx.collections.immutable.ImmutableList
@@ -13,14 +12,18 @@ import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import logcat.LogPriority
+import tachiyomi.core.common.preference.getAndSet
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.entries.anime.interactor.NetworkToLocalAnime
 import tachiyomi.domain.entries.anime.model.Anime
 import tachiyomi.domain.source.anime.model.AnimeSource
+import tachiyomi.domain.source.anime.model.Pin
+import tachiyomi.domain.source.anime.model.Pins
 import tachiyomi.domain.source.anime.service.AnimeSourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -28,7 +31,6 @@ import uy.kohesive.injekt.api.get
 class AnimeDiscoverScreenModel(
     private val sourcePreferences: SourcePreferences = Injekt.get(),
     private val sourceManager: AnimeSourceManager = Injekt.get(),
-    private val getEnabledAnimeSources: GetEnabledAnimeSources = Injekt.get(),
     private val networkToLocalAnime: NetworkToLocalAnime = Injekt.get(),
 ) : StateScreenModel<AnimeDiscoverScreenModel.State>(State()) {
 
@@ -36,12 +38,32 @@ class AnimeDiscoverScreenModel(
 
     init {
         screenModelScope.launchIO {
-            getEnabledAnimeSources.subscribe().collectLatest { enabledSources ->
-                val catalogueSources = enabledSources
+            combine(
+                sourceManager.sources,
+                sourcePreferences.pinnedAnimeSources().changes(),
+                sourcePreferences.disabledAnimeSources().changes(),
+            ) { allSources, pinnedSourceIds, disabledSources ->
+                allSources
+                    .filterIsInstance<AnimeCatalogueSource>()
+                    .filterNot { it.id.toString() in disabledSources }
                     .distinctBy { it.id }
-                    .filter { domainSource ->
-                        sourceManager.get(domainSource.id) is AnimeCatalogueSource
+                    .map { cs ->
+                        val isPinned = cs.id.toString() in pinnedSourceIds
+                        AnimeSource(
+                            id = cs.id,
+                            lang = cs.lang,
+                            name = cs.name,
+                            supportsLatest = cs.supportsLatest,
+                            isStub = false,
+                            pin = if (isPinned) Pins.pinned else Pins.unpinned,
+                        )
                     }
+                    .sortedWith(
+                        compareByDescending<AnimeSource> { Pin.Actual in it.pin }
+                            .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name.removeSuffix(" [CS]").trim() },
+                    )
+            }.collectLatest { catalogueSources ->
+                if (catalogueSources.isEmpty()) return@collectLatest
 
                 mutableState.update { it.copy(sources = catalogueSources.toImmutableList()) }
 
@@ -74,6 +96,16 @@ class AnimeDiscoverScreenModel(
     fun selectSource(sourceId: Long) {
         sourcePreferences.preferredHomeSource().set(sourceId)
         loadSourceFeed(sourceId)
+    }
+
+    fun togglePin(sourceId: Long) {
+        sourcePreferences.pinnedAnimeSources().getAndSet { pinned ->
+            if (sourceId.toString() in pinned) {
+                pinned - sourceId.toString()
+            } else {
+                pinned + sourceId.toString()
+            }
+        }
     }
 
     fun refresh() {
