@@ -562,20 +562,16 @@ class MangaLibraryScreenModel(
         }
     }
 
+    private val displayModeState by lazy { libraryPreferences.displayMode().asState(screenModelScope) }
+    private val landscapeColumnsState by lazy { libraryPreferences.mangaLandscapeColumns().asState(screenModelScope) }
+    private val portraitColumnsState by lazy { libraryPreferences.mangaPortraitColumns().asState(screenModelScope) }
+
     fun getDisplayMode(): PreferenceMutableState<LibraryDisplayMode> {
-        return libraryPreferences.displayMode().asState(screenModelScope)
+        return displayModeState
     }
 
     fun getColumnsPreferenceForCurrentOrientation(isLandscape: Boolean): PreferenceMutableState<Int> {
-        return (
-            if (isLandscape) {
-                libraryPreferences.mangaLandscapeColumns()
-            } else {
-                libraryPreferences.mangaPortraitColumns()
-            }
-            ).asState(
-            screenModelScope,
-        )
+        return if (isLandscape) landscapeColumnsState else portraitColumnsState
     }
 
     suspend fun getRandomLibraryItemForCurrentCategory(): MangaLibraryItem? {

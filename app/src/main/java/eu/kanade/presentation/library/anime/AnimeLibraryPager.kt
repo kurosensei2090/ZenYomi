@@ -85,7 +85,7 @@ fun AnimeLibraryPager(
                     )
                 }
 
-                LibraryDisplayMode.CompactGrid, LibraryDisplayMode.CoverOnlyGrid -> {
+                LibraryDisplayMode.CompactGrid, LibraryDisplayMode.CoverOnlyGrid, else -> {
                     AnimeLibraryCompactGrid(
                         items = library,
                         showTitle = displayMode is LibraryDisplayMode.CompactGrid,

@@ -132,4 +132,8 @@
 -keep class org.json.** { *; }
 -keepclassmembers class org.json.** { *; }
 
+# Keep LibraryDisplayMode models and sealed subclasses intact
+-keep class tachiyomi.domain.library.model.LibraryDisplayMode** { *; }
+
+
 

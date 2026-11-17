@@ -577,20 +577,16 @@ class AnimeLibraryScreenModel(
         }
     }
 
+    private val displayModeState by lazy { libraryPreferences.displayMode().asState(screenModelScope) }
+    private val landscapeColumnsState by lazy { libraryPreferences.animeLandscapeColumns().asState(screenModelScope) }
+    private val portraitColumnsState by lazy { libraryPreferences.animePortraitColumns().asState(screenModelScope) }
+
     fun getDisplayMode(): PreferenceMutableState<LibraryDisplayMode> {
-        return libraryPreferences.displayMode().asState(screenModelScope)
+        return displayModeState
     }
 
     fun getColumnsPreferenceForCurrentOrientation(isLandscape: Boolean): PreferenceMutableState<Int> {
-        return (
-            if (isLandscape) {
-                libraryPreferences.animeLandscapeColumns()
-            } else {
-                libraryPreferences.animePortraitColumns()
-            }
-            ).asState(
-            screenModelScope,
-        )
+        return if (isLandscape) landscapeColumnsState else portraitColumnsState
     }
 
     suspend fun getRandomAnimelibItemForCurrentCategory(): AnimeLibraryItem? {
