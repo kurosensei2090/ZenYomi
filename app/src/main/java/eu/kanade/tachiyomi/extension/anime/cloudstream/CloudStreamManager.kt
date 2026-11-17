@@ -159,6 +159,7 @@ class CloudStreamManager(
             OkHttpClient.Builder()
                 .followRedirects(true)
                 .followSslRedirects(true)
+                .addInterceptor(eu.kanade.tachiyomi.network.interceptor.SpecificHostSecurityInterceptor())
                 .build()
         }
     }

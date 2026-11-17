@@ -440,6 +440,8 @@ class CloudStreamAnimeSource(
                 v.videoUrl.contains("mp4upload", ignoreCase = true) ||
                 v.videoUrl.contains("dood", ignoreCase = true) ||
                 v.videoUrl.contains("megamax", ignoreCase = true) ||
+                v.videoUrl.contains("streamruby", ignoreCase = true) ||
+                v.videoUrl.contains("rubyvidhub", ignoreCase = true) ||
                 v.videoUrl.contains("savefiles", ignoreCase = true) ||
                 v.videoUrl.contains("abyss", ignoreCase = true) ||
                 v.videoUrl.contains("vidtube", ignoreCase = true) ||

@@ -452,6 +452,75 @@ open class Gdriveplayer : ExtractorApi() {
     override var mainUrl = "gdriveplayer.to"
 }
 
+open class StreamRuby : ExtractorApi() {
+    override var name = "StreamRuby"
+    override var mainUrl = "streamruby"
+    override val mainUrls = listOf("streamruby.com", "rubyvidhub.com", "streamruby")
+    override val requiresReferer = true
+
+    override suspend fun getUrl(
+        url: String,
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit,
+    ): List<ExtractorLink>? {
+        val embedUrl = url.trim().trimEnd('/')
+        if (embedUrl.isBlank()) return null
+
+        var fileCode = embedUrl.substringAfterLast("/").substringBefore('?').substringBefore('#')
+        if (fileCode.contains("-")) fileCode = fileCode.substringAfterLast('-')
+        fileCode = fileCode.substringBefore('.').trim()
+        if (fileCode.isBlank()) return null
+
+        val host = if (embedUrl.contains("://")) {
+            embedUrl.substringAfter("://").substringBefore("/")
+        } else {
+            "streamruby.com"
+        }
+        val origin = "https://$host"
+
+        val dlText = try {
+            app.post(
+                "$origin/dl",
+                data = mapOf(
+                    "op" to "embed",
+                    "file_code" to fileCode,
+                    "auto" to "1",
+                    "referer" to (referer ?: embedUrl),
+                ),
+                headers = mapOf("User-Agent" to com.lagradost.cloudstream3.USER_AGENT, "Referer" to embedUrl),
+                referer = embedUrl,
+            ).text
+        } catch (_: Exception) {
+            return null
+        }
+        if (dlText.isBlank()) return null
+
+        val unpacked = try {
+            JsUnpacker(dlText).unpack() ?: dlText
+        } catch (_: Exception) {
+            dlText
+        }
+
+        val streamUrl = Regex("""file:\s*["']([^"']+\.m3u8[^"']*)["']""")
+            .find(unpacked)?.groupValues?.get(1)
+            ?: Regex("""file:\s*["']([^"']+\.mp4[^"']*)["']""")
+                .find(unpacked)?.groupValues?.get(1)
+        if (streamUrl.isNullOrBlank()) return null
+
+        val link = ExtractorLink(
+            source = name,
+            name = name,
+            url = streamUrl,
+            referer = "$origin/",
+            quality = Qualities.Unknown.value,
+            isM3u8 = streamUrl.contains(".m3u8"),
+        )
+        callback(link)
+        return listOf(link)
+    }
+}
+
 fun registerCommonExtractors() {
     val common = listOf(
         PixelDrain(),
@@ -472,6 +541,7 @@ fun registerCommonExtractors() {
         GMPlayer(),
         Jeniusplay(),
         Gdriveplayer(),
+        StreamRuby(),
     )
     for (extractor in common) {
         if (com.lagradost.cloudstream3.utils.extractorApis.none {
