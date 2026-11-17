@@ -138,7 +138,16 @@ fun BrowseAnimeSourceContent(
                 onAnimeLongClick = onAnimeLongClick,
             )
         }
-        LibraryDisplayMode.CompactGrid, LibraryDisplayMode.CoverOnlyGrid, else -> {
+        LibraryDisplayMode.CompactGrid, LibraryDisplayMode.CoverOnlyGrid -> {
+            BrowseAnimeSourceCompactGrid(
+                animeList = animeList,
+                columns = columns,
+                contentPadding = contentPadding,
+                onAnimeClick = onAnimeClick,
+                onAnimeLongClick = onAnimeLongClick,
+            )
+        }
+        else -> {
             BrowseAnimeSourceCompactGrid(
                 animeList = animeList,
                 columns = columns,

@@ -85,7 +85,7 @@ fun AnimeLibraryPager(
                     )
                 }
 
-                LibraryDisplayMode.CompactGrid, LibraryDisplayMode.CoverOnlyGrid, else -> {
+                LibraryDisplayMode.CompactGrid, LibraryDisplayMode.CoverOnlyGrid -> {
                     AnimeLibraryCompactGrid(
                         items = library,
                         showTitle = displayMode is LibraryDisplayMode.CompactGrid,
@@ -109,6 +109,21 @@ fun AnimeLibraryPager(
                         onClick = onClickAnime,
                         onLongClick = onLongClickAnime,
                         onClickContinueWatching = onClickContinueWatching,
+                        searchQuery = searchQuery,
+                        onGlobalSearchClicked = onGlobalSearchClicked,
+                    )
+                }
+
+                else -> {
+                    AnimeLibraryCompactGrid(
+                        items = library,
+                        showTitle = true,
+                        columns = columns,
+                        contentPadding = contentPadding,
+                        selection = selectedAnime,
+                        onClick = onClickAnime,
+                        onClickContinueWatching = onClickContinueWatching,
+                        onLongClick = onLongClickAnime,
                         searchQuery = searchQuery,
                         onGlobalSearchClicked = onGlobalSearchClicked,
                     )

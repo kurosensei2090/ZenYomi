@@ -176,7 +176,16 @@ private fun RelatedAnimeItem(
                 onLongClick = onLongClick,
             )
         }
-        LibraryDisplayMode.CoverOnlyGrid, else -> {
+        LibraryDisplayMode.CoverOnlyGrid -> {
+            EntryCompactGridItem(
+                coverData = anime.asAnimeCover(),
+                coverAlpha = coverAlpha,
+                coverBadgeStart = { InLibraryBadge(enabled = anime.favorite) },
+                onClick = onClick,
+                onLongClick = onLongClick,
+            )
+        }
+        else -> {
             EntryCompactGridItem(
                 coverData = anime.asAnimeCover(),
                 coverAlpha = coverAlpha,
