@@ -274,60 +274,13 @@ fun Screen.csSourcesTab(): TabContent {
                             }
                         }
 
-                        // 1. PINNED SOURCES SECTION
-                        if (pinnedSources.isNotEmpty()) {
-                            item(key = "header_pinned") {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 8.dp, bottom = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.PushPin,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "${stringResource(MR.strings.pinned_sources)} (${pinnedSources.size})",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary,
-                                    )
-                                }
-                            }
-
-                            items(pinnedSources, key = { "pinned_${it.id}" }) { source ->
-                                val repo = remember(source.pluginName, repos) { manager.getRepoForPlugin(source.pluginName) }
-                                CsSourceCard(
-                                    source = source,
-                                    isPinned = true,
-                                    repoName = repo?.cleanName,
-                                    manager = manager,
-                                    onBrowse = { browseSource(source) },
-                                    onLatest = if (source.supportsLatest) {
-                                        { browseSource(source, GetRemoteAnime.QUERY_LATEST) }
-                                    } else null,
-                                    onTogglePin = { togglePin(source.id) },
-                                    onDelete = {
-                                        scope.launch {
-                                            manager.uninstallPlugin(source.pluginName)
-                                            context.toast("Deleted ${source.name.removeSuffix(" [CS]").trim()}")
-                                        }
-                                    },
-                                )
-                            }
-                        }
-
-                        // 2. LAST USED SOURCE SECTION
+                        // 1. LAST USED SOURCE SECTION
                         if (lastUsedSource != null) {
                             item(key = "header_last_used") {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(top = if (pinnedSources.isNotEmpty()) 12.dp else 8.dp, bottom = 4.dp),
+                                        .padding(top = 8.dp, bottom = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Icon(
@@ -362,6 +315,53 @@ fun Screen.csSourcesTab(): TabContent {
                                         scope.launch {
                                             manager.uninstallPlugin(lastUsedSource.pluginName)
                                             context.toast("Deleted ${lastUsedSource.name.removeSuffix(" [CS]").trim()}")
+                                        }
+                                    },
+                                )
+                            }
+                        }
+
+                        // 2. PINNED SOURCES SECTION
+                        if (pinnedSources.isNotEmpty()) {
+                            item(key = "header_pinned") {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = if (lastUsedSource != null) 12.dp else 8.dp, bottom = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.PushPin,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "${stringResource(MR.strings.pinned_sources)} (${pinnedSources.size})",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            }
+
+                            items(pinnedSources, key = { "pinned_${it.id}" }) { source ->
+                                val repo = remember(source.pluginName, repos) { manager.getRepoForPlugin(source.pluginName) }
+                                CsSourceCard(
+                                    source = source,
+                                    isPinned = true,
+                                    repoName = repo?.cleanName,
+                                    manager = manager,
+                                    onBrowse = { browseSource(source) },
+                                    onLatest = if (source.supportsLatest) {
+                                        { browseSource(source, GetRemoteAnime.QUERY_LATEST) }
+                                    } else null,
+                                    onTogglePin = { togglePin(source.id) },
+                                    onDelete = {
+                                        scope.launch {
+                                            manager.uninstallPlugin(source.pluginName)
+                                            context.toast("Deleted ${source.name.removeSuffix(" [CS]").trim()}")
                                         }
                                     },
                                 )
