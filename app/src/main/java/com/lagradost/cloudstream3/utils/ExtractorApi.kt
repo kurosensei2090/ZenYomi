@@ -209,17 +209,33 @@ suspend fun loadExtractor(
 
         // Check if the page contains iframes to other video hosters
         val iframeRegex = Regex("""<iframe[^>]+src=["'](https?://[^"']+)["']""", RegexOption.IGNORE_CASE)
-        val iframes = iframeRegex.findAll(html).map { it.groupValues[1] }.distinct().toList()
-        for (iframeUrl in iframes) {
-            val lower = iframeUrl.lowercase()
-            if (iframeUrl != cleanUrl &&
-                !lower.contains("google.com/recaptcha") &&
-                !lower.contains("facebook.com") &&
-                !lower.contains("disqus.com")
-            ) {
-                val resolved = loadExtractor(iframeUrl, cleanUrl, subtitleCallback, callback)
-                if (resolved) emitted = true
+        val iframes = iframeRegex.findAll(html)
+            .map { it.groupValues[1] }
+            .distinct()
+            .filter { iframeUrl ->
+                val lower = iframeUrl.lowercase()
+                iframeUrl != cleanUrl &&
+                    !lower.contains("google.com") &&
+                    !lower.contains("facebook.com") &&
+                    !lower.contains("disqus.com") &&
+                    !lower.contains("doubleclick") &&
+                    !lower.contains("adservice") &&
+                    !lower.contains("googlesyndication") &&
+                    !lower.contains("histats") &&
+                    !lower.contains("adsterra") &&
+                    !lower.contains("popads") &&
+                    !lower.contains("trafficjunky") &&
+                    !lower.contains("cloudflare") &&
+                    !lower.contains("recaptcha") &&
+                    !lower.contains("twitter.com") &&
+                    !lower.contains("telegram.org")
             }
+            .take(3)
+            .toList()
+
+        for (iframeUrl in iframes) {
+            val resolved = loadExtractor(iframeUrl, cleanUrl, subtitleCallback, callback)
+            if (resolved) emitted = true
         }
 
         return emitted

@@ -407,7 +407,7 @@ class CloudStreamAnimeSource(
         }
 
         try {
-            withTimeoutOrNull(30_000L) {
+            withTimeoutOrNull(15_000L) {
                 api.loadLinks(
                     data = episode.url,
                     isCasting = false,
@@ -453,12 +453,14 @@ class CloudStreamAnimeSource(
                 embedsToExtract.map { embed ->
                     async {
                         try {
-                            com.lagradost.cloudstream3.utils.loadExtractor(
-                                url = embed.videoUrl,
-                                referer = baseUrl,
-                                subtitleCallback = onSubtitle,
-                                callback = onLink,
-                            )
+                            withTimeoutOrNull(6_000L) {
+                                com.lagradost.cloudstream3.utils.loadExtractor(
+                                    url = embed.videoUrl,
+                                    referer = baseUrl,
+                                    subtitleCallback = onSubtitle,
+                                    callback = onLink,
+                                )
+                            }
                         } catch (t: Throwable) {
                             logcat(LogPriority.DEBUG, t) { "Failed deep extract for ${embed.videoUrl}" }
                         }
@@ -469,7 +471,7 @@ class CloudStreamAnimeSource(
 
         if (videos.isEmpty() && episode.url.isNotBlank() && (episode.url.startsWith("http://", ignoreCase = true) || episode.url.startsWith("https://", ignoreCase = true))) {
             try {
-                withTimeoutOrNull(20_000L) {
+                withTimeoutOrNull(8_000L) {
                     com.lagradost.cloudstream3.utils.loadExtractor(
                         url = episode.url,
                         referer = baseUrl,

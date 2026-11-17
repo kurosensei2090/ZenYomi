@@ -20,7 +20,7 @@ class WebViewResolver : Interceptor {
     var interceptUrl: Regex? = null
     var additionalUrls: List<Regex> = emptyList()
     var userAgent: String = USER_AGENT
-    var timeout: Long = 30_000L
+    var timeout: Long = 12_000L
 
     constructor(interceptor: (Any) -> Boolean = { true }) {
         // Default constructor
@@ -33,7 +33,7 @@ class WebViewResolver : Interceptor {
         useOkhttp: Boolean = true,
         script: String? = null,
         scriptCallback: ((String) -> Unit)? = null,
-        timeout: Long = 30_000L,
+        timeout: Long = 12_000L,
     ) {
         this.interceptUrl = interceptUrl
         this.additionalUrls = additionalUrls
