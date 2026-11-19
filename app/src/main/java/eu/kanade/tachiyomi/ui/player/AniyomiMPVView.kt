@@ -115,7 +115,11 @@ class AniyomiMPVView(context: Context, attributes: AttributeSet) : BaseMPVView(c
         setVo(if (decoderPreferences.gpuNext().get()) "gpu-next" else "gpu")
         MPVLib.setPropertyBoolean("pause", true)
         MPVLib.setOptionString("profile", "fast")
-        MPVLib.setOptionString("hwdec", if (decoderPreferences.tryHWDecoding().get()) "auto" else "no")
+        MPVLib.setOptionString("hwdec", if (decoderPreferences.tryHWDecoding().get()) "auto-safe" else "no")
+        MPVLib.setOptionString("hwdec-codecs", "h264,hevc,vp9,av1")
+        MPVLib.setOptionString("network-timeout", "15")
+        MPVLib.setOptionString("demuxer-lavf-o", "reconnect=1,reconnect_streamed=1,reconnect_delay_max=5")
+        MPVLib.setOptionString("stream-buffer-size", "512k")
         when (decoderPreferences.videoDebanding().get()) {
             Debanding.None -> {}
             Debanding.CPU -> MPVLib.setOptionString("vf", "gradfun=radius=12")

@@ -61,7 +61,14 @@ class PlayerObserver(val activity: PlayerActivity) :
             MPVLib.mpvLogLevel.MPV_LOG_LEVEL_INFO -> LogPriority.INFO
             else -> LogPriority.VERBOSE
         }
-        if (text.contains("HTTP error")) httpError = text
+        if (text.contains("HTTP error", ignoreCase = true) ||
+            text.contains("Server returned 40", ignoreCase = true) ||
+            text.contains("Server returned 50", ignoreCase = true) ||
+            text.contains("Failed to open", ignoreCase = true) ||
+            text.contains("Connection refused", ignoreCase = true)
+        ) {
+            httpError = text
+        }
         logcat.logcat("mpv/$prefix", logPriority) { text }
     }
 }

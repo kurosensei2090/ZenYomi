@@ -1237,23 +1237,42 @@ class PlayerActivity : BaseActivity() {
 
     fun setHttpOptions(video: Video) {
         if (viewModel.isEpisodeOnline() != true) return
-        val source = viewModel.currentSource.value as? AnimeHttpSource ?: return
+        val source = viewModel.currentSource.value as? AnimeHttpSource
 
-        val headers = (video.headers ?: source.headers)
-            .toMultimap()
-            .mapValues { it.value.firstOrNull() ?: "" }
-            .toMutableMap()
+        val headers = (video.headers ?: source?.headers)
+            ?.toMultimap()
+            ?.mapValues { it.value.firstOrNull() ?: "" }
+            ?.toMutableMap()
+            ?: mutableMapOf()
+
+        val userAgent = headers.entries.firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }?.value
+            ?.ifBlank { null }
+            ?: (source as? eu.kanade.tachiyomi.extension.anime.cloudstream.CloudStreamAnimeSource)?.let { com.lagradost.cloudstream3.USER_AGENT }
+            ?: runCatching { Injekt.get<eu.kanade.tachiyomi.network.NetworkHelper>().defaultUserAgentProvider() }.getOrDefault(com.lagradost.cloudstream3.USER_AGENT)
+        MPVLib.setOptionString("user-agent", userAgent)
+
+        val referrer = headers.entries.firstOrNull { it.key.equals("Referer", ignoreCase = true) }?.value
+            ?.ifBlank { null }
+            ?: headers.entries.firstOrNull { it.key.equals("Origin", ignoreCase = true) }?.value
+            ?.ifBlank { null }
+            ?: source?.baseUrl
+        if (!referrer.isNullOrBlank() && !referrer.startsWith("https://localhost")) {
+            MPVLib.setOptionString("referrer", referrer)
+        }
+
+        // Network stability & progressive stream options
+        MPVLib.setOptionString("network-timeout", "15")
+        MPVLib.setOptionString("demuxer-lavf-o", "reconnect=1,reconnect_streamed=1,reconnect_delay_max=5")
+        MPVLib.setOptionString("stream-buffer-size", "512k")
+        MPVLib.setOptionString("hls-bitrate", "max")
 
         val httpHeaderString = headers.map {
             it.key + ": " + it.value.replace(",", "\\,")
         }.joinToString(",")
 
-        MPVLib.setOptionString("http-header-fields", httpHeaderString)
-
-        // need to fix the cache
-        // MPVLib.setOptionString("cache-on-disk", "yes")
-        // val cacheDir = File(applicationContext.filesDir, "media").path
-        // MPVLib.setOptionString("cache-dir", cacheDir)
+        if (httpHeaderString.isNotBlank()) {
+            MPVLib.setOptionString("http-header-fields", httpHeaderString)
+        }
     }
 
     /**
