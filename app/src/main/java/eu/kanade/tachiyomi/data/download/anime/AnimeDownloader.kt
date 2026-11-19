@@ -25,6 +25,7 @@ import eu.kanade.tachiyomi.data.download.anime.model.AnimeDownload
 import eu.kanade.tachiyomi.data.library.anime.AnimeLibraryUpdateNotifier
 import eu.kanade.tachiyomi.data.notification.NotificationHandler
 import eu.kanade.tachiyomi.data.torrent.service.TorrentServerService
+import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.player.loader.EpisodeLoader
 import eu.kanade.tachiyomi.ui.player.loader.HosterLoader
@@ -365,18 +366,49 @@ class AnimeDownloader(
                 if (hosters.isEmpty()) {
                     throw Exception(context.stringResource(AYMR.strings.video_list_empty_error))
                 }
+                val candidateVideos = hosters.flatMap { it.videoList.orEmpty() }
+                if (candidateVideos.isEmpty()) {
+                    throw Exception(context.stringResource(AYMR.strings.video_list_empty_error))
+                }
                 val bestVideo = HosterLoader.getBestVideo(download.source, hosters)
-                    ?: throw Exception(context.stringResource(AYMR.strings.video_list_empty_error))
-                download.video = bestVideo
-            }
+                    ?: candidateVideos.first()
+                val candidateQueue = linkedSetOf<Video>()
+                candidateQueue.add(bestVideo)
+                candidateQueue.addAll(candidateVideos)
 
-            withIOContext {
-                getOrDownloadVideoFile(download, tmpDir)
-            }
+                var downloaded = false
+                var lastError: Throwable? = null
 
-            if (!isDownloadSuccessful(download, tmpDir)) {
-                download.status = AnimeDownload.State.ERROR
-                return
+                for (candidate in candidateQueue) {
+                    try {
+                        val resolved = HosterLoader.getResolvedVideo(download.source, candidate) ?: candidate
+                        download.video = resolved
+                        withIOContext {
+                            getOrDownloadVideoFile(download, tmpDir)
+                        }
+                        if (isDownloadSuccessful(download, tmpDir)) {
+                            downloaded = true
+                            break
+                        }
+                    } catch (e: Throwable) {
+                        if (e is CancellationException) throw e
+                        lastError = e
+                        logcat(LogPriority.WARN, e) { "Failed downloading ${download.episode.name} with ${candidate.videoTitle}, trying next candidate..." }
+                    }
+                }
+
+                if (!downloaded) {
+                    throw (lastError ?: Exception(context.stringResource(AYMR.strings.video_list_empty_error)))
+                }
+            } else {
+                withIOContext {
+                    getOrDownloadVideoFile(download, tmpDir)
+                }
+
+                if (!isDownloadSuccessful(download, tmpDir)) {
+                    download.status = AnimeDownload.State.ERROR
+                    return
+                }
             }
 
             val filename = DiskUtil.buildValidFilename("${download.anime.title} - ${download.episode.name}")
@@ -482,10 +514,10 @@ class AnimeDownloader(
             progressJob?.cancel()
         } catch (e: Exception) {
             httpServer?.stop()
+            progressJob?.cancel()
             if (e is CancellationException) throw e
             video.status = Video.State.ERROR
-            notifier.onError(e.message, download.episode.name, download.anime.title, download.anime.id)
-            progressJob?.cancel()
+            throw e
         }
     }
 
@@ -575,7 +607,18 @@ class AnimeDownloader(
 
         val ffmpegFilename = { videoFile.uri.toFFmpegString(context) }
 
-        val headers = video.headers ?: download.source.headers
+        val rawHeaders = video.headers ?: download.source.headers
+        val hasUserAgent = (0 until rawHeaders.size).any {
+            rawHeaders.name(it).equals("User-Agent", ignoreCase = true)
+        }
+        val headers = if (!hasUserAgent) {
+            val defaultUa = runCatching { Injekt.get<NetworkHelper>().defaultUserAgentProvider() }
+                .getOrDefault(com.lagradost.cloudstream3.USER_AGENT)
+            rawHeaders.newBuilder().set("User-Agent", defaultUa).build()
+        } else {
+            rawHeaders
+        }
+
         val headerOptions = if (headers.size > 0) {
             headers.joinToString("", "-headers '", "'") {
                 "${it.first}: ${it.second}\r\n"
@@ -589,7 +632,8 @@ class AnimeDownloader(
         val ffprobeCommand = { file: String, ffprobeHeaders: String? ->
             val headersArg = if (!ffprobeHeaders.isNullOrBlank()) "$ffprobeHeaders " else ""
             FFmpegKitConfig.parseArguments(
-                "-protocol_whitelist \"file,http,https,tcp,tls,crypto,data\" " +
+                "-rw_timeout 15000000 " +
+                    "-protocol_whitelist \"file,http,https,tcp,tls,crypto,data\" " +
                     "${headersArg}-v quiet -show_entries " +
                     "format=duration -of default=noprint_wrappers=1:nokey=1 \"$file\"",
             )
@@ -643,11 +687,16 @@ class AnimeDownloader(
     }
 
     private fun getFFmpegOptions(video: Video, headerOptions: String, ffmpegFilename: String): Array<String> {
+        val networkOptions = "-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 5 -rw_timeout 15000000"
+
         fun formatInputs(tracks: List<Track>) = tracks.joinToString(" ", postfix = " ") {
             buildList {
                 add("-protocol_whitelist \"file,http,https,tcp,tls,crypto,data\"")
-                if (it.url.startsWith("http") && headerOptions.isNotBlank()) {
-                    add(headerOptions)
+                if (it.url.startsWith("http")) {
+                    add(networkOptions)
+                    if (headerOptions.isNotBlank()) {
+                        add(headerOptions)
+                    }
                 }
                 add("-i")
                 add("\"${it.url}\"")
@@ -679,8 +728,11 @@ class AnimeDownloader(
 
         val videoInput = buildList {
             add("-protocol_whitelist \"file,http,https,tcp,tls,crypto,data\"")
-            if (video.videoUrl.startsWith("http") && headerOptions.isNotBlank()) {
-                add(headerOptions)
+            if (video.videoUrl.startsWith("http")) {
+                add(networkOptions)
+                if (headerOptions.isNotBlank()) {
+                    add(headerOptions)
+                }
             }
             add(sourceStreamOptions)
             add("-i")
