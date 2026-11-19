@@ -699,9 +699,17 @@ class CloudStreamManager(
                 val pluginUrl = resolveUrl(url, rawUrl)
                 val rawIcon = obj["iconUrl"]?.jsonPrimitive?.contentOrNull?.let { resolveUrl(url, it) }
                 val iconUrl = rawIcon?.replace("%size%", "128")
-                val version = obj["version"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 1
+                val baseVersion = obj["version"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 1
                 val lang = obj["language"]?.jsonPrimitive?.contentOrNull ?: "en"
                 val tvTypes = obj["tvTypes"]?.jsonArray?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList()
+
+                // Upgrade guard: Replace legacy broken native AnimeDay (v22/v23) with stable pure-Kotlin v29
+                var finalPluginUrl = pluginUrl
+                var finalVersion = baseVersion
+                if ((internalName.equals("AnimeDay", ignoreCase = true) || name.contains("AnimeDay", ignoreCase = true)) && finalVersion < 29) {
+                    finalPluginUrl = "https://github.com/mehdigm4life/mehdigm-stream/raw/refs/heads/main/build/AnimeDay.cs3"
+                    finalVersion = 29
+                }
 
                 if (!iconUrl.isNullOrBlank()) {
                     recordPluginIcon(internalName, iconUrl)
@@ -712,9 +720,9 @@ class CloudStreamManager(
                     CloudStreamPluginItem(
                         name = name,
                         internalName = internalName,
-                        url = pluginUrl,
+                        url = finalPluginUrl,
                         iconUrl = iconUrl,
-                        version = version,
+                        version = finalVersion,
                         tvTypes = tvTypes,
                         language = lang,
                         repoUrl = repoUrl,

@@ -575,6 +575,36 @@ fun Screen.csExtensionsTab(): TabContent {
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth(),
                             )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Quick Presets:",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            TextButton(
+                                onClick = {
+                                    nameInput = "Mehdi Stream (AnimeDay, WitAnime, FaselHD)"
+                                    urlInput = "https://raw.githubusercontent.com/mehdigm4life/mehdigm-stream/master/plugins.json"
+                                },
+                            ) {
+                                Text("Add Mehdi Stream (Arabic / AnimeDay v29)")
+                            }
+                            TextButton(
+                                onClick = {
+                                    nameInput = "Official ReCloudStream Extensions"
+                                    urlInput = "https://raw.githubusercontent.com/recloudstream/extensions/builds/plugins.json"
+                                },
+                            ) {
+                                Text("Add Official ReCloudStream Repository")
+                            }
+                            TextButton(
+                                onClick = {
+                                    nameInput = "Hexated Repository"
+                                    urlInput = "https://raw.githubusercontent.com/hexated/cloudstream-extensions-hexated/builds/repo.json"
+                                },
+                            ) {
+                                Text("Add Hexated Repository (Multilingual)")
+                            }
                         }
                     },
                     confirmButton = {

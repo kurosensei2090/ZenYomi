@@ -608,16 +608,25 @@ class AnimeDownloader(
         val ffmpegFilename = { videoFile.uri.toFFmpegString(context) }
 
         val rawHeaders = video.headers ?: download.source.headers
+        val isGPhoto = video.videoUrl.contains("googleusercontent.com", ignoreCase = true) ||
+            video.videoUrl.contains("photos.google.com", ignoreCase = true)
+
+        val headersBuilder = rawHeaders.newBuilder()
         val hasUserAgent = (0 until rawHeaders.size).any {
             rawHeaders.name(it).equals("User-Agent", ignoreCase = true)
         }
-        val headers = if (!hasUserAgent) {
+        if (!hasUserAgent) {
             val defaultUa = runCatching { Injekt.get<NetworkHelper>().defaultUserAgentProvider() }
                 .getOrDefault(com.lagradost.cloudstream3.USER_AGENT)
-            rawHeaders.newBuilder().set("User-Agent", defaultUa).build()
-        } else {
-            rawHeaders
+            headersBuilder.set("User-Agent", defaultUa)
         }
+        if (isGPhoto) {
+            val hasOrigin = (0 until rawHeaders.size).any { rawHeaders.name(it).equals("Origin", ignoreCase = true) }
+            val hasReferer = (0 until rawHeaders.size).any { rawHeaders.name(it).equals("Referer", ignoreCase = true) }
+            if (!hasOrigin) headersBuilder.set("Origin", "https://photos.google.com")
+            if (!hasReferer) headersBuilder.set("Referer", "https://photos.google.com/")
+        }
+        val headers = headersBuilder.build()
 
         val headerOptions = if (headers.size > 0) {
             headers.joinToString("", "-headers '", "'") {

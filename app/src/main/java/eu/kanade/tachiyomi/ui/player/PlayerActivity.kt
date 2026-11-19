@@ -1251,11 +1251,22 @@ class PlayerActivity : BaseActivity() {
             ?: runCatching { Injekt.get<eu.kanade.tachiyomi.network.NetworkHelper>().defaultUserAgentProvider() }.getOrDefault(com.lagradost.cloudstream3.USER_AGENT)
         MPVLib.setOptionString("user-agent", userAgent)
 
+        val isGPhoto = video.videoUrl.contains("googleusercontent.com", ignoreCase = true) ||
+            video.videoUrl.contains("photos.google.com", ignoreCase = true)
+        if (isGPhoto) {
+            if (!headers.containsKey("Origin")) {
+                headers["Origin"] = "https://photos.google.com"
+            }
+            if (!headers.containsKey("Referer")) {
+                headers["Referer"] = "https://photos.google.com/"
+            }
+        }
+
         val referrer = headers.entries.firstOrNull { it.key.equals("Referer", ignoreCase = true) }?.value
             ?.ifBlank { null }
             ?: headers.entries.firstOrNull { it.key.equals("Origin", ignoreCase = true) }?.value
             ?.ifBlank { null }
-            ?: source?.baseUrl
+            ?: (if (isGPhoto) "https://photos.google.com/" else source?.baseUrl)
         if (!referrer.isNullOrBlank() && !referrer.startsWith("https://localhost")) {
             MPVLib.setOptionString("referrer", referrer)
         }

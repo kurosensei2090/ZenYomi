@@ -385,6 +385,19 @@ class CloudStreamAnimeSource(
                 if (!okhttpHeaders.containsKey("User-Agent")) {
                     okhttpHeaders["User-Agent"] = com.lagradost.cloudstream3.USER_AGENT
                 }
+
+                // Special handling for Google Photos / googleusercontent streams (AnimeDay, CimaCloud, etc.)
+                val isGPhoto = link.url.contains("googleusercontent.com", ignoreCase = true) ||
+                    link.url.contains("photos.google.com", ignoreCase = true)
+                if (isGPhoto) {
+                    if (!okhttpHeaders.containsKey("Origin")) {
+                        okhttpHeaders["Origin"] = "https://photos.google.com"
+                    }
+                    if (!okhttpHeaders.containsKey("Referer") || okhttpHeaders["Referer"].isNullOrBlank()) {
+                        okhttpHeaders["Referer"] = "https://photos.google.com/"
+                    }
+                }
+
                 val cm = CookieManager.getInstance()
                 val cookieForUrl = try {
                     cm?.getCookie(link.url) ?: if (link.referer.isNotEmpty()) cm?.getCookie(link.referer) else null
@@ -407,7 +420,7 @@ class CloudStreamAnimeSource(
         }
 
         try {
-            withTimeoutOrNull(15_000L) {
+            withTimeoutOrNull(30_000L) {
                 api.loadLinks(
                     data = episode.url,
                     isCasting = false,

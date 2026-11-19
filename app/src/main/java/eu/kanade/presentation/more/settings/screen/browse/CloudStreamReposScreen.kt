@@ -422,17 +422,33 @@ class CloudStreamReposScreen : Screen() {
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Quick Suggestion:",
+                        text = "Quick Presets:",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                     )
+                    TextButton(
+                        onClick = {
+                            name = "Mehdi Stream (AnimeDay, WitAnime, FaselHD)"
+                            url = "https://raw.githubusercontent.com/mehdigm4life/mehdigm-stream/master/plugins.json"
+                        },
+                    ) {
+                        Text("Add Mehdi Stream (Arabic / AnimeDay v29)")
+                    }
                     TextButton(
                         onClick = {
                             name = "ReCloudStream Extensions"
                             url = "https://raw.githubusercontent.com/recloudstream/extensions/builds/plugins.json"
                         },
                     ) {
-                        Text("Use Official ReCloudStream Repository")
+                        Text("Add Official ReCloudStream Repository")
+                    }
+                    TextButton(
+                        onClick = {
+                            name = "Hexated Repository"
+                            url = "https://raw.githubusercontent.com/hexated/cloudstream-extensions-hexated/builds/repo.json"
+                        },
+                    ) {
+                        Text("Add Hexated Repository (Multilingual)")
                     }
                 }
             },
