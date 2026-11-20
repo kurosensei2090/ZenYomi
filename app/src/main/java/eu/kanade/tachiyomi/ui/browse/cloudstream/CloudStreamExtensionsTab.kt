@@ -65,6 +65,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.size.Precision
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.TabContent
 import eu.kanade.tachiyomi.R
@@ -325,12 +327,19 @@ fun Screen.csExtensionsTab(): TabContent {
                                         modifier = Modifier.weight(1f),
                                     ) {
                                         if (!plugin.iconUrl.isNullOrBlank()) {
+                                            val iconModel = remember(plugin.iconUrl) {
+                                                ImageRequest.Builder(context)
+                                                    .data(plugin.iconUrl)
+                                                    .size(128)
+                                                    .precision(Precision.INEXACT)
+                                                    .build()
+                                            }
                                             Box(
                                                 modifier = Modifier.size(42.dp),
                                                 contentAlignment = Alignment.BottomEnd,
                                             ) {
                                                 AsyncImage(
-                                                    model = plugin.iconUrl,
+                                                    model = iconModel,
                                                     contentDescription = plugin.name,
                                                     placeholder = painterResource(R.mipmap.ic_default_source),
                                                     error = painterResource(R.mipmap.ic_default_source),

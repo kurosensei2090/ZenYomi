@@ -89,14 +89,15 @@ object DeviceUtil {
      * ActivityManager#isLowRamDevice is based on a system property, which isn't
      * necessarily trustworthy. 1GB is supposedly the regular threshold.
      *
-     * Instead, we consider anything with less than 3GB of RAM as low memory
-     * considering how heavy image processing can be.
+     * Instead, we consider anything with 4GB or less of RAM as low memory
+     * considering how heavy image processing and multi-extension classloading can be.
      */
     fun isLowRamDevice(context: Context): Boolean {
+        val actManager = context.getSystemService<ActivityManager>() ?: return false
         val memInfo = ActivityManager.MemoryInfo()
-        context.getSystemService<ActivityManager>()!!.getMemoryInfo(memInfo)
+        actManager.getMemoryInfo(memInfo)
         val totalMemBytes = memInfo.totalMem
-        return totalMemBytes < 3L * 1024 * 1024 * 1024
+        return actManager.isLowRamDevice || totalMemBytes <= (4.25 * 1024 * 1024 * 1024).toLong()
     }
 
     @SuppressLint("PrivateApi")

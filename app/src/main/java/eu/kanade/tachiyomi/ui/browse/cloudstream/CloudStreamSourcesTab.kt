@@ -59,6 +59,8 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.size.Precision
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.TabContent
@@ -483,6 +485,18 @@ private fun CsSourceCard(
             ?: manager.getPluginIconUrl(source.pluginName)
             ?: manager.getPluginIconUrl(cleanName)
     }
+    val context = LocalContext.current
+    val iconModel = remember(iconUrl) {
+        if (iconUrl.isNullOrBlank()) {
+            null
+        } else {
+            ImageRequest.Builder(context)
+                .data(iconUrl)
+                .size(128)
+                .precision(Precision.INEXACT)
+                .build()
+        }
+    }
 
     Card(
         modifier = Modifier
@@ -506,7 +520,7 @@ private fun CsSourceCard(
             ) {
                 if (!iconUrl.isNullOrBlank()) {
                     AsyncImage(
-                        model = iconUrl,
+                        model = iconModel,
                         contentDescription = cleanName,
                         placeholder = painterResource(R.mipmap.ic_default_source),
                         error = painterResource(R.mipmap.ic_default_source),

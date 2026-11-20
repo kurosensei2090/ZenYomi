@@ -26,6 +26,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.size.Precision
 import eu.kanade.domain.source.anime.model.icon
 import eu.kanade.presentation.util.rememberResourceBitmapPainter
 import eu.kanade.tachiyomi.R
@@ -53,8 +55,15 @@ fun AnimeSourceIcon(
         } else null
 
     if (!csIcon.isNullOrBlank()) {
+        val model = androidx.compose.runtime.remember(csIcon) {
+            ImageRequest.Builder(context)
+                .data(csIcon)
+                .size(128)
+                .precision(Precision.INEXACT)
+                .build()
+        }
         AsyncImage(
-            model = csIcon,
+            model = model,
             contentDescription = null,
             placeholder = painterResource(R.mipmap.ic_default_source),
             error = painterResource(R.mipmap.ic_default_source),
@@ -109,8 +118,16 @@ fun AnimeExtensionIcon(
 ) {
     when (extension) {
         is AnimeExtension.Available -> {
+            val context = LocalContext.current
+            val model = androidx.compose.runtime.remember(extension.iconUrl) {
+                ImageRequest.Builder(context)
+                    .data(extension.iconUrl)
+                    .size(128)
+                    .precision(Precision.INEXACT)
+                    .build()
+            }
             AsyncImage(
-                model = extension.iconUrl,
+                model = model,
                 contentDescription = null,
                 placeholder = ColorPainter(Color(0x1F888888)),
                 error = rememberResourceBitmapPainter(id = R.drawable.cover_error),
