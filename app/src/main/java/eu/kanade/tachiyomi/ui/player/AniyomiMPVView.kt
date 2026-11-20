@@ -118,8 +118,10 @@ class AniyomiMPVView(context: Context, attributes: AttributeSet) : BaseMPVView(c
         MPVLib.setOptionString("hwdec", if (decoderPreferences.tryHWDecoding().get()) "auto-safe" else "no")
         MPVLib.setOptionString("hwdec-codecs", "h264,hevc,vp9,av1")
         MPVLib.setOptionString("network-timeout", "15")
-        MPVLib.setOptionString("demuxer-lavf-o", "reconnect=1,reconnect_streamed=1,reconnect_delay_max=5")
-        MPVLib.setOptionString("stream-buffer-size", "512k")
+        MPVLib.setOptionString("demuxer-lavf-o", "reconnect=1,reconnect_streamed=1,reconnect_delay_max=4,http_persistent=1")
+        MPVLib.setOptionString("stream-buffer-size", "256k")
+        MPVLib.setOptionString("demuxer-readahead-secs", "3")
+        MPVLib.setOptionString("cache-pause-wait", "1")
         when (decoderPreferences.videoDebanding().get()) {
             Debanding.None -> {}
             Debanding.CPU -> MPVLib.setOptionString("vf", "gradfun=radius=12")

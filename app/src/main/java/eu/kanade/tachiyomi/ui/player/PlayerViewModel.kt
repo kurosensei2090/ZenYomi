@@ -1411,15 +1411,16 @@ class PlayerViewModel @JvmOverloads constructor(
                                 }
 
                                 val prefIndex = hosterState.videoList.indexOfFirst { it.preferred }
-                                if (prefIndex != -1 && hosterIndex == -1) {
+                                val targetIndex = if (prefIndex != -1) prefIndex else hosterState.videoList.indexOfFirst { it.videoUrl.isNotEmpty() }
+                                if (targetIndex != -1 && hosterIndex == -1) {
                                     if (hasFoundPreferredVideo.compareAndSet(false, true)) {
                                         if (selectedHosterVideoIndex.value == Pair(-1, -1)) {
                                             val success =
                                                 loadVideo(
                                                     source,
-                                                    hosterState.videoList[prefIndex],
+                                                    hosterState.videoList[targetIndex],
                                                     hosterIdx,
-                                                    prefIndex,
+                                                    targetIndex,
                                                 )
                                             if (!success) {
                                                 hasFoundPreferredVideo.set(false)
