@@ -134,6 +134,10 @@ class SourcePreferences(
 
     fun animeHomeScreenMode() = preferenceStore.getString("anime_home_screen_mode", "DISCOVER")
 
+    fun isPinnedCsSourcesExpanded() = preferenceStore.getBoolean("pref_pinned_cs_sources_expanded", true)
+
+    fun isOtherCsSourcesExpanded() = preferenceStore.getBoolean("pref_other_cs_sources_expanded", true)
+
     enum class DataSaver {
         NONE,
         BANDWIDTH_HERO,

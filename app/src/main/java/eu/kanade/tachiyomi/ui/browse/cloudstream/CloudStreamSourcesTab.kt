@@ -18,6 +18,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Delete
@@ -111,6 +113,9 @@ fun Screen.csSourcesTab(): TabContent {
             val repos by manager.repositoriesFlow.collectAsState()
             val isLoading by manager.isLoadingFlow.collectAsState()
             val lastError by manager.lastErrorFlow.collectAsState()
+
+            val isPinnedExpanded by sourcePreferences.isPinnedCsSourcesExpanded().collectAsState()
+            val isOtherExpanded by sourcePreferences.isOtherCsSourcesExpanded().collectAsState()
 
             var selectedRepoUrl by remember { mutableStateOf<String?>(null) }
 
@@ -327,78 +332,110 @@ fun Screen.csSourcesTab(): TabContent {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(top = if (lastUsedSource != null) 12.dp else 8.dp, bottom = 4.dp),
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable {
+                                            sourcePreferences.isPinnedCsSourcesExpanded().set(!isPinnedExpanded)
+                                        }
+                                        .padding(horizontal = 4.dp, vertical = 6.dp)
+                                        .padding(top = if (lastUsedSource != null) 8.dp else 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Filled.PushPin,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "${stringResource(MR.strings.pinned_sources)} (${pinnedSources.size})",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
                                     Icon(
-                                        imageVector = Icons.Filled.PushPin,
-                                        contentDescription = null,
+                                        imageVector = if (isPinnedExpanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                                        contentDescription = if (isPinnedExpanded) "Collapse" else "Expand",
                                         tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "${stringResource(MR.strings.pinned_sources)} (${pinnedSources.size})",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(22.dp),
                                     )
                                 }
                             }
 
-                            items(pinnedSources, key = { "pinned_${it.id}" }) { source ->
-                                val repo = remember(source.pluginName, repos) { manager.getRepoForPlugin(source.pluginName) }
-                                CsSourceCard(
-                                    source = source,
-                                    isPinned = true,
-                                    repoName = repo?.cleanName,
-                                    manager = manager,
-                                    onBrowse = { browseSource(source) },
-                                    onLatest = if (source.supportsLatest) {
-                                        { browseSource(source, GetRemoteAnime.QUERY_LATEST) }
-                                    } else null,
-                                    onTogglePin = { togglePin(source.id) },
-                                    onDelete = {
-                                        scope.launch {
-                                            manager.uninstallPlugin(source.pluginName)
-                                            context.toast("Deleted ${source.name.removeSuffix(" [CS]").trim()}")
-                                        }
-                                    },
-                                )
+                            if (isPinnedExpanded) {
+                                items(pinnedSources, key = { "pinned_${it.id}" }) { source ->
+                                    val repo = remember(source.pluginName, repos) { manager.getRepoForPlugin(source.pluginName) }
+                                    CsSourceCard(
+                                        source = source,
+                                        isPinned = true,
+                                        repoName = repo?.cleanName,
+                                        manager = manager,
+                                        onBrowse = { browseSource(source) },
+                                        onLatest = if (source.supportsLatest) {
+                                            { browseSource(source, GetRemoteAnime.QUERY_LATEST) }
+                                        } else null,
+                                        onTogglePin = { togglePin(source.id) },
+                                        onDelete = {
+                                            scope.launch {
+                                                manager.uninstallPlugin(source.pluginName)
+                                                context.toast("Deleted ${source.name.removeSuffix(" [CS]").trim()}")
+                                            }
+                                        },
+                                    )
+                                }
                             }
                         }
 
                         // 3. ALL / OTHER SOURCES SECTION
-                        item(key = "header_other") {
-                            val activeRepo = repos.find { it.url == selectedRepoUrl }
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = if (pinnedSources.isNotEmpty() || lastUsedSource != null) 12.dp else 4.dp, bottom = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    text = if (activeRepo != null) {
-                                        "${activeRepo.cleanName} Sources (${otherSources.size})"
-                                    } else if (pinnedSources.isNotEmpty() || lastUsedSource != null) {
-                                        "Installed Sources (${otherSources.size})"
-                                    } else {
-                                        "Installed CS Sources (${otherSources.size})"
-                                    },
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                                if (selectedRepoUrl != null) {
-                                    TextButton(onClick = { selectedRepoUrl = null }) {
-                                        Text("Show All")
+                        if (otherSources.isNotEmpty()) {
+                            item(key = "header_other") {
+                                val activeRepo = repos.find { it.url == selectedRepoUrl }
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable {
+                                            sourcePreferences.isOtherCsSourcesExpanded().set(!isOtherExpanded)
+                                        }
+                                        .padding(horizontal = 4.dp, vertical = 6.dp)
+                                        .padding(top = if (pinnedSources.isNotEmpty() || lastUsedSource != null) 8.dp else 2.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = if (activeRepo != null) {
+                                                "${activeRepo.cleanName} Sources (${otherSources.size})"
+                                            } else if (pinnedSources.isNotEmpty() || lastUsedSource != null) {
+                                                "Installed Sources (${otherSources.size})"
+                                            } else {
+                                                "Installed CS Sources (${otherSources.size})"
+                                            },
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                        )
+                                        if (selectedRepoUrl != null) {
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            TextButton(onClick = { selectedRepoUrl = null }) {
+                                                Text("Show All")
+                                            }
+                                        }
                                     }
+                                    Icon(
+                                        imageVector = if (isOtherExpanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                                        contentDescription = if (isOtherExpanded) "Collapse" else "Expand",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(22.dp),
+                                    )
                                 }
                             }
-                        }
 
-                        items(otherSources, key = { it.id }) { source ->
+                            if (isOtherExpanded) {
+                                items(otherSources, key = { it.id }) { source ->
                             val repo = remember(source.pluginName, repos) { manager.getRepoForPlugin(source.pluginName) }
                             CsSourceCard(
                                 source = source,
@@ -416,13 +453,15 @@ fun Screen.csSourcesTab(): TabContent {
                                         context.toast("Deleted ${source.name.removeSuffix(" [CS]").trim()}")
                                     }
                                 },
-                            )
+                                )
+                            }
                         }
                     }
                 }
             }
-        },
-    )
+        }
+    },
+)
 }
 
 @Composable
