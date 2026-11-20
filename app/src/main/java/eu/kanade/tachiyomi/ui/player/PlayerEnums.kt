@@ -86,8 +86,15 @@ enum class Decoder(val title: String, val value: String) {
     HWPlus("HW+", "mediacodec"),
 }
 
-fun getDecoderFromValue(value: String): Decoder {
-    return Decoder.entries.first { it.value == value }
+fun getDecoderFromValue(value: String?): Decoder {
+    return when (value) {
+        "auto", "auto-safe", "yes" -> Decoder.Auto
+        "auto-copy" -> Decoder.AutoCopy
+        "mediacodec" -> Decoder.HWPlus
+        "mediacodec-copy" -> Decoder.HW
+        "no" -> Decoder.SW
+        else -> Decoder.entries.firstOrNull { it.value == value } ?: Decoder.HW
+    }
 }
 
 enum class Debanding {
