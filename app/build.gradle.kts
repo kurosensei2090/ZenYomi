@@ -19,7 +19,7 @@ android {
     defaultConfig {
         applicationId = "xyz.zenyomi.app"
 
-        versionCode = 49
+        versionCode = 50
         versionName = "1.0.3"
 
         buildConfigField("String", "COMMIT_COUNT", "\"${getCommitCount()}\"")
@@ -231,6 +231,11 @@ dependencies {
     implementation(compose.ui.util)
 
     implementation(androidx.interpolator)
+
+    // AndroidX Media3 (ExoPlayer - CloudStream player engine)
+    implementation("androidx.media3:media3-exoplayer:1.4.1")
+    implementation("androidx.media3:media3-ui:1.4.1")
+    implementation("androidx.media3:media3-datasource-okhttp:1.4.1")
 
     implementation(androidx.paging.runtime)
     implementation(androidx.paging.compose)

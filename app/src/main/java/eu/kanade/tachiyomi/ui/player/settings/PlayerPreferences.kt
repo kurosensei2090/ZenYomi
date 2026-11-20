@@ -5,9 +5,17 @@ import eu.kanade.tachiyomi.ui.player.VideoAspect
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.getEnum
 
+enum class PlayerEngine {
+    MPV,
+    EXOPLAYER,
+    EXTERNAL,
+}
+
 class PlayerPreferences(
     private val preferenceStore: PreferenceStore,
 ) {
+    fun playerEngine() = preferenceStore.getEnum("pref_player_engine", PlayerEngine.MPV)
+
     fun preserveWatchingPosition() = preferenceStore.getBoolean(
         "pref_preserve_watching_position",
         false,

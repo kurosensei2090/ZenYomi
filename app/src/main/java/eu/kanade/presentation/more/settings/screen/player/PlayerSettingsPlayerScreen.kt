@@ -8,6 +8,9 @@ import androidx.compose.runtime.remember
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.presentation.more.settings.screen.SearchableSettings
+import eu.kanade.tachiyomi.ui.player.CLOUDSTREAM_DEBUG
+import eu.kanade.tachiyomi.ui.player.CLOUDSTREAM_PRERELEASE
+import eu.kanade.tachiyomi.ui.player.CLOUDSTREAM_STABLE
 import eu.kanade.tachiyomi.ui.player.JUST_PLAYER
 import eu.kanade.tachiyomi.ui.player.MPV_KT
 import eu.kanade.tachiyomi.ui.player.MPV_KT_PREVIEW
@@ -21,6 +24,7 @@ import eu.kanade.tachiyomi.ui.player.PlayerOrientation
 import eu.kanade.tachiyomi.ui.player.VLC_PLAYER
 import eu.kanade.tachiyomi.ui.player.WEB_VIDEO_CASTER
 import eu.kanade.tachiyomi.ui.player.X_PLAYER
+import eu.kanade.tachiyomi.ui.player.settings.PlayerEngine
 import eu.kanade.tachiyomi.ui.player.settings.PlayerPreferences
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
@@ -46,6 +50,16 @@ object PlayerSettingsPlayerScreen : SearchableSettings {
         val deviceSupportsPip = basePreferences.deviceHasPip()
 
         return listOfNotNull(
+            Preference.PreferenceItem.ListPreference(
+                preference = playerPreferences.playerEngine(),
+                entries = persistentMapOf(
+                    PlayerEngine.MPV to "MPV Player (Default - Full Subtitles & Shaders)",
+                    PlayerEngine.EXOPLAYER to "ExoPlayer (CloudStream Player Engine)",
+                    PlayerEngine.EXTERNAL to "External App Player",
+                ),
+                title = "Preferred Player Engine",
+                subtitle = "Select between MPV, the native ExoPlayer (CloudStream engine), or an external player",
+            ),
             Preference.PreferenceItem.ListPreference(
                 preference = playerPreferences.progressPreference(),
                 entries = persistentMapOf(
@@ -343,4 +357,7 @@ val externalPlayers = listOf(
     NEXT_PLAYER,
     X_PLAYER,
     WEB_VIDEO_CASTER,
+    CLOUDSTREAM_STABLE,
+    CLOUDSTREAM_PRERELEASE,
+    CLOUDSTREAM_DEBUG,
 )

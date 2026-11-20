@@ -96,8 +96,11 @@ import eu.kanade.tachiyomi.ui.entries.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.more.NewUpdateScreen
 import eu.kanade.tachiyomi.ui.more.OnboardingScreen
+import eu.kanade.tachiyomi.ui.player.ExoPlayerActivity
 import eu.kanade.tachiyomi.ui.player.ExternalIntents
 import eu.kanade.tachiyomi.ui.player.PlayerActivity
+import eu.kanade.tachiyomi.ui.player.settings.PlayerEngine
+import eu.kanade.tachiyomi.ui.player.settings.PlayerPreferences
 import eu.kanade.tachiyomi.util.system.dpToPx
 import eu.kanade.tachiyomi.util.system.isNavigationBarNeedsScrim
 import eu.kanade.tachiyomi.util.system.openInBrowser
@@ -614,7 +617,10 @@ class MainActivity : BaseActivity() {
             videoIndex: Int = -1,
             hosterList: List<Hoster>? = null,
         ) {
-            if (extPlayer) {
+            val playerPrefs = Injekt.get<PlayerPreferences>()
+            val engine = playerPrefs.playerEngine().get()
+
+            if (extPlayer || engine == PlayerEngine.EXTERNAL) {
                 val intent = try {
                     ExternalIntents.newIntent(context, animeId, episodeId, video)
                 } catch (e: Exception) {
@@ -627,6 +633,14 @@ class MainActivity : BaseActivity() {
                 } else {
                     context.startActivity(intent)
                 }
+            } else if (engine == PlayerEngine.EXOPLAYER) {
+                context.startActivity(
+                    ExoPlayerActivity.newIntent(
+                        context,
+                        animeId,
+                        episodeId,
+                    ),
+                )
             } else {
                 context.startActivity(
                     PlayerActivity.newIntent(
