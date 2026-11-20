@@ -14,7 +14,10 @@ import eu.kanade.tachiyomi.data.library.anime.AnimeLibraryUpdateJob
 import eu.kanade.tachiyomi.data.library.manga.MangaLibraryUpdateJob
 import eu.kanade.tachiyomi.data.updater.AppUpdateDownloadJob
 import eu.kanade.tachiyomi.ui.main.MainActivity
+import eu.kanade.tachiyomi.ui.player.ExoPlayerActivity
 import eu.kanade.tachiyomi.ui.player.PlayerActivity
+import eu.kanade.tachiyomi.ui.player.settings.PlayerEngine
+import eu.kanade.tachiyomi.ui.player.settings.PlayerPreferences
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import eu.kanade.tachiyomi.util.system.cancelNotification
 import eu.kanade.tachiyomi.util.system.getParcelableExtraCompat
@@ -244,7 +247,14 @@ class NotificationReceiver : BroadcastReceiver() {
         val anime = runBlocking { getAnime.await(animeId) }
         val episode = runBlocking { getEpisode.await(episodeId) }
         if (anime != null && episode != null) {
-            val intent = PlayerActivity.newIntent(context, anime.id, episode.id).apply {
+            val playerPrefs = Injekt.get<PlayerPreferences>()
+            val engine = playerPrefs.playerEngine().get()
+            val newIntent = if (engine == PlayerEngine.EXOPLAYER) {
+                ExoPlayerActivity.newIntent(context, anime.id, episode.id)
+            } else {
+                PlayerActivity.newIntent(context, anime.id, episode.id)
+            }
+            val intent = newIntent.apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
             context.startActivity(intent)
@@ -613,7 +623,13 @@ class NotificationReceiver : BroadcastReceiver() {
          * @param episode episode that needs to be opened
          */
         internal fun openEpisodePendingActivity(context: Context, anime: Anime, episode: Episode): PendingIntent {
-            val newIntent = PlayerActivity.newIntent(context, anime.id, episode.id)
+            val playerPrefs = Injekt.get<PlayerPreferences>()
+            val engine = playerPrefs.playerEngine().get()
+            val newIntent = if (engine == PlayerEngine.EXOPLAYER) {
+                ExoPlayerActivity.newIntent(context, anime.id, episode.id)
+            } else {
+                PlayerActivity.newIntent(context, anime.id, episode.id)
+            }
             return PendingIntent.getActivity(
                 context,
                 anime.id.hashCode(),

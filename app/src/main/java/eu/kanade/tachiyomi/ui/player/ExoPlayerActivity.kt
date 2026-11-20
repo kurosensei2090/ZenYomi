@@ -33,7 +33,9 @@ import eu.kanade.tachiyomi.ui.player.loader.EpisodeLoader
 import eu.kanade.tachiyomi.ui.player.loader.HosterLoader
 import eu.kanade.tachiyomi.ui.player.settings.PlayerPreferences
 import eu.kanade.tachiyomi.util.system.toast
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import logcat.LogPriority
@@ -193,26 +195,46 @@ class ExoPlayerActivity : BaseActivity() {
 
     private fun initExoPlayer(video: Video, startPositionSeconds: Long) {
         val client = networkHelper.client.newBuilder().build()
-        val dataSourceFactory = OkHttpDataSource.Factory(client).apply {
+        val httpDataSourceFactory = OkHttpDataSource.Factory(client).apply {
             setUserAgent(networkHelper.defaultUserAgentProvider())
             val headersMap = mutableMapOf<String, String>()
             video.headers?.forEach { (k, v) ->
-                headersMap[k.toString()] = v.toString()
+                headersMap[k] = v
             }
             if (headersMap.isNotEmpty()) {
                 setDefaultRequestProperties(headersMap)
             }
         }
+        val dataSourceFactory = androidx.media3.datasource.DefaultDataSource.Factory(this, httpDataSourceFactory)
 
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
         val exo = ExoPlayer.Builder(this)
             .setMediaSourceFactory(mediaSourceFactory)
+            .setSeekBackIncrementMs(10000L)
+            .setSeekForwardIncrementMs(10000L)
             .build()
 
         player = exo
         playerView?.player = exo
 
-        val mediaItem = MediaItem.fromUri(video.videoUrl)
+        val mediaItemBuilder = MediaItem.Builder().setUri(video.videoUrl)
+        if (video.subtitleTracks.isNotEmpty()) {
+            val subtitleConfigs = video.subtitleTracks.map { track ->
+                val mimeType = when {
+                    track.url.endsWith(".vtt", ignoreCase = true) -> androidx.media3.common.MimeTypes.TEXT_VTT
+                    track.url.endsWith(".srt", ignoreCase = true) -> androidx.media3.common.MimeTypes.APPLICATION_SUBRIP
+                    track.url.endsWith(".ass", ignoreCase = true) || track.url.endsWith(".ssa", ignoreCase = true) -> androidx.media3.common.MimeTypes.TEXT_SSA
+                    else -> androidx.media3.common.MimeTypes.APPLICATION_SUBRIP
+                }
+                MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(track.url))
+                    .setMimeType(mimeType)
+                    .setLanguage(track.lang)
+                    .setSelectionFlags(androidx.media3.common.C.SELECTION_FLAG_DEFAULT)
+                    .build()
+            }
+            mediaItemBuilder.setSubtitleConfigurations(subtitleConfigs)
+        }
+        val mediaItem = mediaItemBuilder.build()
         exo.setMediaItem(mediaItem)
 
         if (startPositionSeconds > 0) {
@@ -244,11 +266,11 @@ class ExoPlayerActivity : BaseActivity() {
         val currentPositionSec = exo.currentPosition / 1000L
         val totalSec = exo.duration / 1000L
 
-        if (currentPositionSec > 0 && totalSec > 0) {
+        if (totalSec > 0 && currentPositionSec >= 0) {
             val progressThreshold = playerPreferences.progressPreference().get()
             val isWatched = (currentPositionSec.toFloat() / totalSec.toFloat()) >= progressThreshold
 
-            lifecycleScope.launch(Dispatchers.IO) {
+            CoroutineScope(Dispatchers.IO + NonCancellable).launch {
                 updateEpisode.await(
                     EpisodeUpdate(
                         id = episode.id,
@@ -272,7 +294,7 @@ class ExoPlayerActivity : BaseActivity() {
         val exo = player ?: return
         val totalSec = exo.duration / 1000L
 
-        lifecycleScope.launch(Dispatchers.IO) {
+        CoroutineScope(Dispatchers.IO + NonCancellable).launch {
             updateEpisode.await(
                 EpisodeUpdate(
                     id = episode.id,
@@ -287,6 +309,13 @@ class ExoPlayerActivity : BaseActivity() {
                     seenAt = Date(),
                 ),
             )
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            hideSystemUI()
         }
     }
 

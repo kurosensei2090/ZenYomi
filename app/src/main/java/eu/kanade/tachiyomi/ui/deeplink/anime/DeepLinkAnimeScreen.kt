@@ -13,7 +13,12 @@ import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.ui.browse.anime.source.globalsearch.GlobalAnimeSearchScreen
 import eu.kanade.tachiyomi.ui.entries.anime.AnimeScreen
+import eu.kanade.tachiyomi.ui.player.ExoPlayerActivity
 import eu.kanade.tachiyomi.ui.player.PlayerActivity
+import eu.kanade.tachiyomi.ui.player.settings.PlayerEngine
+import eu.kanade.tachiyomi.ui.player.settings.PlayerPreferences
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.stringResource
@@ -59,11 +64,22 @@ class DeepLinkAnimeScreen(
                         )
                     } else {
                         navigator.pop()
-                        PlayerActivity.newIntent(
-                            context,
-                            resultState.anime.id,
-                            resultState.episodeId,
-                        ).also(context::startActivity)
+                        val playerPrefs = Injekt.get<PlayerPreferences>()
+                        val engine = playerPrefs.playerEngine().get()
+                        val intent = if (engine == PlayerEngine.EXOPLAYER) {
+                            ExoPlayerActivity.newIntent(
+                                context,
+                                resultState.anime.id,
+                                resultState.episodeId,
+                            )
+                        } else {
+                            PlayerActivity.newIntent(
+                                context,
+                                resultState.anime.id,
+                                resultState.episodeId,
+                            )
+                        }
+                        context.startActivity(intent)
                     }
                 }
             }
