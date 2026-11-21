@@ -10,7 +10,7 @@ class DecoderPreferences(
     fun tryHWDecoding() = preferenceStore.getBoolean("pref_try_hwdec", true)
     fun gpuNext() = preferenceStore.getBoolean("pref_gpu_next", false)
     fun videoDebanding() = preferenceStore.getEnum("pref_video_debanding", Debanding.None)
-    fun useYUV420P() = preferenceStore.getBoolean("use_yuv420p", true)
+    fun useYUV420P() = preferenceStore.getBoolean("use_yuv420p", false)
 
     // Non-preferences
 
