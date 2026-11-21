@@ -213,6 +213,7 @@ class ExoPlayerActivity : BaseActivity() {
     private var isSubtitleDisabledState = mutableStateOf(false)
     private var isInPipModeState = mutableStateOf(false)
     private var pipReceiver: BroadcastReceiver? = null
+    private var isPipClosing = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -675,19 +676,33 @@ class ExoPlayerActivity : BaseActivity() {
         }
     }
 
+    private fun releasePlayerAndFinish() {
+        unregisterPipReceiver()
+        saveProgress()
+        player?.let { p ->
+            try {
+                p.stop()
+                p.clearMediaItems()
+                p.release()
+            } catch (_: Throwable) {}
+        }
+        player = null
+        playerView = null
+        if (!isFinishing) {
+            finish()
+        }
+    }
+
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         isInPipModeState.value = isInPictureInPictureMode
         playerView?.useController = false
         if (!isInPictureInPictureMode) {
             unregisterPipReceiver()
-            if (isFinishing) {
-                saveProgress()
-                player?.stop()
-                player?.release()
-                player = null
-                playerView = null
+            if (isPipClosing || isFinishing) {
+                releasePlayerAndFinish()
             }
         } else {
+            isPipClosing = false
             updatePipParams()
             registerPipReceiver()
             player?.play()
@@ -698,7 +713,7 @@ class ExoPlayerActivity : BaseActivity() {
 
     override fun onPause() {
         super.onPause()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode && !isFinishing) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode && !isFinishing && !isPipClosing) {
             return
         }
         saveProgress()
@@ -707,27 +722,23 @@ class ExoPlayerActivity : BaseActivity() {
 
     override fun onStop() {
         super.onStop()
-        if (isFinishing || !isInPictureInPictureMode) {
-            saveProgress()
-            player?.pause()
-            if (isFinishing) {
-                unregisterPipReceiver()
-                player?.stop()
-                player?.release()
-                player = null
-                playerView = null
-            }
+        saveProgress()
+        player?.pause()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) {
+            isPipClosing = true
+            releasePlayerAndFinish()
+            return
+        }
+
+        if (isFinishing || isPipClosing) {
+            releasePlayerAndFinish()
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        unregisterPipReceiver()
-        saveProgress()
-        player?.stop()
-        player?.release()
-        player = null
-        playerView = null
+        releasePlayerAndFinish()
     }
 
     // -------------------------------------------------------------
