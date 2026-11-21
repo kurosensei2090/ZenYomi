@@ -119,13 +119,36 @@ fun Screen.csSourcesTab(): TabContent {
             val isPinnedExpanded by sourcePreferences.isPinnedCsSourcesExpanded().collectAsState()
             val isOtherExpanded by sourcePreferences.isOtherCsSourcesExpanded().collectAsState()
 
-            var selectedRepoUrl by remember { mutableStateOf<String?>(null) }
+            val savedRepoFilter by sourcePreferences.lastSelectedCsRepoFilter().collectAsState()
+
+            val activeReposWithCounts = remember(repos, sources) {
+                repos.mapNotNull { repo ->
+                    val normRepo = manager.normalizeRepoUrl(repo.url).trimEnd('/')
+                    val count = sources.count { source ->
+                        val pRepo = manager.getRepoForPlugin(source.pluginName)
+                        val pNorm = pRepo?.url?.let { manager.normalizeRepoUrl(it).trimEnd('/') }
+                        pNorm == normRepo || pRepo?.url == repo.url
+                    }
+                    if (count > 0) repo to count else null
+                }
+            }
+
+            val selectedRepoUrl = remember(savedRepoFilter, activeReposWithCounts) {
+                if (savedRepoFilter.isNotBlank() && activeReposWithCounts.any {
+                    it.first.url == savedRepoFilter ||
+                    manager.normalizeRepoUrl(it.first.url).trimEnd('/') == manager.normalizeRepoUrl(savedRepoFilter).trimEnd('/')
+                }) {
+                    savedRepoFilter
+                } else {
+                    null
+                }
+            }
 
             val filteredSources = remember(sources, selectedRepoUrl, repos) {
                 if (selectedRepoUrl == null) {
                     sources
                 } else {
-                    val normSelected = manager.normalizeRepoUrl(selectedRepoUrl!!).trimEnd('/')
+                    val normSelected = manager.normalizeRepoUrl(selectedRepoUrl).trimEnd('/')
                     sources.filter { source ->
                         val repo = manager.getRepoForPlugin(source.pluginName)
                         val repoNorm = repo?.url?.let { manager.normalizeRepoUrl(it).trimEnd('/') }
@@ -245,8 +268,8 @@ fun Screen.csSourcesTab(): TabContent {
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        // Repository Filter Bar (when multiple repositories connected)
-                        if (repos.size > 1) {
+                        // Repository Filter Bar (when multiple repositories have installed sources)
+                        if (activeReposWithCounts.size > 1) {
                             item(key = "repo_filter_bar") {
                                 LazyRow(
                                     modifier = Modifier
@@ -257,18 +280,23 @@ fun Screen.csSourcesTab(): TabContent {
                                     item {
                                         FilterChip(
                                             selected = selectedRepoUrl == null,
-                                            onClick = { selectedRepoUrl = null },
+                                            onClick = { sourcePreferences.lastSelectedCsRepoFilter().set("") },
                                             label = { Text("All (${sources.size})") },
                                         )
                                     }
-                                    items(repos, key = { it.url }) { repo ->
-                                        val count = sources.count { source ->
-                                            manager.getRepoForPlugin(source.pluginName)?.url == repo.url
-                                        }
+                                    items(activeReposWithCounts, key = { it.first.url }) { (repo, count) ->
+                                        val isSelected = selectedRepoUrl != null && (
+                                            selectedRepoUrl == repo.url ||
+                                            manager.normalizeRepoUrl(selectedRepoUrl).trimEnd('/') == manager.normalizeRepoUrl(repo.url).trimEnd('/')
+                                        )
                                         FilterChip(
-                                            selected = selectedRepoUrl == repo.url,
+                                            selected = isSelected,
                                             onClick = {
-                                                selectedRepoUrl = if (selectedRepoUrl == repo.url) null else repo.url
+                                                if (isSelected) {
+                                                    sourcePreferences.lastSelectedCsRepoFilter().set("")
+                                                } else {
+                                                    sourcePreferences.lastSelectedCsRepoFilter().set(repo.url)
+                                                }
                                             },
                                             label = { Text("${repo.cleanName} ($count)") },
                                         )
@@ -418,7 +446,7 @@ fun Screen.csSourcesTab(): TabContent {
                                         )
                                         if (selectedRepoUrl != null) {
                                             Spacer(modifier = Modifier.width(4.dp))
-                                            TextButton(onClick = { selectedRepoUrl = null }) {
+                                            TextButton(onClick = { sourcePreferences.lastSelectedCsRepoFilter().set("") }) {
                                                 Text("Show All")
                                             }
                                         }

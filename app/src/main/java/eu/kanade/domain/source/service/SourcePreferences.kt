@@ -138,6 +138,8 @@ class SourcePreferences(
 
     fun isOtherCsSourcesExpanded() = preferenceStore.getBoolean("pref_other_cs_sources_expanded", true)
 
+    fun lastSelectedCsRepoFilter() = preferenceStore.getString("pref_last_selected_cs_repo_filter", "")
+
     enum class DataSaver {
         NONE,
         BANDWIDTH_HERO,
