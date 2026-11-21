@@ -26,9 +26,12 @@ import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import logcat.LogPriority
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.Headers.Companion.toHeaders
 import okhttp3.OkHttpClient
@@ -420,13 +423,44 @@ class CloudStreamAnimeSource(
         }
 
         try {
-            withTimeoutOrNull(30_000L) {
-                api.loadLinks(
-                    data = episode.url,
-                    isCasting = false,
-                    subtitleCallback = onSubtitle,
-                    callback = onLink,
-                )
+            coroutineScope {
+                val loadJob = launch(Dispatchers.IO) {
+                    try {
+                        api.loadLinks(
+                            data = episode.url,
+                            isCasting = false,
+                            subtitleCallback = onSubtitle,
+                            callback = onLink,
+                        )
+                    } catch (e: Throwable) {
+                        logcat(LogPriority.DEBUG, e) { "api.loadLinks completed or stopped for ${episode.name}" }
+                    }
+                }
+
+                val maxWaitMs = 40_000L
+                val pollIntervalMs = 200L
+                var waitedMs = 0L
+
+                while (loadJob.isActive && waitedMs < maxWaitMs) {
+                    delay(pollIntervalMs)
+                    waitedMs += pollIntervalMs
+
+                    // Fast-start eager yield:
+                    // If we have collected 3+ links after 1.5s, or at least 1 link after 3.5s,
+                    // yield immediately to the player so users don't wait 30+ seconds for slow/dead hosters!
+                    if (videos.size >= 3 && waitedMs >= 1_500L) {
+                        logcat(LogPriority.INFO) { "Fast-start: Eagerly yielding ${videos.size} links after ${waitedMs}ms" }
+                        break
+                    }
+                    if (videos.isNotEmpty() && waitedMs >= 3_500L) {
+                        logcat(LogPriority.INFO) { "Fast-start: Yielding available ${videos.size} links after ${waitedMs}ms" }
+                        break
+                    }
+                }
+
+                if (loadJob.isActive) {
+                    loadJob.cancel()
+                }
             }
         } catch (e: Throwable) {
             logcat(LogPriority.ERROR, e) { "Failed to load links for ${episode.name}" }
