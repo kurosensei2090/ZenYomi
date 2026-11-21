@@ -1,8 +1,11 @@
 package eu.kanade.tachiyomi.ui.player
 
+import android.annotation.SuppressLint
 import android.app.PictureInPictureParams
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.media.AudioManager
@@ -209,6 +212,7 @@ class ExoPlayerActivity : BaseActivity() {
     private var selectedQualityLabelState = mutableStateOf("Auto")
     private var isSubtitleDisabledState = mutableStateOf(false)
     private var isInPipModeState = mutableStateOf(false)
+    private var pipReceiver: BroadcastReceiver? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -232,6 +236,7 @@ class ExoPlayerActivity : BaseActivity() {
                     saveProgress()
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
                         playerPreferences.enablePip().get() &&
+                        playerPreferences.pipOnExit().get() &&
                         player?.isPlaying == true
                     ) {
                         enterPip()
@@ -402,12 +407,14 @@ class ExoPlayerActivity : BaseActivity() {
             object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     isPlayingState.value = isPlaying
+                    updatePipParams()
                 }
 
                 override fun onPlaybackStateChanged(state: Int) {
                     isBufferingState.value = (state == Player.STATE_BUFFERING)
                     if (state == Player.STATE_READY) {
                         durationState.longValue = exo.duration.coerceAtLeast(0L)
+                        updatePipParams()
                     } else if (state == Player.STATE_ENDED) {
                         markEpisodeSeen()
                         playNextEpisodeIfExists()
@@ -470,11 +477,24 @@ class ExoPlayerActivity : BaseActivity() {
         exo.playWhenReady = true
     }
 
+    private fun playPreviousEpisodeIfExists() {
+        val currIdx = allEpisodes.indexOfFirst { it.id == episodeId }
+        if (currIdx > 0) {
+            val prev = allEpisodes[currIdx - 1]
+            if (playerPreferences.pipEpisodeToasts().get()) {
+                toast("Playing: ${prev.name}")
+            }
+            loadEpisodeAndPlay(prev.id, 0L)
+        }
+    }
+
     private fun playNextEpisodeIfExists() {
         val currIdx = allEpisodes.indexOfFirst { it.id == episodeId }
         if (currIdx != -1 && currIdx < allEpisodes.size - 1) {
             val next = allEpisodes[currIdx + 1]
-            toast("Playing next: ${next.name}")
+            if (playerPreferences.pipEpisodeToasts().get()) {
+                toast("Playing: ${next.name}")
+            }
             loadEpisodeAndPlay(next.id, 0L)
         }
     }
@@ -531,25 +551,72 @@ class ExoPlayerActivity : BaseActivity() {
         }
     }
 
-    private fun enterPip() {
+    private fun createPipParams(): PictureInPictureParams {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            error("PiP is not supported on Android < O")
+        }
+        val builder = PictureInPictureParams.Builder()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val animeTitle = animeTitleState.value
+            val epName = episodeNameState.value
+            if (animeTitle.isNotBlank()) {
+                builder.setTitle(animeTitle)
+            }
+            if (epName.isNotBlank()) {
+                builder.setSubtitle(epName)
+            }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val autoEnter = playerPreferences.pipOnExit().get()
+            val isPlaying = player?.isPlaying == true
+            builder.setAutoEnterEnabled(isPlaying && autoEnter)
+            builder.setSeamlessResizeEnabled(isPlaying && autoEnter)
+        }
+        val currIdx = allEpisodes.indexOfFirst { it.id == episodeId }
+        val actions = createPipActions(
+            context = this,
+            isPaused = player?.isPlaying != true,
+            replaceWithPrevious = playerPreferences.pipReplaceWithPrevious().get(),
+            playlistCount = allEpisodes.size,
+            playlistPosition = currIdx.coerceAtLeast(0),
+        )
+        builder.setActions(actions)
+
+        try {
+            val videoFormat = player?.videoFormat
+            if (videoFormat != null && videoFormat.width > 0 && videoFormat.height > 0) {
+                val ratio = videoFormat.width.toFloat() / videoFormat.height.toFloat()
+                if (ratio in 0.42f..2.38f) {
+                    builder.setAspectRatio(Rational(videoFormat.width, videoFormat.height))
+                } else {
+                    builder.setAspectRatio(Rational(16, 9))
+                }
+            } else {
+                builder.setAspectRatio(Rational(16, 9))
+            }
+        } catch (_: Throwable) {
+            builder.setAspectRatio(Rational(16, 9))
+        }
+
+        return builder.build()
+    }
+
+    private fun updatePipParams() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             try {
-                val params = PictureInPictureParams.Builder()
-                    .setAspectRatio(Rational(16, 9))
-                    .build()
-                enterPictureInPictureMode(params)
+                if (isInPictureInPictureMode) {
+                    setPictureInPictureParams(createPipParams())
+                }
             } catch (_: Throwable) {}
         }
     }
 
-    override fun onUserLeaveHint() {
-        super.onUserLeaveHint()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-            playerPreferences.pipOnExit().get() &&
-            playerPreferences.enablePip().get() &&
-            player?.isPlaying == true
-        ) {
-            enterPip()
+    private fun enterPip() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                val params = createPipParams()
+                enterPictureInPictureMode(params)
+            } catch (_: Throwable) {}
         }
     }
 
@@ -570,18 +637,68 @@ class ExoPlayerActivity : BaseActivity() {
         exo.trackSelectionParameters = params.build()
     }
 
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
+    private fun registerPipReceiver() {
+        if (pipReceiver == null) {
+            pipReceiver = object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    if (intent == null || intent.action != PIP_INTENTS_FILTER) return
+                    when (intent.getIntExtra(PIP_INTENT_ACTION, 0)) {
+                        PIP_PAUSE -> player?.pause()
+                        PIP_PLAY -> player?.play()
+                        PIP_NEXT -> playNextEpisodeIfExists()
+                        PIP_PREVIOUS -> playPreviousEpisodeIfExists()
+                        PIP_SKIP -> {
+                            player?.let { p ->
+                                val target = (p.currentPosition + 10_000L).coerceIn(0L, p.duration.coerceAtLeast(0L))
+                                p.seekTo(target)
+                            }
+                        }
+                    }
+                    updatePipParams()
+                }
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(pipReceiver, IntentFilter(PIP_INTENTS_FILTER), RECEIVER_NOT_EXPORTED)
+            } else {
+                registerReceiver(pipReceiver, IntentFilter(PIP_INTENTS_FILTER))
+            }
+        }
+    }
+
+    private fun unregisterPipReceiver() {
+        pipReceiver?.let {
+            try {
+                unregisterReceiver(it)
+            } catch (_: Exception) {}
+            pipReceiver = null
+        }
+    }
+
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
-        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        playerView?.useController = false
         isInPipModeState.value = isInPictureInPictureMode
-        if (isInPictureInPictureMode) {
+        playerView?.useController = false
+        if (!isInPictureInPictureMode) {
+            unregisterPipReceiver()
+            if (isFinishing) {
+                saveProgress()
+                player?.stop()
+                player?.release()
+                player = null
+                playerView = null
+            }
+        } else {
+            updatePipParams()
+            registerPipReceiver()
             player?.play()
         }
+
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
     }
 
     override fun onPause() {
         super.onPause()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode && !isFinishing) {
             return
         }
         saveProgress()
@@ -590,16 +707,24 @@ class ExoPlayerActivity : BaseActivity() {
 
     override fun onStop() {
         super.onStop()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) {
-            return
+        if (isFinishing || !isInPictureInPictureMode) {
+            saveProgress()
+            player?.pause()
+            if (isFinishing) {
+                unregisterPipReceiver()
+                player?.stop()
+                player?.release()
+                player = null
+                playerView = null
+            }
         }
-        saveProgress()
-        player?.pause()
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        unregisterPipReceiver()
         saveProgress()
+        player?.stop()
         player?.release()
         player = null
         playerView = null
@@ -650,10 +775,6 @@ class ExoPlayerActivity : BaseActivity() {
         var seekOverlayText by remember { mutableStateOf<String?>(null) }
 
         val scope = rememberCoroutineScope()
-
-        if (isInPipMode) {
-            return
-        }
 
         // Position tracking ticker
         LaunchedEffect(player, isPlaying) {
@@ -712,12 +833,13 @@ class ExoPlayerActivity : BaseActivity() {
                 modifier = Modifier.fillMaxSize(),
             )
 
-            // Gesture Detector Layer
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .pointerInput(isLocked, isPlaying) {
-                        detectTapGestures(
+            if (!isInPipMode) {
+                // Gesture Detector Layer
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(isLocked, isPlaying) {
+                            detectTapGestures(
                             onPress = {
                                 if (!isLocked && isPlaying) {
                                     val originalSpeed = player?.playbackParameters?.speed ?: 1.0f
@@ -1031,11 +1153,7 @@ class ExoPlayerActivity : BaseActivity() {
                             onClick = {
                                 notifyInteraction()
                                 saveProgress()
-                                val currIdx = allEpisodes.indexOfFirst { it.id == episodeId }
-                                if (currIdx > 0) {
-                                    val prev = allEpisodes[currIdx - 1]
-                                    loadEpisodeAndPlay(prev.id, 0L)
-                                }
+                                playPreviousEpisodeIfExists()
                             },
                             modifier = Modifier.size(54.dp),
                         ) {
@@ -1132,11 +1250,7 @@ class ExoPlayerActivity : BaseActivity() {
                             onClick = {
                                 notifyInteraction()
                                 saveProgress()
-                                val currIdx = allEpisodes.indexOfFirst { it.id == episodeId }
-                                if (currIdx != -1 && currIdx < allEpisodes.size - 1) {
-                                    val next = allEpisodes[currIdx + 1]
-                                    loadEpisodeAndPlay(next.id, 0L)
-                                }
+                                playNextEpisodeIfExists()
                             },
                             modifier = Modifier.size(54.dp),
                         ) {
@@ -1712,6 +1826,7 @@ class ExoPlayerActivity : BaseActivity() {
             }
         }
     }
+}
 
     @Composable
     private fun CloudStreamActionButton(
