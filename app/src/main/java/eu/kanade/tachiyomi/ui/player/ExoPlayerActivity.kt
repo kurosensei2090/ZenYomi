@@ -54,6 +54,7 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.outlined.Subtitles
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -96,6 +97,8 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -133,6 +136,17 @@ import tachiyomi.domain.source.anime.service.AnimeSourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.util.Date
+
+/**
+ * Track representation for ExoPlayer audio and subtitle stream tracks.
+ */
+data class ExoTrackInfo(
+    val group: Tracks.Group,
+    val trackIndex: Int,
+    val name: String,
+    val language: String,
+    val isSelected: Boolean,
+)
 
 /**
  * Native Android ExoPlayer engine with full CloudStream player UI overlay and episode switching.
@@ -173,6 +187,9 @@ class ExoPlayerActivity : BaseActivity() {
     private var hasNextEpisodeState = mutableStateOf(false)
     private var episodesListState = mutableStateOf<List<Episode>>(emptyList())
     private var hostersListState = mutableStateOf<List<Hoster>>(emptyList())
+    private var availableSubtitlesState = mutableStateOf<List<ExoTrackInfo>>(emptyList())
+    private var availableAudioTracksState = mutableStateOf<List<ExoTrackInfo>>(emptyList())
+    private var isSubtitleDisabledState = mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -378,6 +395,36 @@ class ExoPlayerActivity : BaseActivity() {
                     }
                 }
 
+                override fun onTracksChanged(tracks: Tracks) {
+                    val subs = mutableListOf<ExoTrackInfo>()
+                    val audios = mutableListOf<ExoTrackInfo>()
+
+                    for (group in tracks.groups) {
+                        val type = group.type
+                        if (type == C.TRACK_TYPE_TEXT) {
+                            for (i in 0 until group.length) {
+                                val format = group.getTrackFormat(i)
+                                val lang = format.language?.uppercase() ?: ""
+                                val label = format.label ?: if (lang.isNotEmpty()) lang else "Subtitle ${subs.size + 1}"
+                                val selected = group.isTrackSelected(i)
+                                subs.add(ExoTrackInfo(group, i, label, lang, selected))
+                            }
+                        } else if (type == C.TRACK_TYPE_AUDIO) {
+                            for (i in 0 until group.length) {
+                                val format = group.getTrackFormat(i)
+                                val lang = format.language?.uppercase() ?: ""
+                                val label = format.label ?: if (lang.isNotEmpty()) lang else "Audio ${audios.size + 1}"
+                                val selected = group.isTrackSelected(i)
+                                audios.add(ExoTrackInfo(group, i, label, lang, selected))
+                            }
+                        }
+                    }
+
+                    availableSubtitlesState.value = subs
+                    availableAudioTracksState.value = audios
+                    isSubtitleDisabledState.value = exo.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
+                }
+
                 override fun onPlayerError(error: PlaybackException) {
                     logcat(LogPriority.WARN, error) { "ExoPlayer error: ${error.message}" }
                     toast("Playback error: ${error.message}")
@@ -509,6 +556,9 @@ class ExoPlayerActivity : BaseActivity() {
         val hasNextEpisode by hasNextEpisodeState
         val episodesList by episodesListState
         val hostersList by hostersListState
+        val availableSubtitles by availableSubtitlesState
+        val availableAudioTracks by availableAudioTracksState
+        val isSubtitleDisabled by isSubtitleDisabledState
 
         var currentPosition by remember { mutableLongStateOf(0L) }
         var isScrubbing by remember { mutableStateOf(false) }
@@ -522,6 +572,7 @@ class ExoPlayerActivity : BaseActivity() {
         var showEpisodesDialog by remember { mutableStateOf(false) }
         var showServersDialog by remember { mutableStateOf(false) }
         var showSpeedDialog by remember { mutableStateOf(false) }
+        var showTracksDialog by remember { mutableStateOf(false) }
 
         var brightnessOverlay by remember { mutableStateOf<Float?>(null) }
         var volumeOverlay by remember { mutableStateOf<Float?>(null) }
@@ -835,7 +886,16 @@ class ExoPlayerActivity : BaseActivity() {
                             }
                         }
 
-                        Spacer(Modifier.size(48.dp))
+                        IconButton(onClick = {
+                            notifyInteraction()
+                            showTracksDialog = true
+                        }) {
+                            Icon(
+                                Icons.Outlined.Subtitles,
+                                contentDescription = "Audio & Subtitles",
+                                tint = Color.White,
+                            )
+                        }
                     }
 
                     // CENTER CONTROLS: Prev, -10s, Play/Pause/Buffer, +10s, Next
@@ -1102,6 +1162,15 @@ class ExoPlayerActivity : BaseActivity() {
                                 },
                             )
 
+                            CloudStreamActionButton(
+                                icon = Icons.Outlined.Subtitles,
+                                label = "Tracks",
+                                onClick = {
+                                    notifyInteraction()
+                                    showTracksDialog = true
+                                },
+                            )
+
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && playerPreferences.enablePip().get()) {
                                 CloudStreamActionButton(
                                     icon = Icons.Default.PictureInPictureAlt,
@@ -1275,6 +1344,163 @@ class ExoPlayerActivity : BaseActivity() {
                     confirmButton = {
                         TextButton(onClick = { showSpeedDialog = false }) {
                             Text("Cancel")
+                        }
+                    },
+                )
+            }
+
+            // DIALOG: Audio & Subtitles
+            if (showTracksDialog) {
+                AlertDialog(
+                    onDismissRequest = { showTracksDialog = false },
+                    title = { Text("Audio & Subtitles") },
+                    text = {
+                        LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 350.dp)) {
+                            // Subtitles Section
+                            item {
+                                Text(
+                                    text = "SUBTITLES",
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                                )
+                            }
+                            item {
+                                val isOff = isSubtitleDisabled
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            player?.let { p ->
+                                                p.trackSelectionParameters = p.trackSelectionParameters
+                                                    .buildUpon()
+                                                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                                                    .build()
+                                            }
+                                            isSubtitleDisabledState.value = true
+                                        }
+                                        .padding(vertical = 10.dp, horizontal = 8.dp),
+                                ) {
+                                    Text(
+                                        text = "Off",
+                                        fontWeight = if (isOff) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isOff) MaterialTheme.colorScheme.primary else Color.White,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    if (isOff) {
+                                        Text(
+                                            text = "✓",
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                    }
+                                }
+                            }
+                            if (availableSubtitles.isEmpty()) {
+                                item {
+                                    Text(
+                                        text = "No subtitle tracks found.",
+                                        fontSize = 12.sp,
+                                        color = Color.Gray,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    )
+                                }
+                            } else {
+                                items(availableSubtitles) { sub ->
+                                    val isCurrent = sub.isSelected && !isSubtitleDisabled
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                player?.let { p ->
+                                                    p.trackSelectionParameters = p.trackSelectionParameters
+                                                        .buildUpon()
+                                                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                                                        .setOverrideForType(TrackSelectionOverride(sub.group.mediaTrackGroup, sub.trackIndex))
+                                                        .build()
+                                                }
+                                                isSubtitleDisabledState.value = false
+                                            }
+                                            .padding(vertical = 10.dp, horizontal = 8.dp),
+                                    ) {
+                                        Text(
+                                            text = sub.name,
+                                            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isCurrent) MaterialTheme.colorScheme.primary else Color.White,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        if (isCurrent) {
+                                            Text(
+                                                text = "✓",
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.Bold,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Audio Section
+                            item {
+                                Text(
+                                    text = "AUDIO TRACKS",
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
+                                )
+                            }
+                            if (availableAudioTracks.isEmpty()) {
+                                item {
+                                    Text(
+                                        text = "Default audio only.",
+                                        fontSize = 12.sp,
+                                        color = Color.Gray,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    )
+                                }
+                            } else {
+                                items(availableAudioTracks) { audio ->
+                                    val isCurrent = audio.isSelected
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                player?.let { p ->
+                                                    p.trackSelectionParameters = p.trackSelectionParameters
+                                                        .buildUpon()
+                                                        .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+                                                        .setOverrideForType(TrackSelectionOverride(audio.group.mediaTrackGroup, audio.trackIndex))
+                                                        .build()
+                                                }
+                                            }
+                                            .padding(vertical = 10.dp, horizontal = 8.dp),
+                                    ) {
+                                        Text(
+                                            text = audio.name,
+                                            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isCurrent) MaterialTheme.colorScheme.primary else Color.White,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        if (isCurrent) {
+                                            Text(
+                                                text = "✓",
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.Bold,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showTracksDialog = false }) {
+                            Text("Done")
                         }
                     },
                 )
