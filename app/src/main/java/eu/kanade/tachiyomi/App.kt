@@ -90,8 +90,15 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
         patchInjekt()
 
         com.lagradost.cloudstream3.AcraApplication.context = this
+        try {
+            val donationPrefs = getSharedPreferences("phisher_donation_prefs", Context.MODE_PRIVATE)
+            donationPrefs.edit().putLong("phisher_donation_last_shown_v2", Long.MAX_VALUE).apply()
+        } catch (_: Throwable) {}
+
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
-            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
+            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
+                com.lagradost.cloudstream3.CommonActivity.activity = activity
+            }
             override fun onActivityStarted(activity: Activity) {
                 com.lagradost.cloudstream3.CommonActivity.activity = activity
             }

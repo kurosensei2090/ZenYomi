@@ -13,12 +13,27 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 
+private sealed class ParResult<out T> {
+    data class Success<out T>(val value: T) : ParResult<T>()
+    object Failure : ParResult<Nothing>()
+}
+
 /**
  * Iterable parallel operations
  */
 suspend fun <A, B> Iterable<A>.amap(f: suspend (A) -> B): List<B> = coroutineScope {
     ensureActive()
-    map { async { f(it) } }.awaitAll()
+    map {
+        async {
+            try {
+                ParResult.Success(f(it))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                ParResult.Failure
+            }
+        }
+    }.awaitAll().filterIsInstance<ParResult.Success<B>>().map { it.value }
 }
 
 suspend fun <A, B> Iterable<A>.apmap(f: suspend (A) -> B): List<B> = amap(f)
@@ -30,20 +45,60 @@ suspend fun <A, B> Iterable<A>.parMap(f: suspend (A) -> B): List<B> = amap(f)
  */
 suspend fun <A, B> List<A>.amap(f: suspend (A) -> B): List<B> = coroutineScope {
     ensureActive()
-    map { async { f(it) } }.awaitAll()
+    map {
+        async {
+            try {
+                ParResult.Success(f(it))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                ParResult.Failure
+            }
+        }
+    }.awaitAll().filterIsInstance<ParResult.Success<B>>().map { it.value }
 }
 
 fun <A, B> List<A>.apmap(f: suspend (A) -> B): List<B> = runBlocking {
-    map { async { f(it) } }.awaitAll()
+    map {
+        async {
+            try {
+                ParResult.Success(f(it))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                ParResult.Failure
+            }
+        }
+    }.awaitAll().filterIsInstance<ParResult.Success<B>>().map { it.value }
 }
 
 suspend fun <A, B> List<A>.amapIndexed(f: suspend (index: Int, A) -> B): List<B> = coroutineScope {
     ensureActive()
-    mapIndexed { index, a -> async { f(index, a) } }.awaitAll()
+    mapIndexed { index, a ->
+        async {
+            try {
+                ParResult.Success(f(index, a))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                ParResult.Failure
+            }
+        }
+    }.awaitAll().filterIsInstance<ParResult.Success<B>>().map { it.value }
 }
 
 fun <A, B> List<A>.apmapIndexed(f: suspend (index: Int, A) -> B): List<B> = runBlocking {
-    mapIndexed { index, a -> async { f(index, a) } }.awaitAll()
+    mapIndexed { index, a ->
+        async {
+            try {
+                ParResult.Success(f(index, a))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                ParResult.Failure
+            }
+        }
+    }.awaitAll().filterIsInstance<ParResult.Success<B>>().map { it.value }
 }
 
 /**
@@ -51,11 +106,31 @@ fun <A, B> List<A>.apmapIndexed(f: suspend (index: Int, A) -> B): List<B> = runB
  */
 suspend fun <K, V, R> Map<out K, V>.amap(f: suspend (Map.Entry<K, V>) -> R): List<R> = coroutineScope {
     ensureActive()
-    map { async { f(it) } }.awaitAll()
+    map {
+        async {
+            try {
+                ParResult.Success(f(it))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                ParResult.Failure
+            }
+        }
+    }.awaitAll().filterIsInstance<ParResult.Success<R>>().map { it.value }
 }
 
 fun <K, V, R> Map<out K, V>.apmap(f: suspend (Map.Entry<K, V>) -> R): List<R> = runBlocking {
-    map { async { f(it) } }.awaitAll()
+    map {
+        async {
+            try {
+                ParResult.Success(f(it))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                ParResult.Failure
+            }
+        }
+    }.awaitAll().filterIsInstance<ParResult.Success<R>>().map { it.value }
 }
 
 /**
@@ -103,5 +178,5 @@ suspend fun <A, B> Collection<A>.cmap(f: suspend (A) -> B): List<B> =
             } catch (t: Throwable) {
                 Result.failure(t)
             }
-        }.map { it.getOrThrow() }
+        }.mapNotNull { it.getOrNull() }
     }

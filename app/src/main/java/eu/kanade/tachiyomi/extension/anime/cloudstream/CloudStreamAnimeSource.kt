@@ -426,8 +426,13 @@ class CloudStreamAnimeSource(
             coroutineScope {
                 val loadJob = launch(Dispatchers.IO) {
                     try {
+                        val loadData = if (episode.url.contains("anikoto|") && episode.url.startsWith("http", ignoreCase = true)) {
+                            "anikoto|" + episode.url.substringAfter("anikoto|")
+                        } else {
+                            episode.url
+                        }
                         api.loadLinks(
-                            data = episode.url,
+                            data = loadData,
                             isCasting = false,
                             subtitleCallback = onSubtitle,
                             callback = onLink,
@@ -544,12 +549,17 @@ class CloudStreamAnimeSource(
     private suspend fun loadDetailsSafely(url: String): LoadResponse? {
         bindActivityContext()
         val candidates = linkedSetOf<String>()
-        candidates.add(url)
         val fixed = api.fixUrl(url)
         candidates.add(fixed)
+        candidates.add(url)
         if (url.startsWith(baseUrl, ignoreCase = true)) {
             val rel = url.removePrefix(baseUrl).trimStart('/')
-            if (rel.isNotBlank()) candidates.add(rel)
+            if (rel.isNotBlank()) {
+                candidates.add(rel)
+                candidates.add("/$rel")
+            }
+        } else if (url.startsWith("/")) {
+            candidates.add(url.trimStart('/'))
         }
         for (candidate in candidates) {
             try {
