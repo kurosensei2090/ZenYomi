@@ -96,6 +96,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -105,6 +106,7 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -218,6 +220,22 @@ class ExoPlayerActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        volumeControlStream = AudioManager.STREAM_MUSIC
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        if (audioManager != null) {
+            val curVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+            val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+            val isMuted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                audioManager.isStreamMute(AudioManager.STREAM_MUSIC)
+            } else {
+                curVol == 0
+            }
+            if (isMuted || curVol == 0) {
+                val targetVol = (maxVol / 2).coerceAtLeast(1)
+                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
+            }
+        }
+
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         hideSystemUI()
 
@@ -263,6 +281,12 @@ class ExoPlayerActivity : BaseActivity() {
         insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         insetsController.hide(WindowInsetsCompat.Type.systemBars())
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        volumeControlStream = AudioManager.STREAM_MUSIC
+        hideSystemUI()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -368,11 +392,29 @@ class ExoPlayerActivity : BaseActivity() {
         }
         val dataSourceFactory = DefaultDataSource.Factory(this, httpDataSourceFactory)
 
+        val audioAttributes = AudioAttributes.Builder()
+            .setUsage(C.USAGE_MEDIA)
+            .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+            .build()
+
+        val renderersFactory = DefaultRenderersFactory(this).apply {
+            setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+            setEnableDecoderFallback(true)
+        }
+
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
-        val exo = ExoPlayer.Builder(this)
+        val exo = ExoPlayer.Builder(this, renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
+            .setAudioAttributes(audioAttributes, true)
+            .setHandleAudioBecomingNoisy(true)
             .setSeekBackIncrementMs(10000L)
             .setSeekForwardIncrementMs(10000L)
+            .build()
+
+        exo.volume = 1.0f
+        exo.trackSelectionParameters = exo.trackSelectionParameters
+            .buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
             .build()
 
         player = exo
@@ -458,6 +500,14 @@ class ExoPlayerActivity : BaseActivity() {
 
                     availableSubtitlesState.value = subs
                     availableAudioTracksState.value = audios
+                    if (audios.isNotEmpty() && !audios.any { it.isSelected }) {
+                        val firstAudio = audios.first()
+                        exo.trackSelectionParameters = exo.trackSelectionParameters
+                            .buildUpon()
+                            .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+                            .setOverrideForType(TrackSelectionOverride(firstAudio.group.mediaTrackGroup, firstAudio.trackIndex))
+                            .build()
+                    }
                     val distinctVideos = videos.groupBy { it.height }
                         .mapValues { entry -> entry.value.maxByOrNull { it.bitrate } ?: entry.value.first() }
                         .values
