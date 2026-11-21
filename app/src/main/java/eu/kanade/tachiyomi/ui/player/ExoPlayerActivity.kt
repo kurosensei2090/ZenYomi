@@ -42,6 +42,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.BrightnessMedium
 import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.PictureInPictureAlt
@@ -149,6 +150,21 @@ data class ExoTrackInfo(
 )
 
 /**
+ * Track representation for ExoPlayer video quality stream tracks.
+ */
+data class ExoVideoQualityInfo(
+    val group: Tracks.Group,
+    val trackIndex: Int,
+    val height: Int,
+    val width: Int,
+    val bitrate: Int,
+    val isSelected: Boolean,
+) {
+    val resolutionLabel: String
+        get() = "${height}p" + (if (width > 0) " (${width}x${height})" else "")
+}
+
+/**
  * Native Android ExoPlayer engine with full CloudStream player UI overlay and episode switching.
  */
 class ExoPlayerActivity : BaseActivity() {
@@ -189,7 +205,10 @@ class ExoPlayerActivity : BaseActivity() {
     private var hostersListState = mutableStateOf<List<Hoster>>(emptyList())
     private var availableSubtitlesState = mutableStateOf<List<ExoTrackInfo>>(emptyList())
     private var availableAudioTracksState = mutableStateOf<List<ExoTrackInfo>>(emptyList())
+    private var availableVideoQualitiesState = mutableStateOf<List<ExoVideoQualityInfo>>(emptyList())
+    private var selectedQualityLabelState = mutableStateOf("Auto")
     private var isSubtitleDisabledState = mutableStateOf(false)
+    private var isInPipModeState = mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -398,6 +417,7 @@ class ExoPlayerActivity : BaseActivity() {
                 override fun onTracksChanged(tracks: Tracks) {
                     val subs = mutableListOf<ExoTrackInfo>()
                     val audios = mutableListOf<ExoTrackInfo>()
+                    val videos = mutableListOf<ExoVideoQualityInfo>()
 
                     for (group in tracks.groups) {
                         val type = group.type
@@ -417,11 +437,24 @@ class ExoPlayerActivity : BaseActivity() {
                                 val selected = group.isTrackSelected(i)
                                 audios.add(ExoTrackInfo(group, i, label, lang, selected))
                             }
+                        } else if (type == C.TRACK_TYPE_VIDEO) {
+                            for (i in 0 until group.length) {
+                                val format = group.getTrackFormat(i)
+                                if (format.height > 0) {
+                                    val selected = group.isTrackSelected(i)
+                                    videos.add(ExoVideoQualityInfo(group, i, format.height, format.width, format.bitrate, selected))
+                                }
+                            }
                         }
                     }
 
                     availableSubtitlesState.value = subs
                     availableAudioTracksState.value = audios
+                    val distinctVideos = videos.groupBy { it.height }
+                        .mapValues { entry -> entry.value.maxByOrNull { it.bitrate } ?: entry.value.first() }
+                        .values
+                        .sortedByDescending { it.height }
+                    availableVideoQualitiesState.value = distinctVideos
                     isSubtitleDisabledState.value = exo.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
                 }
 
@@ -520,13 +553,46 @@ class ExoPlayerActivity : BaseActivity() {
         }
     }
 
+    private fun selectVideoQuality(track: ExoVideoQualityInfo?) {
+        val exo = player ?: return
+        val params = exo.trackSelectionParameters.buildUpon()
+        if (track == null) {
+            params.clearOverridesOfType(C.TRACK_TYPE_VIDEO)
+            params.setMaxVideoSize(Int.MAX_VALUE, Int.MAX_VALUE)
+            selectedQualityLabelState.value = "Auto"
+            qualityInfoState.value = currentVideo?.videoTitle?.let { "$it • Auto" } ?: "Auto"
+        } else {
+            params.clearOverridesOfType(C.TRACK_TYPE_VIDEO)
+            params.setOverrideForType(TrackSelectionOverride(track.group.mediaTrackGroup, track.trackIndex))
+            selectedQualityLabelState.value = "${track.height}p"
+            qualityInfoState.value = currentVideo?.videoTitle?.let { "$it • ${track.height}p" } ?: "${track.height}p"
+        }
+        exo.trackSelectionParameters = params.build()
+    }
+
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         playerView?.useController = false
+        isInPipModeState.value = isInPictureInPictureMode
+        if (isInPictureInPictureMode) {
+            player?.play()
+        }
     }
 
     override fun onPause() {
         super.onPause()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) {
+            return
+        }
+        saveProgress()
+        player?.pause()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) {
+            return
+        }
         saveProgress()
         player?.pause()
     }
@@ -558,7 +624,10 @@ class ExoPlayerActivity : BaseActivity() {
         val hostersList by hostersListState
         val availableSubtitles by availableSubtitlesState
         val availableAudioTracks by availableAudioTracksState
+        val availableVideoQualities by availableVideoQualitiesState
+        val selectedQualityLabel by selectedQualityLabelState
         val isSubtitleDisabled by isSubtitleDisabledState
+        val isInPipMode by isInPipModeState
 
         var currentPosition by remember { mutableLongStateOf(0L) }
         var isScrubbing by remember { mutableStateOf(false) }
@@ -571,14 +640,20 @@ class ExoPlayerActivity : BaseActivity() {
 
         var showEpisodesDialog by remember { mutableStateOf(false) }
         var showServersDialog by remember { mutableStateOf(false) }
+        var showQualityDialog by remember { mutableStateOf(false) }
         var showSpeedDialog by remember { mutableStateOf(false) }
         var showTracksDialog by remember { mutableStateOf(false) }
 
+        var is2xSpeedActive by remember { mutableStateOf(false) }
         var brightnessOverlay by remember { mutableStateOf<Float?>(null) }
         var volumeOverlay by remember { mutableStateOf<Float?>(null) }
         var seekOverlayText by remember { mutableStateOf<String?>(null) }
 
         val scope = rememberCoroutineScope()
+
+        if (isInPipMode) {
+            return
+        }
 
         // Position tracking ticker
         LaunchedEffect(player, isPlaying) {
@@ -641,8 +716,27 @@ class ExoPlayerActivity : BaseActivity() {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(isLocked) {
+                    .pointerInput(isLocked, isPlaying) {
                         detectTapGestures(
+                            onPress = {
+                                if (!isLocked && isPlaying) {
+                                    val originalSpeed = player?.playbackParameters?.speed ?: 1.0f
+                                    val speedJob = scope.launch {
+                                        delay(450L)
+                                        is2xSpeedActive = true
+                                        player?.setPlaybackSpeed(2.0f)
+                                    }
+                                    try {
+                                        tryAwaitRelease()
+                                    } finally {
+                                        speedJob.cancel()
+                                        if (is2xSpeedActive) {
+                                            is2xSpeedActive = false
+                                            player?.setPlaybackSpeed(originalSpeed)
+                                        }
+                                    }
+                                }
+                            },
                             onTap = {
                                 if (isLocked) {
                                     showUnlockBriefly = !showUnlockBriefly
@@ -770,6 +864,36 @@ class ExoPlayerActivity : BaseActivity() {
                 }
             }
 
+            // 2X Speed Press-and-Hold Indicator
+            if (is2xSpeedActive) {
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color.Black.copy(alpha = 0.8f),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 28.dp),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Speed,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "2X Speed",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                        )
+                    }
+                }
+            }
+
             // Lock Overlay Button
             if (isLocked) {
                 AnimatedVisibility(
@@ -882,20 +1006,15 @@ class ExoPlayerActivity : BaseActivity() {
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     textAlign = TextAlign.Center,
+                                    modifier = Modifier.clickable {
+                                        notifyInteraction()
+                                        showQualityDialog = true
+                                    },
                                 )
                             }
                         }
 
-                        IconButton(onClick = {
-                            notifyInteraction()
-                            showTracksDialog = true
-                        }) {
-                            Icon(
-                                Icons.Outlined.Subtitles,
-                                contentDescription = "Audio & Subtitles",
-                                tint = Color.White,
-                            )
-                        }
+                        Spacer(Modifier.width(48.dp))
                     }
 
                     // CENTER CONTROLS: Prev, -10s, Play/Pause/Buffer, +10s, Next
@@ -1098,6 +1217,15 @@ class ExoPlayerActivity : BaseActivity() {
                                 onClick = {
                                     notifyInteraction()
                                     showServersDialog = true
+                                },
+                            )
+
+                            CloudStreamActionButton(
+                                icon = Icons.Default.HighQuality,
+                                label = "Quality",
+                                onClick = {
+                                    notifyInteraction()
+                                    showQualityDialog = true
                                 },
                             )
 
@@ -1344,6 +1472,83 @@ class ExoPlayerActivity : BaseActivity() {
                     confirmButton = {
                         TextButton(onClick = { showSpeedDialog = false }) {
                             Text("Cancel")
+                        }
+                    },
+                )
+            }
+
+            // DIALOG: Video Quality
+            if (showQualityDialog) {
+                AlertDialog(
+                    onDismissRequest = { showQualityDialog = false },
+                    title = { Text("Video Quality") },
+                    text = {
+                        LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp)) {
+                            // Auto option
+                            item {
+                                val isAuto = selectedQualityLabel == "Auto"
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            selectVideoQuality(null)
+                                            showQualityDialog = false
+                                        }
+                                        .padding(vertical = 12.dp, horizontal = 8.dp),
+                                ) {
+                                    Text(
+                                        text = "Auto (Adaptive)",
+                                        fontWeight = if (isAuto) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isAuto) MaterialTheme.colorScheme.primary else Color.White,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    if (isAuto) {
+                                        Text(
+                                            text = "Active",
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (availableVideoQualities.isNotEmpty()) {
+                                items(availableVideoQualities) { q ->
+                                    val isSelected = selectedQualityLabel == "${q.height}p"
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                selectVideoQuality(q)
+                                                showQualityDialog = false
+                                            }
+                                            .padding(vertical = 12.dp, horizontal = 8.dp),
+                                    ) {
+                                        Text(
+                                            text = q.resolutionLabel,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        if (isSelected) {
+                                            Text(
+                                                text = "Active",
+                                                fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.Bold,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showQualityDialog = false }) {
+                            Text("Close")
                         }
                     },
                 )
