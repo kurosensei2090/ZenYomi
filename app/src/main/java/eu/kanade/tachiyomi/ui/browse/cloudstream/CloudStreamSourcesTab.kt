@@ -137,16 +137,12 @@ fun Screen.csSourcesTab(): TabContent {
             val pinnedSources = remember(filteredSources, pinnedSourcesSet) {
                 filteredSources.filter { it.id.toString() in pinnedSourcesSet }
             }
-            val lastUsedSource = remember(filteredSources, lastUsedSourceId, pinnedSourcesSet) {
-                if (lastUsedSourceId.toString() !in pinnedSourcesSet) {
-                    filteredSources.firstOrNull { it.id == lastUsedSourceId }
-                } else {
-                    null
-                }
+            val lastUsedSource = remember(filteredSources, lastUsedSourceId) {
+                filteredSources.firstOrNull { it.id == lastUsedSourceId }
             }
-            val otherSources = remember(filteredSources, pinnedSourcesSet, lastUsedSource) {
+            val otherSources = remember(filteredSources, pinnedSourcesSet) {
                 filteredSources.filter {
-                    it.id.toString() !in pinnedSourcesSet && it.id != lastUsedSource?.id
+                    it.id.toString() !in pinnedSourcesSet
                 }.sortedBy { it.name.lowercase() }
             }
 
@@ -310,7 +306,7 @@ fun Screen.csSourcesTab(): TabContent {
                                 val repo = remember(lastUsedSource.pluginName, repos) { manager.getRepoForPlugin(lastUsedSource.pluginName) }
                                 CsSourceCard(
                                     source = lastUsedSource,
-                                    isPinned = false,
+                                    isPinned = lastUsedSource.id.toString() in pinnedSourcesSet,
                                     repoName = repo?.cleanName,
                                     manager = manager,
                                     onBrowse = { browseSource(lastUsedSource) },
@@ -437,7 +433,7 @@ fun Screen.csSourcesTab(): TabContent {
                             }
 
                             if (isOtherExpanded) {
-                                items(otherSources, key = { it.id }) { source ->
+                                items(otherSources, key = { "other_${it.id}" }) { source ->
                             val repo = remember(source.pluginName, repos) { manager.getRepoForPlugin(source.pluginName) }
                             CsSourceCard(
                                 source = source,
