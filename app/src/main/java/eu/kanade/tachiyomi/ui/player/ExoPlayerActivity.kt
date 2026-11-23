@@ -108,7 +108,12 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioCapabilities
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MediaSource
+import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import eu.kanade.presentation.theme.TachiyomiTheme
@@ -120,8 +125,10 @@ import eu.kanade.tachiyomi.ui.player.loader.EpisodeLoader
 import eu.kanade.tachiyomi.ui.player.loader.HosterLoader
 import eu.kanade.tachiyomi.ui.player.settings.PlayerPreferences
 import eu.kanade.tachiyomi.util.system.toast
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -194,7 +201,10 @@ class ExoPlayerActivity : BaseActivity() {
     private val upsertAnimeHistory: UpsertAnimeHistory by lazy { Injekt.get() }
     private val sourceManager: AnimeSourceManager by lazy { Injekt.get() }
 
+    private var currentLoadingJob: Job? = null
+
     // State holders
+    private var currentEpisodeIdState = mutableLongStateOf(-1L)
     private var isPlayingState = mutableStateOf(false)
     private var isBufferingState = mutableStateOf(true)
     private var positionState = mutableLongStateOf(0L)
@@ -241,6 +251,7 @@ class ExoPlayerActivity : BaseActivity() {
 
         animeId = intent.getLongExtra(EXTRA_ANIME_ID, -1L)
         episodeId = intent.getLongExtra(EXTRA_EPISODE_ID, -1L)
+        currentEpisodeIdState.longValue = episodeId
 
         if (animeId == -1L || episodeId == -1L) {
             toast("Invalid episode parameters")
@@ -297,9 +308,17 @@ class ExoPlayerActivity : BaseActivity() {
     }
 
     private fun loadEpisodeAndPlay(targetEpisodeId: Long, resumePosition: Long = -1L) {
-        lifecycleScope.launch {
+        currentLoadingJob?.cancel()
+        currentLoadingJob = lifecycleScope.launch {
             try {
+                // Halt any currently running playback immediately so it doesn't continue in the background
+                player?.stop()
+                player?.clearMediaItems()
+
                 isBufferingState.value = true
+                currentEpisodeIdState.longValue = targetEpisodeId
+                episodeId = targetEpisodeId
+
                 val anime = currentAnime ?: withContext(Dispatchers.IO) { getAnime.await(animeId) }
                 if (anime == null) {
                     toast("Failed to load anime details")
@@ -318,12 +337,11 @@ class ExoPlayerActivity : BaseActivity() {
                 val episode = allEpisodes.find { it.id == targetEpisodeId }
                 if (episode == null) {
                     toast("Episode not found")
-                    finish()
+                    isBufferingState.value = false
                     return@launch
                 }
 
                 currentEpisode = episode
-                episodeId = episode.id
                 episodeNameState.value = episode.name
 
                 val currIdx = allEpisodes.indexOfFirst { it.id == episode.id }
@@ -369,6 +387,7 @@ class ExoPlayerActivity : BaseActivity() {
                 val startPos = if (resumePosition >= 0) resumePosition else episode.lastSecondSeen
                 initExoPlayer(bestVideo, startPos)
             } catch (t: Throwable) {
+                if (t is CancellationException) throw t
                 logcat(LogPriority.ERROR, t) { "ExoPlayer loading error: ${t.message}" }
                 toast("Error loading episode: ${t.message}")
                 isBufferingState.value = false
@@ -377,8 +396,6 @@ class ExoPlayerActivity : BaseActivity() {
     }
 
     private fun initExoPlayer(video: Video, startPositionSeconds: Long) {
-        player?.release()
-
         val client = networkHelper.client.newBuilder().build()
         val httpDataSourceFactory = OkHttpDataSource.Factory(client).apply {
             setUserAgent(networkHelper.defaultUserAgentProvider())
@@ -391,35 +408,133 @@ class ExoPlayerActivity : BaseActivity() {
             }
         }
         val dataSourceFactory = DefaultDataSource.Factory(this, httpDataSourceFactory)
+        val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
 
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
             .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
             .build()
 
-        val renderersFactory = DefaultRenderersFactory(this).apply {
+        val renderersFactory = object : DefaultRenderersFactory(this) {
+            override fun buildAudioSink(
+                context: Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean,
+            ): AudioSink? {
+                return DefaultAudioSink.Builder(context)
+                    .setAudioCapabilities(AudioCapabilities.getCapabilities(context))
+                    .setEnableFloatOutput(true)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .build()
+            }
+        }.apply {
             setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
             setEnableDecoderFallback(true)
         }
 
-        val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
-        val exo = ExoPlayer.Builder(this, renderersFactory)
+        // Reuse existing player if available to prevent Surface detachment or recreation flicker
+        val exo = player ?: ExoPlayer.Builder(this, renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
             .setSeekBackIncrementMs(10000L)
             .setSeekForwardIncrementMs(10000L)
-            .build()
+            .build().also { newPlayer ->
+                player = newPlayer
+                playerView?.player = newPlayer
 
+                newPlayer.addListener(
+                    object : Player.Listener {
+                        override fun onIsPlayingChanged(isPlaying: Boolean) {
+                            isPlayingState.value = isPlaying
+                            updatePipParams()
+                        }
+
+                        override fun onPlaybackStateChanged(state: Int) {
+                            isBufferingState.value = (state == Player.STATE_BUFFERING)
+                            if (state == Player.STATE_READY) {
+                                durationState.longValue = newPlayer.duration.coerceAtLeast(0L)
+                                updatePipParams()
+                            } else if (state == Player.STATE_ENDED) {
+                                markEpisodeSeen()
+                                playNextEpisodeIfExists()
+                            }
+                        }
+
+                        override fun onTracksChanged(tracks: Tracks) {
+                            val subs = mutableListOf<ExoTrackInfo>()
+                            val audios = mutableListOf<ExoTrackInfo>()
+                            val videos = mutableListOf<ExoVideoQualityInfo>()
+
+                            for (group in tracks.groups) {
+                                val type = group.type
+                                val isAudio = type == C.TRACK_TYPE_AUDIO ||
+                                    (group.length > 0 && group.getTrackFormat(0).sampleMimeType?.startsWith("audio/") == true)
+                                if (type == C.TRACK_TYPE_TEXT) {
+                                    for (i in 0 until group.length) {
+                                        val format = group.getTrackFormat(i)
+                                        val lang = format.language?.uppercase() ?: ""
+                                        val label = format.label ?: if (lang.isNotEmpty()) lang else "Subtitle ${subs.size + 1}"
+                                        val selected = group.isTrackSelected(i)
+                                        subs.add(ExoTrackInfo(group, i, label, lang, selected))
+                                    }
+                                } else if (isAudio) {
+                                    for (i in 0 until group.length) {
+                                        val format = group.getTrackFormat(i)
+                                        val lang = format.language?.uppercase() ?: ""
+                                        val label = format.label ?: if (lang.isNotEmpty()) lang else "Audio ${audios.size + 1}"
+                                        val selected = group.isTrackSelected(i)
+                                        audios.add(ExoTrackInfo(group, i, label, lang, selected))
+                                    }
+                                } else if (type == C.TRACK_TYPE_VIDEO) {
+                                    for (i in 0 until group.length) {
+                                        val format = group.getTrackFormat(i)
+                                        if (format.height > 0) {
+                                            val selected = group.isTrackSelected(i)
+                                            videos.add(ExoVideoQualityInfo(group, i, format.height, format.width, format.bitrate, selected))
+                                        }
+                                    }
+                                }
+                            }
+
+                            availableSubtitlesState.value = subs
+                            availableAudioTracksState.value = audios
+                            if (audios.isNotEmpty() && !audios.any { it.isSelected }) {
+                                val firstAudio = audios.first()
+                                newPlayer.trackSelectionParameters = newPlayer.trackSelectionParameters
+                                    .buildUpon()
+                                    .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+                                    .setOverrideForType(TrackSelectionOverride(firstAudio.group.mediaTrackGroup, firstAudio.trackIndex))
+                                    .build()
+                            }
+                            val distinctVideos = videos.groupBy { it.height }
+                                .mapValues { entry -> entry.value.maxByOrNull { it.bitrate } ?: entry.value.first() }
+                                .values
+                                .sortedByDescending { it.height }
+                            availableVideoQualitiesState.value = distinctVideos
+                            isSubtitleDisabledState.value = newPlayer.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
+                        }
+
+                        override fun onPlayerError(error: PlaybackException) {
+                            logcat(LogPriority.WARN, error) { "ExoPlayer error: ${error.message}" }
+                            toast("Playback error: ${error.message}")
+                            isBufferingState.value = false
+                        }
+                    },
+                )
+            }
+
+        // Clean slate for new media: clear stale overrides, reset volume
+        exo.stop()
+        exo.clearMediaItems()
         exo.volume = 1.0f
         exo.trackSelectionParameters = exo.trackSelectionParameters
             .buildUpon()
+            .clearOverrides()
             .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
             .build()
 
-        player = exo
-        playerView?.player = exo
-
+        // Build main video media item
         val mediaItemBuilder = MediaItem.Builder().setUri(video.videoUrl)
         if (video.subtitleTracks.isNotEmpty()) {
             val subtitleConfigs = video.subtitleTracks.map { track ->
@@ -438,98 +553,35 @@ class ExoPlayerActivity : BaseActivity() {
             mediaItemBuilder.setSubtitleConfigurations(subtitleConfigs)
         }
         val mediaItem = mediaItemBuilder.build()
-        exo.setMediaItem(mediaItem)
+        val videoSource = mediaSourceFactory.createMediaSource(mediaItem)
 
+        // Support separate audio tracks (e.g. multi-audio streams / external audio tracks)
+        val mediaSource: MediaSource = if (video.audioTracks.isNotEmpty()) {
+            val sources = mutableListOf<MediaSource>(videoSource)
+            for (audioTrack in video.audioTracks) {
+                val audioItem = MediaItem.Builder()
+                    .setUri(audioTrack.url)
+                    .build()
+                sources.add(mediaSourceFactory.createMediaSource(audioItem))
+            }
+            MergingMediaSource(*sources.toTypedArray())
+        } else {
+            videoSource
+        }
+
+        exo.setMediaSource(mediaSource)
         exo.setPlaybackSpeed(speedState.value)
 
         if (startPositionSeconds > 0) {
             exo.seekTo(startPositionSeconds * 1000L)
         }
 
-        exo.addListener(
-            object : Player.Listener {
-                override fun onIsPlayingChanged(isPlaying: Boolean) {
-                    isPlayingState.value = isPlaying
-                    updatePipParams()
-                }
-
-                override fun onPlaybackStateChanged(state: Int) {
-                    isBufferingState.value = (state == Player.STATE_BUFFERING)
-                    if (state == Player.STATE_READY) {
-                        durationState.longValue = exo.duration.coerceAtLeast(0L)
-                        updatePipParams()
-                    } else if (state == Player.STATE_ENDED) {
-                        markEpisodeSeen()
-                        playNextEpisodeIfExists()
-                    }
-                }
-
-                override fun onTracksChanged(tracks: Tracks) {
-                    val subs = mutableListOf<ExoTrackInfo>()
-                    val audios = mutableListOf<ExoTrackInfo>()
-                    val videos = mutableListOf<ExoVideoQualityInfo>()
-
-                    for (group in tracks.groups) {
-                        val type = group.type
-                        if (type == C.TRACK_TYPE_TEXT) {
-                            for (i in 0 until group.length) {
-                                val format = group.getTrackFormat(i)
-                                val lang = format.language?.uppercase() ?: ""
-                                val label = format.label ?: if (lang.isNotEmpty()) lang else "Subtitle ${subs.size + 1}"
-                                val selected = group.isTrackSelected(i)
-                                subs.add(ExoTrackInfo(group, i, label, lang, selected))
-                            }
-                        } else if (type == C.TRACK_TYPE_AUDIO) {
-                            for (i in 0 until group.length) {
-                                val format = group.getTrackFormat(i)
-                                val lang = format.language?.uppercase() ?: ""
-                                val label = format.label ?: if (lang.isNotEmpty()) lang else "Audio ${audios.size + 1}"
-                                val selected = group.isTrackSelected(i)
-                                audios.add(ExoTrackInfo(group, i, label, lang, selected))
-                            }
-                        } else if (type == C.TRACK_TYPE_VIDEO) {
-                            for (i in 0 until group.length) {
-                                val format = group.getTrackFormat(i)
-                                if (format.height > 0) {
-                                    val selected = group.isTrackSelected(i)
-                                    videos.add(ExoVideoQualityInfo(group, i, format.height, format.width, format.bitrate, selected))
-                                }
-                            }
-                        }
-                    }
-
-                    availableSubtitlesState.value = subs
-                    availableAudioTracksState.value = audios
-                    if (audios.isNotEmpty() && !audios.any { it.isSelected }) {
-                        val firstAudio = audios.first()
-                        exo.trackSelectionParameters = exo.trackSelectionParameters
-                            .buildUpon()
-                            .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
-                            .setOverrideForType(TrackSelectionOverride(firstAudio.group.mediaTrackGroup, firstAudio.trackIndex))
-                            .build()
-                    }
-                    val distinctVideos = videos.groupBy { it.height }
-                        .mapValues { entry -> entry.value.maxByOrNull { it.bitrate } ?: entry.value.first() }
-                        .values
-                        .sortedByDescending { it.height }
-                    availableVideoQualitiesState.value = distinctVideos
-                    isSubtitleDisabledState.value = exo.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
-                }
-
-                override fun onPlayerError(error: PlaybackException) {
-                    logcat(LogPriority.WARN, error) { "ExoPlayer error: ${error.message}" }
-                    toast("Playback error: ${error.message}")
-                    isBufferingState.value = false
-                }
-            },
-        )
-
         exo.prepare()
         exo.playWhenReady = true
     }
 
     private fun playPreviousEpisodeIfExists() {
-        val currIdx = allEpisodes.indexOfFirst { it.id == episodeId }
+        val currIdx = allEpisodes.indexOfFirst { it.id == currentEpisodeIdState.longValue }
         if (currIdx > 0) {
             val prev = allEpisodes[currIdx - 1]
             if (playerPreferences.pipEpisodeToasts().get()) {
@@ -540,7 +592,7 @@ class ExoPlayerActivity : BaseActivity() {
     }
 
     private fun playNextEpisodeIfExists() {
-        val currIdx = allEpisodes.indexOfFirst { it.id == episodeId }
+        val currIdx = allEpisodes.indexOfFirst { it.id == currentEpisodeIdState.longValue }
         if (currIdx != -1 && currIdx < allEpisodes.size - 1) {
             val next = allEpisodes[currIdx + 1]
             if (playerPreferences.pipEpisodeToasts().get()) {
@@ -727,6 +779,8 @@ class ExoPlayerActivity : BaseActivity() {
     }
 
     private fun releasePlayerAndFinish() {
+        currentLoadingJob?.cancel()
+        currentLoadingJob = null
         unregisterPipReceiver()
         saveProgress()
         player?.let { p ->
@@ -807,6 +861,7 @@ class ExoPlayerActivity : BaseActivity() {
         val hasPrevEpisode by hasPrevEpisodeState
         val hasNextEpisode by hasNextEpisodeState
         val episodesList by episodesListState
+        val currentEpisodeId by currentEpisodeIdState
         val hostersList by hostersListState
         val availableSubtitles by availableSubtitlesState
         val availableAudioTracks by availableAudioTracksState
@@ -1497,7 +1552,7 @@ class ExoPlayerActivity : BaseActivity() {
                     text = {
                         LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp)) {
                             items(episodesList) { ep ->
-                                val isSelected = ep.id == episodeId
+                                val isSelected = ep.id == currentEpisodeId
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier
