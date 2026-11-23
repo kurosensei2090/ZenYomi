@@ -26,11 +26,16 @@ import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import logcat.LogPriority
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.Headers.Companion.toHeaders
@@ -39,6 +44,7 @@ import okhttp3.Request
 import okhttp3.Response
 import tachiyomi.core.common.util.system.logcat
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
 
 @Suppress("OVERRIDE_DEPRECATION")
@@ -357,14 +363,47 @@ class CloudStreamAnimeSource(
             CookieManager.getInstance()?.flush()
         } catch (_: Exception) {}
 
+        cancelExtraction()
+        val isInitialYieldDone = AtomicBoolean(false)
         val videos = CopyOnWriteArrayList<Video>()
         val subtitles = CopyOnWriteArrayList<Track>()
+
+        val isDirectMedia: (String) -> Boolean = { u ->
+            val clean = u.lowercase().substringBefore("?")
+            clean.endsWith(".m3u8") || clean.endsWith(".mp4") || clean.endsWith(".mkv") || clean.endsWith(".ts")
+        }
+
+        val isEmbedUrl: (String) -> Boolean = { u ->
+            !isDirectMedia(u) && (
+                u.contains("pixeldrain.com/u/", ignoreCase = true) ||
+                u.contains("uqload", ignoreCase = true) ||
+                u.contains("streamwish", ignoreCase = true) ||
+                u.contains("wish", ignoreCase = true) ||
+                u.contains("vidhide", ignoreCase = true) ||
+                u.contains("streamhide", ignoreCase = true) ||
+                u.contains("ahvsh", ignoreCase = true) ||
+                u.contains("filelions", ignoreCase = true) ||
+                u.contains("alions", ignoreCase = true) ||
+                u.contains("voe.sx", ignoreCase = true) ||
+                u.contains("mp4upload", ignoreCase = true) ||
+                u.contains("dood", ignoreCase = true) ||
+                u.contains("megamax", ignoreCase = true) ||
+                u.contains("streamruby", ignoreCase = true) ||
+                u.contains("rubyvidhub", ignoreCase = true) ||
+                u.contains("savefiles", ignoreCase = true) ||
+                u.contains("abyss", ignoreCase = true) ||
+                u.contains("vidtube", ignoreCase = true) ||
+                u.contains("playmogo", ignoreCase = true) ||
+                u.contains("embed", ignoreCase = true)
+            )
+        }
 
         val onSubtitle: (SubtitleFile) -> Unit = { sub ->
             subtitles.add(Track(url = sub.url, lang = sub.lang))
         }
 
-        val onLink: (ExtractorLink) -> Unit = { link ->
+        lateinit var onLink: (ExtractorLink) -> Unit
+        onLink = { link ->
             if (link.url.isNotBlank()) {
                 val qualityStr = Qualities.getStringByInt(link.quality)
                 val cleanQuality = if (qualityStr.equals("Unknown", ignoreCase = true)) "" else qualityStr.trim()
@@ -418,89 +457,80 @@ class CloudStreamAnimeSource(
                     subtitleTracks = subtitles.toList(),
                     initialized = true,
                 )
-                videos.add(video)
+                if (videos.none { it.videoUrl == video.videoUrl }) {
+                    videos.add(video)
+                    if (isInitialYieldDone.get()) {
+                        if (isDirectMedia(video.videoUrl)) {
+                            val hosters = listOf(video).toHosterList()
+                            if (hosters.isNotEmpty()) {
+                                logcat(LogPriority.INFO) { "Streaming newly discovered server: ${video.videoTitle} for ${episode.name}" }
+                                discoveredHostersFlow.tryEmit(DiscoveredHostersEvent(episode.url, hosters))
+                            }
+                        } else if (isEmbedUrl(video.videoUrl)) {
+                            extractionScope.launch {
+                                try {
+                                    withTimeoutOrNull(8_000L) {
+                                        com.lagradost.cloudstream3.utils.loadExtractor(
+                                            url = video.videoUrl,
+                                            referer = baseUrl,
+                                            subtitleCallback = onSubtitle,
+                                            callback = onLink,
+                                        )
+                                    }
+                                } catch (_: Throwable) {}
+                            }
+                        }
+                    }
+                }
             }
         }
 
         try {
-            coroutineScope {
-                val loadJob = launch(Dispatchers.IO) {
-                    try {
-                        val loadData = if (episode.url.contains("anikoto|") && episode.url.startsWith("http", ignoreCase = true)) {
-                            "anikoto|" + episode.url.substringAfter("anikoto|")
-                        } else {
-                            episode.url
-                        }
-                        api.loadLinks(
-                            data = loadData,
-                            isCasting = false,
-                            subtitleCallback = onSubtitle,
-                            callback = onLink,
-                        )
-                    } catch (e: Throwable) {
-                        logcat(LogPriority.DEBUG, e) { "api.loadLinks completed or stopped for ${episode.name}" }
+            val loadJob = extractionScope.launch {
+                try {
+                    val loadData = if (episode.url.contains("anikoto|") && episode.url.startsWith("http", ignoreCase = true)) {
+                        "anikoto|" + episode.url.substringAfter("anikoto|")
+                    } else {
+                        episode.url
                     }
+                    api.loadLinks(
+                        data = loadData,
+                        isCasting = false,
+                        subtitleCallback = onSubtitle,
+                        callback = onLink,
+                    )
+                } catch (e: Throwable) {
+                    logcat(LogPriority.DEBUG, e) { "api.loadLinks completed or stopped for ${episode.name}" }
                 }
+            }
+            activeExtractionJob = loadJob
 
-                val maxWaitMs = 40_000L
-                val pollIntervalMs = 200L
-                var waitedMs = 0L
+            val maxWaitMs = 30_000L
+            val pollIntervalMs = 200L
+            var waitedMs = 0L
 
-                while (loadJob.isActive && waitedMs < maxWaitMs) {
-                    delay(pollIntervalMs)
-                    waitedMs += pollIntervalMs
+            while (loadJob.isActive && waitedMs < maxWaitMs) {
+                delay(pollIntervalMs)
+                waitedMs += pollIntervalMs
 
-                    // Fast-start eager yield:
-                    // If we have collected 3+ links after 1.5s, or at least 1 link after 3.5s,
-                    // yield immediately to the player so users don't wait 30+ seconds for slow/dead hosters!
-                    if (videos.size >= 3 && waitedMs >= 1_500L) {
-                        logcat(LogPriority.INFO) { "Fast-start: Eagerly yielding ${videos.size} links after ${waitedMs}ms" }
-                        break
-                    }
-                    if (videos.isNotEmpty() && waitedMs >= 3_500L) {
-                        logcat(LogPriority.INFO) { "Fast-start: Yielding available ${videos.size} links after ${waitedMs}ms" }
-                        break
-                    }
+                // Fast-start eager yield:
+                // If we have collected 3+ links after 1.5s, or at least 1 link after 3.5s,
+                // yield immediately to the player so users don't wait 30+ seconds for slow/dead hosters!
+                if (videos.size >= 3 && waitedMs >= 1_500L) {
+                    logcat(LogPriority.INFO) { "Fast-start: Eagerly yielding ${videos.size} links after ${waitedMs}ms" }
+                    break
                 }
-
-                if (loadJob.isActive) {
-                    loadJob.cancel()
+                if (videos.isNotEmpty() && waitedMs >= 3_500L) {
+                    logcat(LogPriority.INFO) { "Fast-start: Yielding available ${videos.size} links after ${waitedMs}ms" }
+                    break
                 }
             }
         } catch (e: Throwable) {
             logcat(LogPriority.ERROR, e) { "Failed to load links for ${episode.name}" }
         }
 
-        val isDirectMedia: (String) -> Boolean = { u ->
-            val clean = u.lowercase().substringBefore("?")
-            clean.endsWith(".m3u8") || clean.endsWith(".mp4") || clean.endsWith(".mkv") || clean.endsWith(".ts")
-        }
-
-        // Check if any video was added as an embed URL that needs second-pass extraction
-        val embedsToExtract = videos.filter { v ->
-            !isDirectMedia(v.videoUrl) && (
-                v.videoUrl.contains("pixeldrain.com/u/", ignoreCase = true) ||
-                v.videoUrl.contains("uqload", ignoreCase = true) ||
-                v.videoUrl.contains("streamwish", ignoreCase = true) ||
-                v.videoUrl.contains("wish", ignoreCase = true) ||
-                v.videoUrl.contains("vidhide", ignoreCase = true) ||
-                v.videoUrl.contains("streamhide", ignoreCase = true) ||
-                v.videoUrl.contains("ahvsh", ignoreCase = true) ||
-                v.videoUrl.contains("filelions", ignoreCase = true) ||
-                v.videoUrl.contains("alions", ignoreCase = true) ||
-                v.videoUrl.contains("voe.sx", ignoreCase = true) ||
-                v.videoUrl.contains("mp4upload", ignoreCase = true) ||
-                v.videoUrl.contains("dood", ignoreCase = true) ||
-                v.videoUrl.contains("megamax", ignoreCase = true) ||
-                v.videoUrl.contains("streamruby", ignoreCase = true) ||
-                v.videoUrl.contains("rubyvidhub", ignoreCase = true) ||
-                v.videoUrl.contains("savefiles", ignoreCase = true) ||
-                v.videoUrl.contains("abyss", ignoreCase = true) ||
-                v.videoUrl.contains("vidtube", ignoreCase = true) ||
-                v.videoUrl.contains("playmogo", ignoreCase = true) ||
-                v.videoUrl.contains("embed", ignoreCase = true)
-            )
-        }
+        // Check if any initial video was added as an embed URL that needs second-pass extraction
+        val embedsToExtract = videos.filter { v -> isEmbedUrl(v.videoUrl) }
         if (embedsToExtract.isNotEmpty()) {
             videos.removeAll(embedsToExtract.toSet())
             coroutineScope {
@@ -538,12 +568,34 @@ class CloudStreamAnimeSource(
             }
         }
 
-        logcat(LogPriority.INFO) { "Loaded ${videos.size} videos for ${episode.name} from ${api.name}" }
+        isInitialYieldDone.set(true)
+        logcat(LogPriority.INFO) { "Loaded ${videos.size} initial videos for ${episode.name} from ${api.name}. Background extraction continues." }
         return videos.toList()
     }
 
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
         return getVideoList(episode).toHosterList()
+    }
+
+    companion object {
+        data class DiscoveredHostersEvent(
+            val episodeUrl: String,
+            val hosters: List<Hoster>,
+        )
+
+        val discoveredHostersFlow = MutableSharedFlow<DiscoveredHostersEvent>(
+            replay = 0,
+            extraBufferCapacity = 64,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST,
+        )
+
+        private val extractionScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        private var activeExtractionJob: Job? = null
+
+        fun cancelExtraction() {
+            activeExtractionJob?.cancel()
+            activeExtractionJob = null
+        }
     }
 
     private suspend fun loadDetailsSafely(url: String): LoadResponse? {

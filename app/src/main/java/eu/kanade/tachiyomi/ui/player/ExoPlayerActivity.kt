@@ -127,6 +127,7 @@ import androidx.media3.ui.PlayerView
 import eu.kanade.presentation.theme.TachiyomiTheme
 import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.Video
+import eu.kanade.tachiyomi.extension.anime.cloudstream.CloudStreamAnimeSource
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.ui.base.activity.BaseActivity
 import eu.kanade.tachiyomi.ui.player.loader.EpisodeLoader
@@ -302,6 +303,37 @@ class ExoPlayerActivity : BaseActivity() {
             }
         }
 
+        lifecycleScope.launch {
+            CloudStreamAnimeSource.discoveredHostersFlow.collect { event ->
+                val ep = currentEpisode
+                if (ep != null && (ep.url == event.episodeUrl || event.episodeUrl.endsWith(ep.url) || ep.url.endsWith(event.episodeUrl))) {
+                    val updatedList = hostersListState.value.toMutableList()
+                    var hasChanges = false
+                    for (newHoster in event.hosters) {
+                        val existingIdx = updatedList.indexOfFirst { it.hosterName.equals(newHoster.hosterName, ignoreCase = true) }
+                        if (existingIdx != -1) {
+                            val existing = updatedList[existingIdx]
+                            val existingVids = existing.videoList.orEmpty()
+                            val newVids = (newHoster.videoList.orEmpty()).filter { nv ->
+                                existingVids.none { it.videoUrl == nv.videoUrl || it.videoTitle == nv.videoTitle }
+                            }
+                            if (newVids.isNotEmpty()) {
+                                updatedList[existingIdx] = existing.copy(videoList = existingVids + newVids)
+                                hasChanges = true
+                            }
+                        } else {
+                            updatedList.add(newHoster)
+                            hasChanges = true
+                        }
+                    }
+                    if (hasChanges) {
+                        hostersListState.value = updatedList
+                        currentHosters = updatedList
+                    }
+                }
+            }
+        }
+
         loadEpisodeAndPlay(episodeId)
     }
 
@@ -341,6 +373,7 @@ class ExoPlayerActivity : BaseActivity() {
     }
 
     private fun loadEpisodeAndPlay(targetEpisodeId: Long, resumePosition: Long = -1L) {
+        CloudStreamAnimeSource.cancelExtraction()
         currentLoadingJob?.cancel()
         currentLoadingJob = lifecycleScope.launch {
             try {
@@ -963,6 +996,7 @@ class ExoPlayerActivity : BaseActivity() {
     }
 
     override fun onDestroy() {
+        CloudStreamAnimeSource.cancelExtraction()
         super.onDestroy()
         releasePlayerAndFinish()
     }

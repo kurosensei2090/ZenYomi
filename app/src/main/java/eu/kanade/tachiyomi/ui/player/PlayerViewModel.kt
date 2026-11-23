@@ -1476,6 +1476,65 @@ class PlayerViewModel @JvmOverloads constructor(
         updateIsLoadingHosters(false)
     }
 
+    fun appendDiscoveredHosters(newHosters: List<Hoster>) {
+        if (newHosters.isEmpty()) return
+
+        synchronized(this) {
+            val updatedHosterList = _hosterList.value.toMutableList()
+            val updatedStateList = _hosterState.value.toMutableList()
+            val updatedExpandedList = _hosterExpandedList.value.toMutableList()
+
+            var hasChanges = false
+
+            for (newHoster in newHosters) {
+                val existingIndex = updatedHosterList.indexOfFirst {
+                    it.hosterName.equals(newHoster.hosterName, ignoreCase = true)
+                }
+                if (existingIndex != -1) {
+                    val existingHoster = updatedHosterList[existingIndex]
+                    val existingVideos = existingHoster.videoList.orEmpty()
+                    val newVideosToAdd = (newHoster.videoList.orEmpty()).filter { newVid ->
+                        existingVideos.none { it.videoUrl == newVid.videoUrl || it.videoTitle == newVid.videoTitle }
+                    }
+                    if (newVideosToAdd.isNotEmpty()) {
+                        val mergedVideos = existingVideos + newVideosToAdd
+                        val mergedHoster = existingHoster.copy(videoList = mergedVideos)
+                        updatedHosterList[existingIndex] = mergedHoster
+
+                        val existingState = updatedStateList.getOrNull(existingIndex)
+                        if (existingState is HosterState.Ready) {
+                            val mergedState = HosterState.Ready(
+                                name = existingState.name,
+                                videoList = mergedVideos,
+                                videoState = existingState.videoState + List(newVideosToAdd.size) { Video.State.QUEUE },
+                            )
+                            updatedStateList[existingIndex] = mergedState
+                        }
+                        hasChanges = true
+                    }
+                } else {
+                    updatedHosterList.add(newHoster)
+                    updatedExpandedList.add(true)
+                    val videoList = newHoster.videoList.orEmpty()
+                    val newState = HosterState.Ready(
+                        name = newHoster.hosterName,
+                        videoList = videoList,
+                        videoState = List(videoList.size) { Video.State.QUEUE },
+                    )
+                    updatedStateList.add(newState)
+                    hasChanges = true
+                }
+            }
+
+            if (hasChanges) {
+                _hosterList.value = updatedHosterList
+                _hosterExpandedList.value = updatedExpandedList
+                _hosterState.value = updatedStateList
+                logcat(LogPriority.INFO) { "Appended discovered hosters, total hosters: ${updatedHosterList.size}" }
+            }
+        }
+    }
+
     private val isFailingOver = java.util.concurrent.atomic.AtomicBoolean(false)
 
     fun findNextAvailableVideo(excludeHosterIdx: Int = -1, excludeVideoIdx: Int = -1): Pair<Int, Int>? {

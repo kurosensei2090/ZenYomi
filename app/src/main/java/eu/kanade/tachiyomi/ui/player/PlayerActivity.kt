@@ -48,6 +48,7 @@ import androidx.activity.viewModels
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import eu.kanade.tachiyomi.extension.anime.cloudstream.CloudStreamAnimeSource
 import androidx.core.net.toUri
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -199,6 +200,7 @@ class PlayerActivity : BaseActivity() {
         )
 
         viewModel.saveCurrentEpisodeWatchingProgress()
+        CloudStreamAnimeSource.cancelExtraction()
 
         lifecycleScope.launchNonCancellable {
             viewModel.updateIsLoadingEpisode(true)
@@ -265,6 +267,15 @@ class PlayerActivity : BaseActivity() {
             }
             .launchIn(lifecycleScope)
 
+        lifecycleScope.launch {
+            CloudStreamAnimeSource.discoveredHostersFlow.collect { event ->
+                val currentEp = viewModel.currentEpisode.value
+                if (currentEp != null && (currentEp.url == event.episodeUrl || event.episodeUrl.endsWith(currentEp.url) || currentEp.url.endsWith(event.episodeUrl))) {
+                    viewModel.appendDiscoveredHosters(event.hosters)
+                }
+            }
+        }
+
         binding.controls.setContent {
             TachiyomiTheme {
                 PlayerControls(
@@ -317,6 +328,7 @@ class PlayerActivity : BaseActivity() {
 
         MPVLib.removeLogObserver(playerObserver)
         MPVLib.removeObserver(playerObserver)
+        CloudStreamAnimeSource.cancelExtraction()
         player.destroy()
 
         super.onDestroy()
