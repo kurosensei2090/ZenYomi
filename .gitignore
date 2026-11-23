@@ -53,6 +53,34 @@ Thumbs.db
 # Log files
 *.log
 
-# Signing / Keystores
+# Signing, Keystores & Secrets
 *.keystore
 *.jks
+*.p12
+*.pfx
+*.pem
+*.key
+*.pk8
+acra.properties
+secrets.properties
+*.secret
+.env
+.env.*
+
+# Google Services & Auth
+google-services.json
+
+# Crash dumps & Profiling
+*.hprof
+*.dump
+
+# Python & Temporary files
+__pycache__/
+*.py[cod]
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+*.orig
+*.rej

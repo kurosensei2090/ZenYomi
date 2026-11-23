@@ -47,9 +47,9 @@ android {
             val keyFile = rootProject.file("zenyomi.keystore")
             if (keyFile.exists()) {
                 storeFile = keyFile
-                storePassword = "zenyomiapp"
-                keyAlias = "zenyomi"
-                keyPassword = "zenyomiapp"
+                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "zenyomiapp"
+                keyAlias = System.getenv("KEY_ALIAS") ?: "zenyomi"
+                keyPassword = System.getenv("KEY_PASSWORD") ?: "zenyomiapp"
                 enableV1Signing = true
                 enableV2Signing = true
                 enableV3Signing = true
