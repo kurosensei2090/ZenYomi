@@ -57,6 +57,7 @@ fun Screen.animeSourcesTab(): TabContent {
                 onLongClickItem = screenModel::showSourceDialog,
                 isRefreshing = isRefreshing,
                 onRefresh = screenModel::refresh,
+                onSearchQueryChange = screenModel::search,
             )
 
             state.dialog?.let { dialog ->

@@ -60,6 +60,13 @@ class AnimeSourcesScreenModel(
         }
     }
 
+    private var rawSources: List<AnimeSource> = emptyList()
+
+    fun search(query: String?) {
+        mutableState.update { it.copy(searchQuery = query) }
+        collectLatestAnimeSources(rawSources)
+    }
+
     init {
         screenModelScope.launchIO {
             getEnabledAnimeSources.subscribe()
@@ -72,7 +79,12 @@ class AnimeSourcesScreenModel(
     }
 
     private fun collectLatestAnimeSources(sources: List<AnimeSource>) {
-        val nonCsSources = sources.filterNot { it.name.endsWith(" [CS]") || it.name.contains("[CS]") }
+        rawSources = sources
+        val query = state.value.searchQuery
+        var nonCsSources = sources.filterNot { it.name.endsWith(" [CS]") || it.name.contains("[CS]") }
+        if (!query.isNullOrBlank()) {
+            nonCsSources = nonCsSources.filter { it.name.contains(query, ignoreCase = true) }
+        }
         mutableState.update { state ->
             val map = TreeMap<String, MutableList<AnimeSource>> { d1, d2 ->
                 // Sources without a lang defined will be placed at the end
@@ -137,6 +149,7 @@ class AnimeSourcesScreenModel(
         val dialog: Dialog? = null,
         val isLoading: Boolean = true,
         val items: ImmutableList<AnimeSourceUiModel> = persistentListOf(),
+        val searchQuery: String? = null,
     ) {
         val isEmpty = items.isEmpty()
     }

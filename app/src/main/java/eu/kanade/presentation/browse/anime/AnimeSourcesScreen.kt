@@ -1,22 +1,28 @@
 package eu.kanade.presentation.browse.anime
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -48,6 +54,7 @@ fun AnimeSourcesScreen(
     onLongClickItem: (AnimeSource) -> Unit,
     isRefreshing: Boolean = false,
     onRefresh: () -> Unit = {},
+    onSearchQueryChange: (String?) -> Unit = {},
 ) {
     PullRefresh(
         refreshing = isRefreshing,
@@ -57,7 +64,7 @@ fun AnimeSourcesScreen(
     ) {
         when {
             state.isLoading -> LoadingScreen(Modifier.padding(contentPadding))
-            state.isEmpty -> EmptyScreen(
+            state.isEmpty && state.searchQuery.isNullOrBlank() -> EmptyScreen(
                 stringRes = MR.strings.source_empty_screen,
                 modifier = Modifier.padding(contentPadding),
             )
@@ -65,6 +72,53 @@ fun AnimeSourcesScreen(
                 ScrollbarLazyColumn(
                     contentPadding = contentPadding + topSmallPaddingValues,
                 ) {
+                    item(key = "anime_sources_search_box") {
+                        OutlinedTextField(
+                            value = state.searchQuery.orEmpty(),
+                            onValueChange = onSearchQueryChange,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                            placeholder = { Text("Search sources...") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Outlined.Search,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            },
+                            trailingIcon = {
+                                if (!state.searchQuery.isNullOrEmpty()) {
+                                    IconButton(onClick = { onSearchQueryChange("") }) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Close,
+                                            contentDescription = "Clear",
+                                        )
+                                    }
+                                }
+                            },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                        )
+                    }
+
+                    if (state.isEmpty && !state.searchQuery.isNullOrBlank()) {
+                        item(key = "no_search_results") {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 32.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = "No sources found matching \"${state.searchQuery}\"",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+
                     items(
                         items = state.items,
                         contentType = {

@@ -21,12 +21,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -35,6 +37,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -120,6 +123,7 @@ fun Screen.csSourcesTab(): TabContent {
             val isOtherExpanded by sourcePreferences.isOtherCsSourcesExpanded().collectAsState()
 
             val savedRepoFilter by sourcePreferences.lastSelectedCsRepoFilter().collectAsState()
+            var searchQuery by remember { mutableStateOf("") }
 
             val activeReposWithCounts = remember(repos, sources) {
                 repos.mapNotNull { repo ->
@@ -144,8 +148,8 @@ fun Screen.csSourcesTab(): TabContent {
                 }
             }
 
-            val filteredSources = remember(sources, selectedRepoUrl, repos) {
-                if (selectedRepoUrl == null) {
+            val filteredSources = remember(sources, selectedRepoUrl, repos, searchQuery) {
+                val repoFiltered = if (selectedRepoUrl == null) {
                     sources
                 } else {
                     val normSelected = manager.normalizeRepoUrl(selectedRepoUrl).trimEnd('/')
@@ -153,6 +157,14 @@ fun Screen.csSourcesTab(): TabContent {
                         val repo = manager.getRepoForPlugin(source.pluginName)
                         val repoNorm = repo?.url?.let { manager.normalizeRepoUrl(it).trimEnd('/') }
                         repoNorm == normSelected || repo?.url == selectedRepoUrl
+                    }
+                }
+                if (searchQuery.isBlank()) {
+                    repoFiltered
+                } else {
+                    repoFiltered.filter { source ->
+                        source.name.contains(searchQuery, ignoreCase = true) ||
+                        source.pluginName.contains(searchQuery, ignoreCase = true)
                     }
                 }
             }
@@ -268,6 +280,37 @@ fun Screen.csSourcesTab(): TabContent {
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
+                        // Search Box for CS Sources
+                        item(key = "cs_sources_search_box") {
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                placeholder = { Text("Search CS sources...") },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Search,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                },
+                                trailingIcon = {
+                                    if (searchQuery.isNotEmpty()) {
+                                        IconButton(onClick = { searchQuery = "" }) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Close,
+                                                contentDescription = "Clear",
+                                            )
+                                        }
+                                    }
+                                },
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                            )
+                        }
+
                         // Repository Filter Bar (when multiple repositories have installed sources)
                         if (activeReposWithCounts.size > 1) {
                             item(key = "repo_filter_bar") {
@@ -301,6 +344,24 @@ fun Screen.csSourcesTab(): TabContent {
                                             label = { Text("${repo.cleanName} ($count)") },
                                         )
                                     }
+                                }
+                            }
+                        }
+
+                        // Empty search results
+                        if (filteredSources.isEmpty() && searchQuery.isNotBlank()) {
+                            item(key = "no_search_results") {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 32.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        text = "No sources found matching \"$searchQuery\"",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
                                 }
                             }
                         }
