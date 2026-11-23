@@ -86,6 +86,10 @@ class CloudStreamManager(
             "cloudstream repo", "cloudstream repo.", "cloudstream", "cs repo", "cs3"
         )
 
+        private val REGEX_BASE_GITHUB = "^https?://github\\.com/([^/]+)/([^/]+)/?$".toRegex(RegexOption.IGNORE_CASE)
+        private val REGEX_TREE = "^https?://github\\.com/([^/]+)/([^/]+)/tree/([^/]+)/?(.*)$".toRegex(RegexOption.IGNORE_CASE)
+        private val REGEX_BLOB = "^https?://github\\.com/([^/]+)/([^/]+)/blob/([^/]+)/?(.*)$".toRegex(RegexOption.IGNORE_CASE)
+
         private val URL_IGNORE_SEGMENTS = setOf(
             "http:", "https:", "raw.githubusercontent.com", "github.com", "gitlab.com",
             "repo.json", "plugins.json", "builds", "main", "master", "build", "release",
@@ -186,6 +190,11 @@ class CloudStreamManager(
     private val _lastErrorFlow = MutableStateFlow<String?>(null)
     val lastErrorFlow: StateFlow<String?> = _lastErrorFlow.asStateFlow()
 
+    private val cachedPluginRepoMap = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val cachedPluginVersionMap = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    private val cachedPluginIconMap = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val repoByPluginNameCache = java.util.concurrent.ConcurrentHashMap<String, CloudStreamRepo?>()
+
     init {
         com.lagradost.cloudstream3.AcraApplication.context = context.applicationContext
         try {
@@ -195,10 +204,32 @@ class CloudStreamManager(
             logcat(LogPriority.WARN, t) { "Failed to bind baseClient to CloudStream app" }
         }
         com.lagradost.cloudstream3.extractors.registerCommonExtractors()
+        initMapsFromPreferences()
         loadSavedRepositories()
         scope.launch {
             loadInstalledPlugins()
             refreshRepositories()
+        }
+    }
+
+    private fun initMapsFromPreferences() {
+        val rawRepos = prefs.getString(PREF_PLUGIN_REPOS, null)
+        if (!rawRepos.isNullOrBlank()) {
+            try {
+                cachedPluginRepoMap.putAll(json.decodeFromString<Map<String, String>>(rawRepos))
+            } catch (_: Exception) {}
+        }
+        val rawVersions = prefs.getString(PREF_PLUGIN_VERSIONS, null)
+        if (!rawVersions.isNullOrBlank()) {
+            try {
+                cachedPluginVersionMap.putAll(json.decodeFromString<Map<String, Int>>(rawVersions))
+            } catch (_: Exception) {}
+        }
+        val rawIcons = prefs.getString(PREF_PLUGIN_ICONS, null)
+        if (!rawIcons.isNullOrBlank()) {
+            try {
+                cachedPluginIconMap.putAll(json.decodeFromString<Map<String, String>>(rawIcons))
+            } catch (_: Exception) {}
         }
     }
 
@@ -246,110 +277,116 @@ class CloudStreamManager(
     }
 
     private fun saveRepositories(repos: List<CloudStreamRepo>) {
+        repoByPluginNameCache.clear()
         prefs.edit().putString(PREF_REPOS, json.encodeToString(repos)).apply()
         _repositoriesFlow.value = repos
     }
 
     private fun getPluginRepoMap(): MutableMap<String, String> {
-        val raw = prefs.getString(PREF_PLUGIN_REPOS, null) ?: return mutableMapOf()
-        return try {
-            json.decodeFromString<Map<String, String>>(raw).toMutableMap()
-        } catch (_: Exception) {
-            mutableMapOf()
-        }
+        return cachedPluginRepoMap
     }
 
-    private fun savePluginRepoMap(map: Map<String, String>) {
-        prefs.edit().putString(PREF_PLUGIN_REPOS, json.encodeToString(map)).apply()
+    private fun savePluginRepoMap() {
+        repoByPluginNameCache.clear()
+        val snapshot = HashMap(cachedPluginRepoMap)
+        scope.launch {
+            try {
+                prefs.edit().putString(PREF_PLUGIN_REPOS, json.encodeToString(snapshot)).apply()
+            } catch (_: Exception) {}
+        }
     }
 
     private fun associatePluginWithRepo(pluginName: String, repoUrl: String) {
         if (repoUrl.isBlank()) return
-        val map = getPluginRepoMap()
-        map[pluginName] = repoUrl
-        savePluginRepoMap(map)
+        cachedPluginRepoMap[pluginName] = repoUrl
+        savePluginRepoMap()
     }
 
     private fun removePluginRepoAssociation(pluginName: String) {
-        val map = getPluginRepoMap()
-        if (map.remove(pluginName) != null) {
-            savePluginRepoMap(map)
+        if (cachedPluginRepoMap.remove(pluginName) != null) {
+            savePluginRepoMap()
         }
     }
 
     private fun getPluginVersionMap(): MutableMap<String, Int> {
-        val raw = prefs.getString(PREF_PLUGIN_VERSIONS, null) ?: return mutableMapOf()
-        return try {
-            json.decodeFromString<Map<String, Int>>(raw).toMutableMap()
-        } catch (_: Exception) {
-            mutableMapOf()
-        }
+        return cachedPluginVersionMap
     }
 
-    private fun savePluginVersionMap(map: Map<String, Int>) {
-        prefs.edit().putString(PREF_PLUGIN_VERSIONS, json.encodeToString(map)).apply()
+    private fun savePluginVersionMap() {
+        val snapshot = HashMap(cachedPluginVersionMap)
+        scope.launch {
+            try {
+                prefs.edit().putString(PREF_PLUGIN_VERSIONS, json.encodeToString(snapshot)).apply()
+            } catch (_: Exception) {}
+        }
     }
 
     private fun recordPluginVersion(pluginName: String, version: Int) {
         if (pluginName.isBlank() || version <= 0) return
-        val map = getPluginVersionMap()
-        map[pluginName] = version
-        savePluginVersionMap(map)
+        cachedPluginVersionMap[pluginName] = version
+        savePluginVersionMap()
     }
 
     private fun removePluginVersion(pluginName: String) {
-        val map = getPluginVersionMap()
-        if (map.remove(pluginName) != null) {
-            savePluginVersionMap(map)
+        if (cachedPluginVersionMap.remove(pluginName) != null) {
+            savePluginVersionMap()
         }
     }
 
     private fun getPluginIconMap(): MutableMap<String, String> {
-        val raw = prefs.getString(PREF_PLUGIN_ICONS, null) ?: return mutableMapOf()
-        return try {
-            json.decodeFromString<Map<String, String>>(raw).toMutableMap()
-        } catch (_: Exception) {
-            mutableMapOf()
-        }
+        return cachedPluginIconMap
     }
 
-    private fun savePluginIconMap(map: Map<String, String>) {
-        prefs.edit().putString(PREF_PLUGIN_ICONS, json.encodeToString(map)).apply()
+    private fun savePluginIconMap() {
+        val snapshot = HashMap(cachedPluginIconMap)
+        scope.launch {
+            try {
+                prefs.edit().putString(PREF_PLUGIN_ICONS, json.encodeToString(snapshot)).apply()
+            } catch (_: Exception) {}
+        }
     }
 
     fun getPluginIconUrl(pluginName: String): String? {
         if (pluginName.isBlank()) return null
+        val direct = cachedPluginIconMap[pluginName]
+        if (direct != null) return direct
         val clean = pluginName.removeSuffix(".cs3").removeSuffix(" [CS]").trim()
-        val map = getPluginIconMap()
-        return map[pluginName] ?: map[clean] ?: map["$clean.cs3"]
+        return cachedPluginIconMap[clean] ?: cachedPluginIconMap["$clean.cs3"]
     }
 
     fun recordPluginIcon(pluginName: String, rawIconUrl: String?) {
         if (pluginName.isBlank() || rawIconUrl.isNullOrBlank()) return
         val iconUrl = rawIconUrl.replace("%size%", "128")
-        val map = getPluginIconMap()
-        map[pluginName] = iconUrl
+        cachedPluginIconMap[pluginName] = iconUrl
         val clean = pluginName.removeSuffix(".cs3").removeSuffix(" [CS]").trim()
-        map[clean] = iconUrl
-        map["$clean.cs3"] = iconUrl
-        savePluginIconMap(map)
+        cachedPluginIconMap[clean] = iconUrl
+        cachedPluginIconMap["$clean.cs3"] = iconUrl
+        savePluginIconMap()
     }
 
     private fun getPluginsForRepo(repoUrl: String): List<String> {
-        val map = getPluginRepoMap()
+        val map = cachedPluginRepoMap
         return map.filter { it.value.equals(repoUrl, ignoreCase = true) }.map { it.key }
     }
 
     fun getRepoForPlugin(pluginName: String): CloudStreamRepo? {
-        val map = getPluginRepoMap()
+        if (pluginName.isBlank()) return null
+        val cached = repoByPluginNameCache[pluginName]
+        if (cached != null) return cached
+
+        val map = cachedPluginRepoMap
         val repoUrl = map[pluginName]
             ?: _availablePluginsFlow.value.find { it.internalName.equals(pluginName, ignoreCase = true) || it.name.equals(pluginName, ignoreCase = true) }?.repoUrl
             ?: map.entries.find { pluginName.contains(it.key, ignoreCase = true) || it.key.contains(pluginName, ignoreCase = true) }?.value
         if (repoUrl != null) {
             val normTarget = normalizeRepoUrl(repoUrl).trimEnd('/')
-            return _repositoriesFlow.value.find { normalizeRepoUrl(it.url).trimEnd('/') == normTarget }
+            val found = _repositoriesFlow.value.find { normalizeRepoUrl(it.url).trimEnd('/') == normTarget }
                 ?: _repositoriesFlow.value.find { it.url == repoUrl }
                 ?: _repositoriesFlow.value.find { it.url.contains(repoUrl) || repoUrl.contains(it.url) }
+            if (found != null) {
+                repoByPluginNameCache[pluginName] = found
+                return found
+            }
         }
         return null
     }
@@ -423,7 +460,9 @@ class CloudStreamManager(
                 }
                 com.lagradost.cloudstream3.APIHolder.allProviders.clear()
                 com.lagradost.cloudstream3.APIHolder.apis.clear()
-                savePluginRepoMap(emptyMap())
+                cachedPluginRepoMap.clear()
+                repoByPluginNameCache.clear()
+                savePluginRepoMap()
                 _installedSourcesFlow.value = emptyList()
                 _availablePluginsFlow.value = emptyList()
                 _lastErrorFlow.value = null
@@ -574,20 +613,17 @@ class CloudStreamManager(
             url = "https://$url"
         }
         // GitHub tree/blob URL normalization to raw content
-        val baseGithubRegex = "^https?://github\\.com/([^/]+)/([^/]+)/?$".toRegex(RegexOption.IGNORE_CASE)
-        val baseGithubMatch = baseGithubRegex.matchEntire(url)
+        val baseGithubMatch = REGEX_BASE_GITHUB.matchEntire(url)
         if (baseGithubMatch != null) {
             val (owner, repo) = baseGithubMatch.destructured
             url = "https://raw.githubusercontent.com/$owner/$repo/master"
         }
-        val treeRegex = "^https?://github\\.com/([^/]+)/([^/]+)/tree/([^/]+)/?(.*)$".toRegex(RegexOption.IGNORE_CASE)
-        val treeMatch = treeRegex.matchEntire(url)
+        val treeMatch = REGEX_TREE.matchEntire(url)
         if (treeMatch != null) {
             val (owner, repo, branch, subpath) = treeMatch.destructured
             url = "https://raw.githubusercontent.com/$owner/$repo/$branch/$subpath".trimEnd('/')
         }
-        val blobRegex = "^https?://github\\.com/([^/]+)/([^/]+)/blob/([^/]+)/?(.*)$".toRegex(RegexOption.IGNORE_CASE)
-        val blobMatch = blobRegex.matchEntire(url)
+        val blobMatch = REGEX_BLOB.matchEntire(url)
         if (blobMatch != null) {
             val (owner, repo, branch, subpath) = blobMatch.destructured
             url = "https://raw.githubusercontent.com/$owner/$repo/$branch/$subpath"

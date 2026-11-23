@@ -9,6 +9,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.Navigator
@@ -135,7 +136,8 @@ data object BrowseTab : Tab {
             onChangeAnimeSearchQuery = { animeExtensionsScreenModel?.search(it) },
             scrollable = true,
         )
-        LaunchedEffect(tabs) {
+        val currentTabs by rememberUpdatedState(tabs)
+        LaunchedEffect(Unit) {
             switchToSubTabChannel.receiveAsFlow()
                 .collectLatest { subTab ->
                     val targetTitleRes = when (subTab) {
@@ -146,8 +148,8 @@ data object BrowseTab : Tab {
                         SubTab.MangaExtensions -> AYMR.strings.label_manga_extensions
                         SubTab.CsExtensions -> AYMR.strings.label_cs_extensions
                     }
-                    val index = tabs.indexOfFirst { it.titleRes == targetTitleRes }
-                    if (index in 0 until tabs.size) {
+                    val index = currentTabs.indexOfFirst { it.titleRes == targetTitleRes }
+                    if (index in 0 until currentTabs.size) {
                         state.scrollToPage(index)
                     }
                 }

@@ -125,14 +125,24 @@ fun Screen.csSourcesTab(): TabContent {
             val savedRepoFilter by sourcePreferences.lastSelectedCsRepoFilter().collectAsState()
             var searchQuery by remember { mutableStateOf("") }
 
-            val activeReposWithCounts = remember(repos, sources) {
-                repos.mapNotNull { repo ->
-                    val normRepo = manager.normalizeRepoUrl(repo.url).trimEnd('/')
-                    val count = sources.count { source ->
-                        val pRepo = manager.getRepoForPlugin(source.pluginName)
-                        val pNorm = pRepo?.url?.let { manager.normalizeRepoUrl(it).trimEnd('/') }
-                        pNorm == normRepo || pRepo?.url == repo.url
+            // Precompute plugin to repo mapping once in a single pass O(N)
+            val pluginToRepoMap = remember(sources, repos) {
+                sources.associate { source ->
+                    source.pluginName to manager.getRepoForPlugin(source.pluginName)
+                }
+            }
+
+            // O(N) calculation of active repos with source counts
+            val activeReposWithCounts = remember(repos, sources, pluginToRepoMap) {
+                val counts = mutableMapOf<String, Int>()
+                sources.forEach { source ->
+                    val pRepo = pluginToRepoMap[source.pluginName]
+                    if (pRepo != null) {
+                        counts[pRepo.url] = (counts[pRepo.url] ?: 0) + 1
                     }
+                }
+                repos.mapNotNull { repo ->
+                    val count = counts[repo.url] ?: 0
                     if (count > 0) repo to count else null
                 }
             }
@@ -148,13 +158,13 @@ fun Screen.csSourcesTab(): TabContent {
                 }
             }
 
-            val filteredSources = remember(sources, selectedRepoUrl, repos, searchQuery) {
+            val filteredSources = remember(sources, selectedRepoUrl, pluginToRepoMap, searchQuery) {
                 val repoFiltered = if (selectedRepoUrl == null) {
                     sources
                 } else {
                     val normSelected = manager.normalizeRepoUrl(selectedRepoUrl).trimEnd('/')
                     sources.filter { source ->
-                        val repo = manager.getRepoForPlugin(source.pluginName)
+                        val repo = pluginToRepoMap[source.pluginName]
                         val repoNorm = repo?.url?.let { manager.normalizeRepoUrl(it).trimEnd('/') }
                         repoNorm == normSelected || repo?.url == selectedRepoUrl
                     }
@@ -392,7 +402,7 @@ fun Screen.csSourcesTab(): TabContent {
                             }
 
                             item(key = "last_used_${lastUsedSource.id}") {
-                                val repo = remember(lastUsedSource.pluginName, repos) { manager.getRepoForPlugin(lastUsedSource.pluginName) }
+                                val repo = pluginToRepoMap[lastUsedSource.pluginName]
                                 CsSourceCard(
                                     source = lastUsedSource,
                                     isPinned = lastUsedSource.id.toString() in pinnedSourcesSet,
@@ -454,7 +464,7 @@ fun Screen.csSourcesTab(): TabContent {
 
                             if (isPinnedExpanded) {
                                 items(pinnedSources, key = { "pinned_${it.id}" }) { source ->
-                                    val repo = remember(source.pluginName, repos) { manager.getRepoForPlugin(source.pluginName) }
+                                    val repo = pluginToRepoMap[source.pluginName]
                                     CsSourceCard(
                                         source = source,
                                         isPinned = true,
@@ -523,7 +533,7 @@ fun Screen.csSourcesTab(): TabContent {
 
                             if (isOtherExpanded) {
                                 items(otherSources, key = { "other_${it.id}" }) { source ->
-                            val repo = remember(source.pluginName, repos) { manager.getRepoForPlugin(source.pluginName) }
+                            val repo = pluginToRepoMap[source.pluginName]
                             CsSourceCard(
                                 source = source,
                                 isPinned = false,
