@@ -9,15 +9,19 @@ import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.media.AudioManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.util.Rational
 import android.view.WindowManager
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -36,14 +40,17 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.BrightnessMedium
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Lock
@@ -58,6 +65,7 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Subtitles
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material3.AlertDialog
@@ -224,8 +232,19 @@ class ExoPlayerActivity : BaseActivity() {
     private var selectedQualityLabelState = mutableStateOf("Auto")
     private var isSubtitleDisabledState = mutableStateOf(false)
     private var isInPipModeState = mutableStateOf(false)
+    private var showStatsOverlayState = mutableStateOf(false)
+    private val externalSubtitleConfigs = mutableListOf<MediaItem.SubtitleConfiguration>()
+    private var pendingSelectedSubtitleLabel: String? = null
     private var pipReceiver: BroadcastReceiver? = null
     private var isPipClosing = false
+
+    private val subtitlePickerLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        if (uri != null) {
+            addExternalSubtitle(uri)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -328,6 +347,8 @@ class ExoPlayerActivity : BaseActivity() {
                 // Halt any currently running playback immediately so it doesn't continue in the background
                 player?.stop()
                 player?.clearMediaItems()
+                externalSubtitleConfigs.clear()
+                pendingSelectedSubtitleLabel = null
 
                 isBufferingState.value = true
                 currentEpisodeIdState.longValue = targetEpisodeId
@@ -406,6 +427,111 @@ class ExoPlayerActivity : BaseActivity() {
                 toast("Error loading episode: ${t.message}")
                 isBufferingState.value = false
             }
+        }
+    }
+
+    private fun createMediaSource(video: Video): MediaSource {
+        val client = networkHelper.client.newBuilder().build()
+        val httpDataSourceFactory = OkHttpDataSource.Factory(client).apply {
+            setUserAgent(networkHelper.defaultUserAgentProvider())
+            val headersMap = mutableMapOf<String, String>()
+            video.headers?.forEach { (k, v) ->
+                headersMap[k] = v
+            }
+            if (headersMap.isNotEmpty()) {
+                setDefaultRequestProperties(headersMap)
+            }
+        }
+        val dataSourceFactory = DefaultDataSource.Factory(this, httpDataSourceFactory)
+        val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
+
+        // Build main video media item
+        val mediaItemBuilder = MediaItem.Builder().setUri(video.videoUrl)
+        val allSubtitleConfigs = mutableListOf<MediaItem.SubtitleConfiguration>()
+        if (video.subtitleTracks.isNotEmpty()) {
+            val subtitleConfigs = video.subtitleTracks.map { track ->
+                val mimeType = when {
+                    track.url.endsWith(".vtt", ignoreCase = true) -> MimeTypes.TEXT_VTT
+                    track.url.endsWith(".srt", ignoreCase = true) -> MimeTypes.APPLICATION_SUBRIP
+                    track.url.endsWith(".ass", ignoreCase = true) || track.url.endsWith(".ssa", ignoreCase = true) -> MimeTypes.TEXT_SSA
+                    else -> MimeTypes.APPLICATION_SUBRIP
+                }
+                MediaItem.SubtitleConfiguration.Builder(Uri.parse(track.url))
+                    .setMimeType(mimeType)
+                    .setLanguage(track.lang)
+                    .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                    .build()
+            }
+            allSubtitleConfigs.addAll(subtitleConfigs)
+        }
+        allSubtitleConfigs.addAll(externalSubtitleConfigs)
+        if (allSubtitleConfigs.isNotEmpty()) {
+            mediaItemBuilder.setSubtitleConfigurations(allSubtitleConfigs)
+        }
+        val mediaItem = mediaItemBuilder.build()
+        val videoSource = mediaSourceFactory.createMediaSource(mediaItem)
+
+        return if (video.audioTracks.isNotEmpty()) {
+            val sources = mutableListOf<MediaSource>(videoSource)
+            for (audioTrack in video.audioTracks) {
+                val audioItem = MediaItem.Builder()
+                    .setUri(audioTrack.url)
+                    .build()
+                sources.add(mediaSourceFactory.createMediaSource(audioItem))
+            }
+            MergingMediaSource(*sources.toTypedArray())
+        } else {
+            videoSource
+        }
+    }
+
+    private fun addExternalSubtitle(uri: Uri) {
+        try {
+            try {
+                contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (_: Exception) {}
+
+            var displayName = "External Subtitle"
+            contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (nameIndex != -1 && cursor.moveToFirst()) {
+                    val n = cursor.getString(nameIndex)
+                    if (!n.isNullOrBlank()) displayName = n
+                }
+            }
+
+            val lowerName = displayName.lowercase()
+            val mimeType = when {
+                lowerName.endsWith(".vtt") -> MimeTypes.TEXT_VTT
+                lowerName.endsWith(".srt") -> MimeTypes.APPLICATION_SUBRIP
+                lowerName.endsWith(".ass") || lowerName.endsWith(".ssa") -> MimeTypes.TEXT_SSA
+                else -> MimeTypes.APPLICATION_SUBRIP
+            }
+
+            val subConfig = MediaItem.SubtitleConfiguration.Builder(uri)
+                .setMimeType(mimeType)
+                .setLabel(displayName)
+                .setLanguage("und")
+                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                .build()
+
+            externalSubtitleConfigs.add(subConfig)
+            pendingSelectedSubtitleLabel = displayName
+
+            val exo = player
+            val video = currentVideo
+            if (exo != null && video != null) {
+                val currentPos = exo.currentPosition
+                val wasPlaying = exo.isPlaying
+                val mediaSource = createMediaSource(video)
+                exo.setMediaSource(mediaSource, currentPos)
+                exo.prepare()
+                if (wasPlaying) exo.play()
+                toast("Loaded subtitle: $displayName")
+            }
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e) { "Failed to load external subtitle: ${e.message}" }
+            toast("Failed to load subtitle: ${e.message}")
         }
     }
 
@@ -513,6 +639,22 @@ class ExoPlayerActivity : BaseActivity() {
 
                             availableSubtitlesState.value = subs
                             availableAudioTracksState.value = audios
+
+                            // Auto-select pending external subtitle if requested
+                            val pendingLabel = pendingSelectedSubtitleLabel
+                            if (pendingLabel != null) {
+                                val targetSub = subs.find { it.name.equals(pendingLabel, ignoreCase = true) }
+                                if (targetSub != null) {
+                                    newPlayer.trackSelectionParameters = newPlayer.trackSelectionParameters
+                                        .buildUpon()
+                                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                                        .setOverrideForType(TrackSelectionOverride(targetSub.group.mediaTrackGroup, targetSub.trackIndex))
+                                        .build()
+                                    isSubtitleDisabledState.value = false
+                                    pendingSelectedSubtitleLabel = null
+                                }
+                            }
+
                             if (audios.isNotEmpty() && !audios.any { it.isSelected }) {
                                 val firstAudio = audios.first()
                                 newPlayer.trackSelectionParameters = newPlayer.trackSelectionParameters
@@ -548,41 +690,7 @@ class ExoPlayerActivity : BaseActivity() {
             .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
             .build()
 
-        // Build main video media item
-        val mediaItemBuilder = MediaItem.Builder().setUri(video.videoUrl)
-        if (video.subtitleTracks.isNotEmpty()) {
-            val subtitleConfigs = video.subtitleTracks.map { track ->
-                val mimeType = when {
-                    track.url.endsWith(".vtt", ignoreCase = true) -> MimeTypes.TEXT_VTT
-                    track.url.endsWith(".srt", ignoreCase = true) -> MimeTypes.APPLICATION_SUBRIP
-                    track.url.endsWith(".ass", ignoreCase = true) || track.url.endsWith(".ssa", ignoreCase = true) -> MimeTypes.TEXT_SSA
-                    else -> MimeTypes.APPLICATION_SUBRIP
-                }
-                MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(track.url))
-                    .setMimeType(mimeType)
-                    .setLanguage(track.lang)
-                    .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
-                    .build()
-            }
-            mediaItemBuilder.setSubtitleConfigurations(subtitleConfigs)
-        }
-        val mediaItem = mediaItemBuilder.build()
-        val videoSource = mediaSourceFactory.createMediaSource(mediaItem)
-
-        // Support separate audio tracks (e.g. multi-audio streams / external audio tracks)
-        val mediaSource: MediaSource = if (video.audioTracks.isNotEmpty()) {
-            val sources = mutableListOf<MediaSource>(videoSource)
-            for (audioTrack in video.audioTracks) {
-                val audioItem = MediaItem.Builder()
-                    .setUri(audioTrack.url)
-                    .build()
-                sources.add(mediaSourceFactory.createMediaSource(audioItem))
-            }
-            MergingMediaSource(*sources.toTypedArray())
-        } else {
-            videoSource
-        }
-
+        val mediaSource = createMediaSource(video)
         exo.setMediaSource(mediaSource)
         exo.setPlaybackSpeed(speedState.value)
 
@@ -1545,6 +1653,15 @@ class ExoPlayerActivity : BaseActivity() {
                                 },
                             )
 
+                            CloudStreamActionButton(
+                                icon = Icons.Outlined.Info,
+                                label = "Stats",
+                                onClick = {
+                                    notifyInteraction()
+                                    showStatsOverlayState.value = !showStatsOverlayState.value
+                                },
+                            )
+
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && playerPreferences.enablePip().get()) {
                                 CloudStreamActionButton(
                                     icon = Icons.Default.PictureInPictureAlt,
@@ -1556,6 +1673,93 @@ class ExoPlayerActivity : BaseActivity() {
                                 )
                             }
                         }
+                    }
+                }
+            }
+
+            // Stream Info ("Stats for Nerds") HUD Overlay
+            val showStatsOverlay by showStatsOverlayState
+            AnimatedVisibility(
+                visible = showStatsOverlay && !isInPipMode,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 16.dp, top = 56.dp),
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color.Black.copy(alpha = 0.82f),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                            .widthIn(min = 230.dp, max = 320.dp),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                text = "Stream Info",
+                                color = MaterialTheme.colorScheme.primary,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close Stats",
+                                tint = Color.White.copy(alpha = 0.7f),
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .clickable { showStatsOverlayState.value = false },
+                            )
+                        }
+
+                        Spacer(Modifier.height(6.dp))
+
+                        // Video Stats
+                        val vf = player?.videoFormat
+                        val res = if (vf != null && vf.width > 0 && vf.height > 0) "${vf.width}x${vf.height}" else "Unknown"
+                        val fps = if (vf != null && vf.frameRate > 0) "%.1f fps".format(vf.frameRate) else "N/A"
+                        val vBitrate = if (vf != null && vf.bitrate > 0) "${vf.bitrate / 1000} kbps" else "Adaptive / N/A"
+                        val vCodec = vf?.codecs ?: vf?.sampleMimeType?.substringAfter('/')?.uppercase() ?: "Auto"
+
+                        // Audio Stats
+                        val af = player?.audioFormat
+                        val aCodec = af?.codecs ?: af?.sampleMimeType?.substringAfter('/')?.uppercase() ?: "Auto"
+                        val aChannels = when (af?.channelCount) {
+                            1 -> "Mono (1ch)"
+                            2 -> "Stereo (2ch)"
+                            6 -> "5.1 Surround"
+                            null -> "Auto"
+                            else -> "${af.channelCount} ch"
+                        }
+                        val aSampleRate = if (af != null && af.sampleRate > 0) "${af.sampleRate / 1000.0} kHz" else "N/A"
+
+                        // Connection & Buffer
+                        val bufMs = ((player?.bufferedPosition ?: 0L) - currentPosition).coerceAtLeast(0L)
+                        val bufSec = "%.1f s".format(bufMs / 1000.0)
+
+                        val url = currentVideo?.videoUrl?.lowercase() ?: ""
+                        val protocol = when {
+                            url.contains(".m3u8") -> "HLS"
+                            url.contains(".mpd") -> "DASH"
+                            url.startsWith("https") -> "HTTPS Direct"
+                            url.startsWith("http") -> "HTTP Direct"
+                            else -> "Direct Stream"
+                        }
+
+                        StreamInfoRow("Resolution", res)
+                        StreamInfoRow("Bitrate", vBitrate)
+                        StreamInfoRow("Framerate", fps)
+                        StreamInfoRow("Video Codec", vCodec)
+                        StreamInfoRow("Audio Codec", "$aCodec ($aChannels)")
+                        StreamInfoRow("Sample Rate", aSampleRate)
+                        StreamInfoRow("Buffer Health", bufSec)
+                        StreamInfoRow("Protocol", protocol)
                     }
                 }
             }
@@ -1818,6 +2022,42 @@ class ExoPlayerActivity : BaseActivity() {
                                 )
                             }
                             item {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            try {
+                                                subtitlePickerLauncher.launch(
+                                                    arrayOf(
+                                                        "text/*",
+                                                        "application/x-subrip",
+                                                        "application/octet-stream",
+                                                        "*/*",
+                                                    ),
+                                                )
+                                            } catch (_: Exception) {
+                                                subtitlePickerLauncher.launch(arrayOf("*/*"))
+                                            }
+                                        }
+                                        .padding(vertical = 10.dp, horizontal = 8.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        text = "Add external subtitle (.srt, .vtt, .ass)...",
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                }
+                            }
+                            item {
                                 val isOff = isSubtitleDisabled
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
@@ -1988,6 +2228,30 @@ class ExoPlayerActivity : BaseActivity() {
                 color = Color.White.copy(alpha = 0.9f),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,
+            )
+        }
+    }
+
+    @Composable
+    private fun StreamInfoRow(label: String, value: String) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 1.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = "$label:",
+                color = Color.White.copy(alpha = 0.7f),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = value,
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
             )
         }
     }
