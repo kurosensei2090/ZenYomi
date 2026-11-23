@@ -1272,9 +1272,12 @@ class PlayerActivity : BaseActivity() {
         }
 
         // Network stability & progressive stream options
-        MPVLib.setOptionString("network-timeout", "15")
-        MPVLib.setOptionString("demuxer-lavf-o", "reconnect=1,reconnect_streamed=1,reconnect_delay_max=5")
-        MPVLib.setOptionString("stream-buffer-size", "512k")
+        MPVLib.setOptionString("network-timeout", "20")
+        MPVLib.setOptionString("demuxer-lavf-o", "reconnect=1,reconnect_delay_max=5,reconnect_on_http_error=4xx,5xx")
+        MPVLib.setOptionString("demuxer-lavf-buffersize", "4194304")
+        MPVLib.setOptionString("stream-buffer-size", "${16 * 1024 * 1024}")
+        MPVLib.setOptionString("demuxer-readahead-secs", "25")
+        MPVLib.setOptionString("demuxer-reorder-pts", "yes")
         MPVLib.setOptionString("hls-bitrate", "max")
 
         val httpHeaderString = headers.map {
