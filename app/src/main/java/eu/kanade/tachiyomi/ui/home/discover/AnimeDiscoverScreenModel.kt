@@ -63,7 +63,20 @@ class AnimeDiscoverScreenModel(
                             .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name.removeSuffix(" [CS]").trim() },
                     )
             }.collectLatest { catalogueSources ->
-                if (catalogueSources.isEmpty()) return@collectLatest
+                if (catalogueSources.isEmpty()) {
+                    mutableState.update {
+                        it.copy(
+                            isLoading = false,
+                            isRefreshing = false,
+                            sources = persistentListOf(),
+                            currentSource = null,
+                            popularAnime = persistentListOf(),
+                            latestAnime = persistentListOf(),
+                            errorMessage = null,
+                        )
+                    }
+                    return@collectLatest
+                }
 
                 mutableState.update { it.copy(sources = catalogueSources.toImmutableList()) }
 

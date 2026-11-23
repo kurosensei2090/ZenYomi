@@ -61,8 +61,10 @@ import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.PullRefresh
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
+import tachiyomi.presentation.core.screens.EmptyScreenAction
 import tachiyomi.presentation.core.screens.LoadingScreen
 import tachiyomi.presentation.core.util.plus
+import kotlinx.collections.immutable.persistentListOf
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,15 +91,22 @@ fun AnimeDiscoverContent(
             indicatorPadding = contentPadding,
         ) {
             when {
-                state.isLoading && state.popularAnime.isEmpty() && state.latestAnime.isEmpty() -> {
-                    LoadingScreen(Modifier.padding(contentPadding))
-                }
-
                 state.sources.isEmpty() -> {
                     EmptyScreen(
                         stringRes = AYMR.strings.no_sources_installed,
                         modifier = Modifier.padding(contentPadding),
+                        actions = persistentListOf(
+                            EmptyScreenAction(
+                                stringRes = MR.strings.label_extensions,
+                                icon = Icons.Outlined.Explore,
+                                onClick = onExploreExtensionsClick,
+                            ),
+                        ),
                     )
+                }
+
+                state.isLoading && state.popularAnime.isEmpty() && state.latestAnime.isEmpty() -> {
+                    LoadingScreen(Modifier.padding(contentPadding))
                 }
 
                 state.popularAnime.isEmpty() && state.latestAnime.isEmpty() && state.errorMessage != null -> {

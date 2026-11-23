@@ -286,6 +286,20 @@ class ExoPlayerActivity : BaseActivity() {
         loadEpisodeAndPlay(episodeId)
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val newAnimeId = intent.getLongExtra(EXTRA_ANIME_ID, -1L)
+        val newEpisodeId = intent.getLongExtra(EXTRA_EPISODE_ID, -1L)
+        if (newAnimeId != -1L && newEpisodeId != -1L) {
+            animeId = newAnimeId
+            episodeId = newEpisodeId
+            currentEpisodeIdState.longValue = newEpisodeId
+            saveProgress()
+            loadEpisodeAndPlay(newEpisodeId, 0L)
+        }
+    }
+
     private fun hideSystemUI() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val insetsController = WindowCompat.getInsetsController(window, window.decorView)
@@ -998,7 +1012,9 @@ class ExoPlayerActivity : BaseActivity() {
                                         currentPosition = target
                                         flashSeek("+10s")
                                     }
-                                    notifyInteraction()
+                                    if (controlsVisible) {
+                                        userInteractionTick++
+                                    }
                                 }
                             },
                         )
