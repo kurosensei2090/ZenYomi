@@ -16,6 +16,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Tab
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -48,10 +49,17 @@ fun TabbedScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    LaunchedEffect(tabs.size) {
+        if (tabs.isNotEmpty() && state.currentPage >= tabs.size) {
+            state.scrollToPage(tabs.lastIndex)
+        }
+    }
+
     Scaffold(
         topBar = {
-            if (titleRes != null) {
-                val tab = tabs[state.currentPage]
+            if (titleRes != null && tabs.isNotEmpty()) {
+                val safePage = state.currentPage.coerceIn(0, tabs.lastIndex)
+                val tab = tabs.getOrNull(safePage) ?: tabs.first()
                 val searchEnabled = tab.searchEnabled
 
                 val isManga = tab.titleRes == AYMR.strings.label_manga_sources ||
@@ -89,7 +97,7 @@ fun TabbedScreen(
         ) {
             FlexibleTabRow(
                 scrollable = scrollable,
-                selectedTabIndex = state.currentPage,
+                selectedTabIndex = if (tabs.isNotEmpty()) state.currentPage.coerceIn(0, tabs.lastIndex) else 0,
             ) {
                 tabs.forEachIndexed { index, tab ->
                     Tab(
@@ -119,9 +127,9 @@ fun TabbedScreen(
                 state = state,
                 verticalAlignment = Alignment.Top,
                 beyondViewportPageCount = 0,
-                key = { page -> tabs[page].titleRes.resourceId },
+                key = { page -> tabs.getOrNull(page)?.titleRes?.resourceId ?: page },
             ) { page ->
-                tabs[page].content(
+                tabs.getOrNull(page)?.content(
                     PaddingValues(bottom = contentPadding.calculateBottomPadding()),
                     snackbarHostState,
                 )
