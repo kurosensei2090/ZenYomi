@@ -11,6 +11,8 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
@@ -27,6 +29,7 @@ import tachiyomi.domain.source.anime.model.Pins
 import tachiyomi.domain.source.anime.service.AnimeSourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.util.concurrent.ConcurrentHashMap
 
 class AnimeDiscoverScreenModel(
     private val sourcePreferences: SourcePreferences = Injekt.get(),
@@ -34,6 +37,12 @@ class AnimeDiscoverScreenModel(
     private val networkToLocalAnime: NetworkToLocalAnime = Injekt.get(),
 ) : StateScreenModel<AnimeDiscoverScreenModel.State>(State()) {
 
+    data class FeedCache(
+        val popular: List<Anime>,
+        val latest: List<Anime>,
+    )
+
+    private val feedCache = ConcurrentHashMap<Long, FeedCache>()
     private var loadFeedJob: Job? = null
 
     init {
@@ -133,13 +142,31 @@ class AnimeDiscoverScreenModel(
             return
         }
 
-        loadFeedJob?.cancel()
-        loadFeedJob = screenModelScope.launchIO {
+        // Instant feed display from in-memory cache if available
+        val cached = feedCache[sourceId]
+        if (cached != null && !isRefresh) {
             mutableState.update {
                 it.copy(
-                    isLoading = !isRefresh,
+                    isLoading = false,
+                    isRefreshing = false,
+                    currentSource = catalogueSource,
+                    popularAnime = cached.popular.toImmutableList(),
+                    latestAnime = cached.latest.toImmutableList(),
+                    errorMessage = null,
+                )
+            }
+        }
+
+        loadFeedJob?.cancel()
+        loadFeedJob = screenModelScope.launchIO {
+            val hasCache = cached != null && !isRefresh
+            mutableState.update {
+                it.copy(
+                    isLoading = !hasCache && !isRefresh,
                     isRefreshing = isRefresh,
                     currentSource = catalogueSource,
+                    popularAnime = if (hasCache) it.popularAnime else persistentListOf(),
+                    latestAnime = if (hasCache) it.latestAnime else persistentListOf(),
                     errorMessage = null,
                 )
             }
@@ -148,7 +175,11 @@ class AnimeDiscoverScreenModel(
                 val popularJob = async {
                     try {
                         val page = catalogueSource.getPopularAnime(1)
-                        page.animes.map { networkToLocalAnime.await(it.toDomainAnime(sourceId)) }.distinctBy { it.id }
+                        coroutineScope {
+                            page.animes.map { anime ->
+                                async { networkToLocalAnime.await(anime.toDomainAnime(sourceId)) }
+                            }.awaitAll().distinctBy { it.id }
+                        }
                     } catch (e: Throwable) {
                         logcat(LogPriority.ERROR, e) { "Failed to load popular anime from source $sourceId" }
                         emptyList()
@@ -159,7 +190,11 @@ class AnimeDiscoverScreenModel(
                     try {
                         if (catalogueSource.supportsLatest) {
                             val page = catalogueSource.getLatestUpdates(1)
-                            page.animes.map { networkToLocalAnime.await(it.toDomainAnime(sourceId)) }.distinctBy { it.id }
+                            coroutineScope {
+                                page.animes.map { anime ->
+                                    async { networkToLocalAnime.await(anime.toDomainAnime(sourceId)) }
+                                }.awaitAll().distinctBy { it.id }
+                            }
                         } else {
                             emptyList()
                         }
@@ -170,15 +205,35 @@ class AnimeDiscoverScreenModel(
                 }
 
                 val popular = popularJob.await()
+                if (popular.isNotEmpty()) {
+                    mutableState.update {
+                        it.copy(
+                            isLoading = false,
+                            popularAnime = popular.toImmutableList(),
+                        )
+                    }
+                }
+
                 val latest = latestJob.await()
+                if (latest.isNotEmpty()) {
+                    mutableState.update {
+                        it.copy(
+                            latestAnime = latest.toImmutableList(),
+                        )
+                    }
+                }
+
+                if (popular.isNotEmpty() || latest.isNotEmpty()) {
+                    feedCache[sourceId] = FeedCache(popular, latest)
+                }
 
                 mutableState.update {
                     it.copy(
                         isLoading = false,
                         isRefreshing = false,
-                        popularAnime = popular.toImmutableList(),
-                        latestAnime = latest.toImmutableList(),
-                        errorMessage = if (popular.isEmpty() && latest.isEmpty()) "Failed to load content" else null,
+                        popularAnime = if (popular.isNotEmpty()) popular.toImmutableList() else it.popularAnime,
+                        latestAnime = if (latest.isNotEmpty()) latest.toImmutableList() else it.latestAnime,
+                        errorMessage = if (it.popularAnime.isEmpty() && it.latestAnime.isEmpty()) "Failed to load content" else null,
                     )
                 }
             } catch (e: Throwable) {
@@ -187,7 +242,7 @@ class AnimeDiscoverScreenModel(
                     it.copy(
                         isLoading = false,
                         isRefreshing = false,
-                        errorMessage = e.message ?: "Failed to load feed",
+                        errorMessage = if (it.popularAnime.isEmpty() && it.latestAnime.isEmpty()) (e.message ?: "Failed to load feed") else null,
                     )
                 }
             }

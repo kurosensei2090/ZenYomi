@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.util.Rational
+import android.util.TypedValue
 import android.view.WindowManager
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
@@ -125,6 +126,7 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
 import eu.kanade.presentation.theme.TachiyomiTheme
 import eu.kanade.tachiyomi.animesource.model.Hoster
@@ -156,6 +158,7 @@ import tachiyomi.domain.items.episode.interactor.UpdateEpisode
 import tachiyomi.domain.items.episode.model.Episode
 import tachiyomi.domain.items.episode.model.EpisodeUpdate
 import tachiyomi.domain.items.episode.service.getEpisodeSort
+import java.io.File
 import tachiyomi.domain.source.anime.service.AnimeSourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -634,10 +637,6 @@ class ExoPlayerActivity : BaseActivity() {
 
     private fun addExternalSubtitle(uri: Uri) {
         try {
-            try {
-                contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            } catch (_: Exception) {}
-
             var displayName = "External Subtitle"
             contentResolver.query(uri, null, null, null, null)?.use { cursor ->
                 val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
@@ -655,7 +654,23 @@ class ExoPlayerActivity : BaseActivity() {
                 else -> MimeTypes.APPLICATION_SUBRIP
             }
 
-            val subConfig = MediaItem.SubtitleConfiguration.Builder(uri)
+            // Copy subtitle stream to local cache directory so ExoPlayer has direct, persistent file access
+            val subCacheDir = File(cacheDir, "subtitles").apply { mkdirs() }
+            val safeName = displayName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+            val localSubFile = File(subCacheDir, "${System.currentTimeMillis()}_$safeName")
+            contentResolver.openInputStream(uri)?.use { input ->
+                localSubFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            val targetUri = if (localSubFile.exists() && localSubFile.length() > 0) {
+                Uri.fromFile(localSubFile)
+            } else {
+                uri
+            }
+
+            val subConfig = MediaItem.SubtitleConfiguration.Builder(targetUri)
+                .setId(displayName)
                 .setMimeType(mimeType)
                 .setLabel(displayName)
                 .setLanguage("und")
@@ -761,7 +776,7 @@ class ExoPlayerActivity : BaseActivity() {
                                     for (i in 0 until group.length) {
                                         val format = group.getTrackFormat(i)
                                         val lang = format.language?.uppercase() ?: ""
-                                        val label = format.label ?: if (lang.isNotEmpty()) lang else "Subtitle ${subs.size + 1}"
+                                        val label = format.label ?: format.id ?: if (lang.isNotEmpty()) lang else "Subtitle ${subs.size + 1}"
                                         val selected = group.isTrackSelected(i)
                                         subs.add(ExoTrackInfo(group, i, label, lang, selected))
                                     }
@@ -790,11 +805,17 @@ class ExoPlayerActivity : BaseActivity() {
                             // Auto-select pending external subtitle if requested
                             val pendingLabel = pendingSelectedSubtitleLabel
                             if (pendingLabel != null) {
-                                val targetSub = subs.find { it.name.equals(pendingLabel, ignoreCase = true) }
+                                val targetSub = subs.find {
+                                    it.name.equals(pendingLabel, ignoreCase = true) ||
+                                        it.group.getTrackFormat(it.trackIndex).label?.equals(pendingLabel, ignoreCase = true) == true ||
+                                        it.group.getTrackFormat(it.trackIndex).id?.equals(pendingLabel, ignoreCase = true) == true
+                                } ?: subs.lastOrNull()
                                 if (targetSub != null) {
-                                    newPlayer.trackSelectionParameters = newPlayer.trackSelectionParameters
+                                    val exoInstance = player ?: newPlayer
+                                    exoInstance.trackSelectionParameters = exoInstance.trackSelectionParameters
                                         .buildUpon()
                                         .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                                        .clearOverridesOfType(C.TRACK_TYPE_TEXT)
                                         .setOverrideForType(TrackSelectionOverride(targetSub.group.mediaTrackGroup, targetSub.trackIndex))
                                         .build()
                                     isSubtitleDisabledState.value = false
@@ -1214,6 +1235,18 @@ class ExoPlayerActivity : BaseActivity() {
                         this.useController = false
                         this.resizeMode = resizeMode
                         this.setBackgroundColor(android.graphics.Color.BLACK)
+                        this.subtitleView?.apply {
+                            val style = CaptionStyleCompat(
+                                android.graphics.Color.WHITE,
+                                android.graphics.Color.TRANSPARENT,
+                                android.graphics.Color.TRANSPARENT,
+                                CaptionStyleCompat.EDGE_TYPE_OUTLINE,
+                                android.graphics.Color.BLACK,
+                                null,
+                            )
+                            setStyle(style)
+                            setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+                        }
                         this@ExoPlayerActivity.playerView = this
                     }
                 },
