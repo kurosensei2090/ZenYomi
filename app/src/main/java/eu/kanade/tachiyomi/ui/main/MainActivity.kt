@@ -634,11 +634,16 @@ class MainActivity : BaseActivity() {
                     context.startActivity(intent)
                 }
             } else if (engine == PlayerEngine.EXOPLAYER) {
+                val hosterName = if (hosterIndex >= 0 && hosterList != null && hosterIndex < hosterList.size) {
+                    hosterList[hosterIndex].hosterName
+                } else null
                 context.startActivity(
                     ExoPlayerActivity.newIntent(
                         context,
                         animeId,
                         episodeId,
+                        initialHosterName = hosterName,
+                        initialVideoUrl = video?.videoUrl,
                     ),
                 )
             } else {

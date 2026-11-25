@@ -52,6 +52,7 @@ import eu.kanade.presentation.components.TabbedDialogPaddings
 import eu.kanade.tachiyomi.animesource.AnimeSource
 import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.Video
+import eu.kanade.tachiyomi.extension.anime.cloudstream.CloudStreamAnimeSource
 import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadManager
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.player.controls.components.sheets.HosterState
@@ -167,6 +168,15 @@ class EpisodeOptionsDialogScreenModel(
 
     init {
         val hasFoundPreferredVideo = AtomicBoolean(false)
+
+        screenModelScope.launchIO {
+            CloudStreamAnimeSource.discoveredHostersFlow.collect { event ->
+                val ep = _episode.value
+                if (ep != null && (ep.url == event.episodeUrl || event.episodeUrl.endsWith(ep.url) || ep.url.endsWith(event.episodeUrl))) {
+                    appendDiscoveredHosters(event.hosters)
+                }
+            }
+        }
 
         screenModelScope.launchIO {
             val episode = Injekt.get<GetEpisode>().await(episodeId)!!
@@ -385,6 +395,82 @@ class EpisodeOptionsDialogScreenModel(
                 )
             } else {
                 h
+            }
+        }
+    }
+
+    fun appendDiscoveredHosters(newHosters: List<Hoster>) {
+        if (newHosters.isEmpty()) return
+
+        synchronized(this) {
+            val currentHosterList = _hosterList.value.toMutableList()
+            val currentHosterStates = (_hosterState.value?.getOrNull() ?: emptyList()).toMutableList()
+            val currentExpanded = _hosterExpandedList.value.toMutableList()
+
+            var hasChanges = false
+
+            for (newHoster in newHosters) {
+                val existingIndex = currentHosterList.indexOfFirst {
+                    it.hosterName.equals(newHoster.hosterName, ignoreCase = true)
+                }
+                if (existingIndex != -1) {
+                    val existingHoster = currentHosterList[existingIndex]
+                    val existingVideos = existingHoster.videoList.orEmpty()
+                    val newVideosToAdd = (newHoster.videoList.orEmpty()).filter { newVid ->
+                        existingVideos.none { it.videoUrl == newVid.videoUrl || it.videoTitle == newVid.videoTitle }
+                    }
+                    if (newVideosToAdd.isNotEmpty()) {
+                        val mergedVideos = existingVideos + newVideosToAdd
+                        val mergedHoster = existingHoster.copy(videoList = mergedVideos)
+                        currentHosterList[existingIndex] = mergedHoster
+
+                        val existingState = currentHosterStates.getOrNull(existingIndex)
+                        if (existingState is HosterState.Ready) {
+                            val mergedState = HosterState.Ready(
+                                name = existingState.name,
+                                videoList = mergedVideos,
+                                videoState = existingState.videoState + List(newVideosToAdd.size) { Video.State.QUEUE },
+                            )
+                            currentHosterStates[existingIndex] = mergedState
+                        }
+                        hasChanges = true
+                    }
+                } else {
+                    currentHosterList.add(newHoster)
+                    currentExpanded.add(true)
+
+                    val newVideos = newHoster.videoList
+                    val newState = if (newVideos != null) {
+                        HosterState.Ready(
+                            name = newHoster.hosterName,
+                            videoList = newVideos,
+                            videoState = List(newVideos.size) { Video.State.QUEUE },
+                        )
+                    } else {
+                        HosterState.Idle(newHoster.hosterName)
+                    }
+                    currentHosterStates.add(newState)
+                    hasChanges = true
+                }
+            }
+
+            if (hasChanges) {
+                _hosterList.value = currentHosterList
+                _hosterExpandedList.value = currentExpanded
+                _hosterState.value = Result.success(currentHosterStates)
+
+                if (_currentVideo.value == null && currentHosterStates.any { it is HosterState.Ready && it.videoList.isNotEmpty() }) {
+                    val (hIdx, vIdx) = HosterLoader.selectBestVideo(currentHosterStates)
+                    if (hIdx != -1) {
+                        val vid = (currentHosterStates[hIdx] as HosterState.Ready).videoList[vIdx]
+                        val src = _source.value
+                        if (src != null) {
+                            screenModelScope.launchIO {
+                                loadVideo(src, vid, hIdx, vIdx)
+                            }
+                        }
+                    }
+                }
             }
         }
     }

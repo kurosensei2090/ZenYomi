@@ -463,8 +463,30 @@ class ExoPlayerActivity : BaseActivity() {
                     return@launch
                 }
 
+                val initialHosterName = intent.getStringExtra(EXTRA_INITIAL_HOSTER_NAME)
+                intent.removeExtra(EXTRA_INITIAL_HOSTER_NAME)
+                val targetHoster = if (!initialHosterName.isNullOrEmpty()) {
+                    hosters.find { it.hosterName.equals(initialHosterName, ignoreCase = true) }
+                } else null
+
                 val hosterAndVideo = withContext(Dispatchers.IO) {
-                    HosterLoader.getBestHosterAndVideo(source, hosters)
+                    if (targetHoster != null) {
+                        try {
+                            val hosterState = EpisodeLoader.loadHosterVideos(source, targetHoster)
+                            val chosenVideo = if (hosterState is eu.kanade.tachiyomi.ui.player.controls.components.sheets.HosterState.Ready && hosterState.videoList.isNotEmpty()) {
+                                HosterLoader.getResolvedVideo(source, hosterState.videoList.first())
+                            } else null
+                            if (chosenVideo != null && chosenVideo.videoUrl.isNotEmpty()) {
+                                Pair(targetHoster, chosenVideo)
+                            } else {
+                                HosterLoader.getBestHosterAndVideo(source, hosters)
+                            }
+                        } catch (e: Exception) {
+                            HosterLoader.getBestHosterAndVideo(source, hosters)
+                        }
+                    } else {
+                        HosterLoader.getBestHosterAndVideo(source, hosters)
+                    }
                 }
 
                 if (hosterAndVideo == null || hosterAndVideo.second.videoUrl.isEmpty()) {
@@ -2411,11 +2433,25 @@ class ExoPlayerActivity : BaseActivity() {
     companion object {
         const val EXTRA_ANIME_ID = "extra_anime_id"
         const val EXTRA_EPISODE_ID = "extra_episode_id"
+        const val EXTRA_INITIAL_HOSTER_NAME = "extra_initial_hoster_name"
+        const val EXTRA_INITIAL_VIDEO_URL = "extra_initial_video_url"
 
-        fun newIntent(context: Context, animeId: Long, episodeId: Long): Intent {
+        fun newIntent(
+            context: Context,
+            animeId: Long,
+            episodeId: Long,
+            initialHosterName: String? = null,
+            initialVideoUrl: String? = null,
+        ): Intent {
             return Intent(context, ExoPlayerActivity::class.java).apply {
                 putExtra(EXTRA_ANIME_ID, animeId)
                 putExtra(EXTRA_EPISODE_ID, episodeId)
+                if (!initialHosterName.isNullOrEmpty()) {
+                    putExtra(EXTRA_INITIAL_HOSTER_NAME, initialHosterName)
+                }
+                if (!initialVideoUrl.isNullOrEmpty()) {
+                    putExtra(EXTRA_INITIAL_VIDEO_URL, initialVideoUrl)
+                }
             }
         }
 

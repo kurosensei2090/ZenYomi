@@ -84,10 +84,12 @@ class ExternalIntents {
         chosenVideo: Video?,
     ): Intent? {
         if (!initAnime(animeId, episodeId)) return null
-        val hosters = EpisodeLoader.getHosters(episode, anime, source)
 
         val video = chosenVideo
-            ?: HosterLoader.getBestVideo(source, hosters)
+            ?: run {
+                val hosters = EpisodeLoader.getHosters(episode, anime, source)
+                HosterLoader.getBestVideo(source, hosters)
+            }
             ?: throw Exception("Video list is empty")
 
         var videoUrl = getVideoUrl(source, context, video) ?: return null
@@ -303,11 +305,17 @@ class ExternalIntents {
                 for (header in headers) {
                     headersArray += arrayOf(header.first, header.second)
                     headersBundle.putString(header.first, header.second)
+                    if (header.first.equals("User-Agent", ignoreCase = true)) {
+                        putExtra(":http-user-agent", header.second)
+                    }
+                    if (header.first.equals("Referer", ignoreCase = true)) {
+                        putExtra(":http-referrer", header.second)
+                    }
                 }
                 putExtra("headers", headersArray)
                 putExtra("android.media.intent.extra.HTTP_HEADERS", headersBundle)
                 val headersString = headers.joinToString("\r\n") { "${it.first}: ${it.second}" }
-                if (!isSupportedPlayer) putExtra("http-header-fields", headersString)
+                putExtra("http-header-fields", headersString)
             }
         }
     }
@@ -318,11 +326,15 @@ class ExternalIntents {
      * @param uri the path data of the video.
      */
     private fun getMime(uri: Uri): String {
-        return when (uri.path?.substringAfterLast(".")) {
+        val cleanPath = uri.path?.substringBefore("?") ?: uri.toString().substringBefore("?")
+        val ext = cleanPath.substringAfterLast(".", "").lowercase()
+        return when (ext) {
             "mp4" -> "video/mp4"
             "mkv" -> "video/x-matroska"
             "m3u8" -> "application/x-mpegURL"
-            else -> "video/any"
+            "webm" -> "video/webm"
+            "mov" -> "video/quicktime"
+            else -> "video/*"
         }
     }
 
