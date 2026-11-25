@@ -67,15 +67,16 @@ class HosterLoader {
         }
 
         class EarlyReturnException(val video: Video) : Exception()
+        class EarlyReturnHosterVideoException(val hoster: Hoster, val video: Video) : Exception()
 
         /**
-         * Return the first loaded and valid "best" video, based on the criteria in the function `selectBestVideo` above.
+         * Return the first loaded and valid "best" (hoster, video) pair, based on the criteria in selectBestVideo.
          *
          * @param source The source for the episode
          * @param hosterList the list of hosters
-         * @return the video, or null if no valid video was found
+         * @return the hoster and video pair, or null if no valid video was found
          */
-        suspend fun getBestVideo(source: AnimeSource, hosterList: List<Hoster>): Video? {
+        suspend fun getBestHosterAndVideo(source: AnimeSource, hosterList: List<Hoster>): Pair<Hoster, Video>? {
             val hosterStates = MutableList<HosterState>(hosterList.size) { HosterState.Idle("") }
 
             return try {
@@ -99,7 +100,7 @@ class HosterLoader {
                                     val resolvedVideo = getResolvedVideo(source, video)
                                     if (resolvedVideo?.videoUrl?.isNotEmpty() == true) {
                                         coroutineContext.cancelChildren()
-                                        throw EarlyReturnException(resolvedVideo)
+                                        throw EarlyReturnHosterVideoException(hoster, resolvedVideo)
                                     }
 
                                     hosterStates[hosterIdx] =
@@ -127,7 +128,7 @@ class HosterLoader {
                         val resolvedVideo = getResolvedVideo(source, video)
                         if (resolvedVideo?.videoUrl?.isNotEmpty() == true) {
                             coroutineContext.cancelChildren()
-                            return@withContext resolvedVideo
+                            return@withContext Pair(hosterList[hosterIdx], resolvedVideo)
                         }
 
                         hosterStates[hosterIdx] =
@@ -144,9 +145,20 @@ class HosterLoader {
                     coroutineContext.cancelChildren()
                     return@withContext null
                 }
-            } catch (e: EarlyReturnException) {
-                e.video
+            } catch (e: EarlyReturnHosterVideoException) {
+                Pair(e.hoster, e.video)
             }
+        }
+
+        /**
+         * Return the first loaded and valid "best" video, based on the criteria in the function `selectBestVideo` above.
+         *
+         * @param source The source for the episode
+         * @param hosterList the list of hosters
+         * @return the video, or null if no valid video was found
+         */
+        suspend fun getBestVideo(source: AnimeSource, hosterList: List<Hoster>): Video? {
+            return getBestHosterAndVideo(source, hosterList)?.second
         }
 
         suspend fun getResolvedVideo(source: AnimeSource?, video: Video): Video? {

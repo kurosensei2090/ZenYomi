@@ -50,6 +50,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.BrightnessMedium
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.HighQuality
@@ -90,6 +91,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -227,6 +229,8 @@ class ExoPlayerActivity : BaseActivity() {
     private var hasNextEpisodeState = mutableStateOf(false)
     private var episodesListState = mutableStateOf<List<Episode>>(emptyList())
     private var hostersListState = mutableStateOf<List<Hoster>>(emptyList())
+    private var selectedHosterNameState = mutableStateOf("")
+    private val failedHosterNames = mutableSetOf<String>()
     private var availableSubtitlesState = mutableStateOf<List<ExoTrackInfo>>(emptyList())
     private var availableAudioTracksState = mutableStateOf<List<ExoTrackInfo>>(emptyList())
     private var availableVideoQualitiesState = mutableStateOf<List<ExoVideoQualityInfo>>(emptyList())
@@ -392,6 +396,8 @@ class ExoPlayerActivity : BaseActivity() {
                 currentEpisode = null
                 currentHosters = emptyList()
                 hostersListState.value = emptyList()
+                selectedHosterNameState.value = ""
+                failedHosterNames.clear()
                 currentVideo = null
                 qualityInfoState.value = ""
                 availableSubtitlesState.value = emptyList()
@@ -457,16 +463,18 @@ class ExoPlayerActivity : BaseActivity() {
                     return@launch
                 }
 
-                val bestVideo = withContext(Dispatchers.IO) {
-                    HosterLoader.getBestVideo(source, hosters)
+                val hosterAndVideo = withContext(Dispatchers.IO) {
+                    HosterLoader.getBestHosterAndVideo(source, hosters)
                 }
 
-                if (bestVideo == null || bestVideo.videoUrl.isEmpty()) {
-                    toast("No playable stream found")
-                    isBufferingState.value = false
+                if (hosterAndVideo == null || hosterAndVideo.second.videoUrl.isEmpty()) {
+                    val startPos = if (resumePosition >= 0) resumePosition else episode.lastSecondSeen
+                    switchToNextServer(startPos, "No playable stream found")
                     return@launch
                 }
 
+                val (chosenHoster, bestVideo) = hosterAndVideo
+                selectedHosterNameState.value = chosenHoster.hosterName
                 currentVideo = bestVideo
                 qualityInfoState.value = buildString {
                     append(bestVideo.videoTitle.ifEmpty { "Default" })
@@ -482,6 +490,67 @@ class ExoPlayerActivity : BaseActivity() {
                 logcat(LogPriority.ERROR, t) { "ExoPlayer loading error: ${t.message}" }
                 toast("Error loading episode: ${t.message}")
                 isBufferingState.value = false
+            }
+        }
+    }
+
+    private fun switchToNextServer(resumePosition: Long = -1L, reason: String? = null) {
+        val currentHosterName = selectedHosterNameState.value
+        if (currentHosterName.isNotEmpty()) {
+            failedHosterNames.add(currentHosterName)
+        }
+
+        val allHosters = hostersListState.value
+        val availableHosters = allHosters.filter { it.hosterName !in failedHosterNames }
+
+        if (availableHosters.isEmpty()) {
+            toast(if (!reason.isNullOrEmpty()) "All servers failed ($reason)" else "All servers failed")
+            isBufferingState.value = false
+            return
+        }
+
+        val nextHoster = availableHosters.first()
+        val currentPosSec = if (resumePosition >= 0) {
+            resumePosition
+        } else {
+            (player?.currentPosition ?: 0L) / 1000L
+        }
+
+        toast(
+            if (currentHosterName.isNotEmpty()) {
+                "Server '$currentHosterName' failed. Switching to '${nextHoster.hosterName}'..."
+            } else {
+                "Switching to '${nextHoster.hosterName}'..."
+            }
+        )
+
+        lifecycleScope.launch {
+            try {
+                isBufferingState.value = true
+                val source = sourceManager.get(currentAnime?.source ?: -1L) ?: run {
+                    isBufferingState.value = false
+                    return@launch
+                }
+                val hosterState = withContext(Dispatchers.IO) {
+                    EpisodeLoader.loadHosterVideos(source, nextHoster)
+                }
+                val chosenVideo = if (hosterState is eu.kanade.tachiyomi.ui.player.controls.components.sheets.HosterState.Ready && hosterState.videoList.isNotEmpty()) {
+                    HosterLoader.getResolvedVideo(source, hosterState.videoList.first())
+                } else null
+
+                if (chosenVideo != null && chosenVideo.videoUrl.isNotEmpty()) {
+                    currentVideo = chosenVideo
+                    selectedHosterNameState.value = nextHoster.hosterName
+                    qualityInfoState.value = chosenVideo.videoTitle
+                    initExoPlayer(chosenVideo, currentPosSec)
+                } else {
+                    failedHosterNames.add(nextHoster.hosterName)
+                    switchToNextServer(currentPosSec, "Failed to load from ${nextHoster.hosterName}")
+                }
+            } catch (e: Throwable) {
+                if (e is CancellationException) throw e
+                failedHosterNames.add(nextHoster.hosterName)
+                switchToNextServer(currentPosSec, e.message)
             }
         }
     }
@@ -729,8 +798,13 @@ class ExoPlayerActivity : BaseActivity() {
 
                         override fun onPlayerError(error: PlaybackException) {
                             logcat(LogPriority.WARN, error) { "ExoPlayer error: ${error.message}" }
-                            toast("Playback error: ${error.message}")
-                            isBufferingState.value = false
+                            val remaining = hostersListState.value.filter { it.hosterName !in failedHosterNames && it.hosterName != selectedHosterNameState.value }
+                            if (remaining.isNotEmpty()) {
+                                switchToNextServer(reason = error.errorCodeName)
+                            } else {
+                                toast("Playback error: ${error.message}")
+                                isBufferingState.value = false
+                            }
                         }
                     },
                 )
@@ -1875,13 +1949,16 @@ class ExoPlayerActivity : BaseActivity() {
                         if (hostersList.isEmpty()) {
                             Text("No alternate servers available.")
                         } else {
-                            LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp)) {
+                            LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 350.dp)) {
                                 items(hostersList) { hoster ->
-                                    val isCurrent = currentVideo?.videoTitle?.contains(hoster.hosterName, ignoreCase = true) == true
+                                    val isCurrent = hoster.hosterName.equals(selectedHosterNameState.value, ignoreCase = true) ||
+                                        (selectedHosterNameState.value.isEmpty() && currentVideo?.videoTitle?.contains(hoster.hosterName, ignoreCase = true) == true)
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier
                                             .fillMaxWidth()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent)
                                             .clickable {
                                                 showServersDialog = false
                                                 lifecycleScope.launch {
@@ -1897,6 +1974,8 @@ class ExoPlayerActivity : BaseActivity() {
 
                                                         if (chosenVideo != null && chosenVideo.videoUrl.isNotEmpty()) {
                                                             currentVideo = chosenVideo
+                                                            selectedHosterNameState.value = hoster.hosterName
+                                                            failedHosterNames.remove(hoster.hosterName)
                                                             qualityInfoState.value = chosenVideo.videoTitle
                                                             val resumePos = player?.currentPosition ?: 0L
                                                             initExoPlayer(chosenVideo, resumePos / 1000L)
@@ -1910,8 +1989,16 @@ class ExoPlayerActivity : BaseActivity() {
                                                     }
                                                 }
                                             }
-                                            .padding(vertical = 10.dp, horizontal = 8.dp),
+                                            .padding(vertical = 10.dp, horizontal = 12.dp),
                                     ) {
+                                        if (isCurrent) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = "Active server",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(18.dp).padding(end = 8.dp),
+                                            )
+                                        }
                                         Text(
                                             text = hoster.hosterName,
                                             fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
@@ -1919,11 +2006,19 @@ class ExoPlayerActivity : BaseActivity() {
                                             modifier = Modifier.weight(1f),
                                         )
                                         if (isCurrent) {
-                                            Text(
-                                                text = "Active",
-                                                fontSize = 11.sp,
-                                                color = MaterialTheme.colorScheme.primary,
-                                            )
+                                            Surface(
+                                                shape = RoundedCornerShape(4.dp),
+                                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                                                modifier = Modifier.padding(start = 8.dp),
+                                            ) {
+                                                Text(
+                                                    text = "Active",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                )
+                                            }
                                         }
                                     }
                                 }
