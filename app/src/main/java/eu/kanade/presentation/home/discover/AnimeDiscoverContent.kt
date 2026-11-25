@@ -1,5 +1,6 @@
 package eu.kanade.presentation.home.discover
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -7,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,7 +17,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -26,8 +31,8 @@ import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.PushPin
-import androidx.compose.material.icons.outlined.Whatshot
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -49,10 +54,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import eu.kanade.presentation.browse.InLibraryBadge
 import eu.kanade.presentation.browse.anime.components.AnimeSourceIcon
 import eu.kanade.presentation.entries.components.ItemCover
 import eu.kanade.tachiyomi.ui.home.discover.AnimeDiscoverScreenModel
+import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.domain.entries.anime.model.Anime
 import tachiyomi.domain.entries.anime.model.AnimeCover
 import tachiyomi.domain.source.anime.model.Pin
@@ -64,7 +71,6 @@ import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.screens.EmptyScreenAction
 import tachiyomi.presentation.core.screens.LoadingScreen
 import tachiyomi.presentation.core.util.plus
-import kotlinx.collections.immutable.persistentListOf
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,6 +85,7 @@ fun AnimeDiscoverContent(
     onSelectSource: (Long) -> Unit,
     onTogglePin: (Long) -> Unit = {},
     onExploreExtensionsClick: () -> Unit,
+    onGlobalSearchClick: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var showSourceSheet by remember { mutableStateOf(false) }
@@ -103,6 +110,93 @@ fun AnimeDiscoverContent(
                             ),
                         ),
                     )
+                }
+
+                // If a search query is active in Discover tab, display search results view
+                !state.searchQuery.isNullOrBlank() -> {
+                    val query = state.searchQuery
+                    val sourceName = state.currentSource?.name?.removeSuffix(" [CS]")?.trim() ?: "Source"
+                    if (state.isSearching && state.searchResults.isEmpty()) {
+                        LoadingScreen(Modifier.padding(contentPadding))
+                    } else if (!state.isSearching && state.searchResults.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(contentPadding),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(16.dp),
+                                modifier = Modifier.padding(24.dp),
+                            ) {
+                                Text(
+                                    text = "No results found for \"$query\" on $sourceName",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Button(onClick = { onGlobalSearchClick(query) }) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Public,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Search all sources")
+                                }
+                            }
+                        }
+                    } else {
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(115.dp),
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = contentPadding + PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 88.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "Results in $sourceName",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                        if (state.isSearching) {
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                        }
+                                    }
+                                    TextButton(onClick = { onGlobalSearchClick(query) }) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Public,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "Search all sources",
+                                            style = MaterialTheme.typography.labelMedium,
+                                        )
+                                    }
+                                }
+                            }
+
+                            itemsIndexed(state.searchResults, key = { idx, anime -> "search_${anime.id}_$idx" }) { _, anime ->
+                                DiscoverAnimeCard(
+                                    anime = anime,
+                                    onClick = { onAnimeClick(anime) },
+                                    onLongClick = { onAnimeLongClick(anime) },
+                                )
+                            }
+                        }
+                    }
                 }
 
                 state.isLoading && state.popularAnime.isEmpty() && state.latestAnime.isEmpty() -> {
@@ -185,6 +279,24 @@ fun AnimeDiscoverContent(
                                             onClick = { onAnimeClick(anime) },
                                             onLongClick = { onAnimeLongClick(anime) },
                                         )
+                                    }
+                                }
+                            }
+                        } else if (state.isLatestLoading && (state.currentSource?.supportsLatest == true)) {
+                            item(key = "header_latest_loading") {
+                                DiscoverSectionHeader(
+                                    title = stringResource(AYMR.strings.discover_latest),
+                                    onMoreClick = onMoreLatestClick,
+                                )
+                            }
+                            item(key = "row_latest_loading") {
+                                LazyRow(
+                                    contentPadding = PaddingValues(horizontal = 16.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    userScrollEnabled = false,
+                                ) {
+                                    items(5) {
+                                        DiscoverAnimeCardPlaceholder()
                                     }
                                 }
                             }
@@ -415,13 +527,49 @@ private fun DiscoverAnimeCard(
             }
         }
         Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = anime.title,
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.Medium,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            color = MaterialTheme.colorScheme.onSurface,
+        // Fixed title box height to prevent LazyRow height jitter and layout jumping
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(38.dp),
+        ) {
+            Text(
+                text = anime.title,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DiscoverAnimeCardPlaceholder() {
+    Column(modifier = Modifier.width(120.dp)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .height(14.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.55f)
+                .height(14.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
         )
     }
 }

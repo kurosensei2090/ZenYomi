@@ -147,11 +147,13 @@ data object AnimeLibraryTab : Tab {
         val discoverState by discoverScreenModel.state.collectAsState()
         val sourcePreferences: SourcePreferences by injectLazy()
         var currentMode by sourcePreferences.animeHomeScreenMode().asState(scope)
+        val isDiscover = currentMode == "DISCOVER"
 
         Scaffold(
             topBar = { scrollBehavior ->
                 Column {
-                    val title = if (currentMode == "DISCOVER") {
+                    val activeSearchQuery = if (isDiscover) discoverState.searchQuery else state.searchQuery
+                    val title = if (isDiscover) {
                         LibraryToolbarTitle(
                             text = stringResource(AYMR.strings.tab_discover),
                         )
@@ -162,10 +164,10 @@ data object AnimeLibraryTab : Tab {
                             page = screenModel.activeCategoryIndex,
                         )
                     }
-                    val tabVisible = state.showCategoryTabs && state.categories.size > 1 && currentMode == "LIBRARY"
+                    val tabVisible = state.showCategoryTabs && state.categories.size > 1 && !isDiscover
                     LibraryToolbar(
-                        hasActiveFilters = state.hasActiveFilters && currentMode == "LIBRARY",
-                        selectedCount = if (currentMode == "LIBRARY") state.selection.size else 0,
+                        hasActiveFilters = state.hasActiveFilters && !isDiscover,
+                        selectedCount = if (!isDiscover) state.selection.size else 0,
                         title = title,
                         onClickUnselectAll = screenModel::clearSelection,
                         onClickSelectAll = { screenModel.selectAll(screenModel.activeCategoryIndex) },
@@ -176,7 +178,7 @@ data object AnimeLibraryTab : Tab {
                         },
                         onClickFilter = screenModel::showSettingsDialog,
                         onClickRefresh = {
-                            if (currentMode == "DISCOVER") {
+                            if (isDiscover) {
                                 discoverScreenModel.refresh()
                             } else {
                                 onClickRefresh(
@@ -197,12 +199,18 @@ data object AnimeLibraryTab : Tab {
                                 }
                             }
                         },
-                        searchQuery = state.searchQuery,
-                        onSearchQueryChange = screenModel::search,
+                        searchQuery = activeSearchQuery,
+                        onSearchQueryChange = { q ->
+                            if (isDiscover) {
+                                discoverScreenModel.search(q)
+                            } else {
+                                screenModel.search(q)
+                            }
+                        },
                         scrollBehavior = scrollBehavior.takeIf { !tabVisible }, // For scroll overlay when no tab
                     )
 
-                    if (state.searchQuery.isNullOrEmpty() && state.selection.isEmpty()) {
+                    if (activeSearchQuery.isNullOrEmpty() && state.selection.isEmpty()) {
                         PrimaryTabRow(
                             selectedTabIndex = if (currentMode == "DISCOVER") 0 else 1,
                             modifier = Modifier.fillMaxWidth(),
@@ -299,6 +307,9 @@ data object AnimeLibraryTab : Tab {
                             scope.launch {
                                 HomeScreen.openTab(HomeScreen.Tab.Browse(toExtensions = true, anime = true))
                             }
+                        },
+                        onGlobalSearchClick = { q ->
+                            navigator.push(GlobalAnimeSearchScreen(searchQuery = q))
                         },
                     )
                 }
@@ -422,8 +433,10 @@ data object AnimeLibraryTab : Tab {
             null -> {}
         }
 
-        BackHandler(enabled = state.selectionMode || state.searchQuery != null) {
+        val isDiscoverSearching = isDiscover && !discoverState.searchQuery.isNullOrBlank()
+        BackHandler(enabled = isDiscoverSearching || state.selectionMode || state.searchQuery != null) {
             when {
+                isDiscoverSearching -> discoverScreenModel.search(null)
                 state.selectionMode -> screenModel.clearSelection()
                 state.searchQuery != null -> screenModel.search(null)
             }

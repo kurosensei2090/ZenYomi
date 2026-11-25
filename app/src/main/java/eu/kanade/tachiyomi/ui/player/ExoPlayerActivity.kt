@@ -125,6 +125,7 @@ import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
+import androidx.media3.exoplayer.source.SingleSampleMediaSource
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
@@ -596,39 +597,57 @@ class ExoPlayerActivity : BaseActivity() {
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
 
         // Build main video media item
-        val mediaItemBuilder = MediaItem.Builder().setUri(video.videoUrl)
-        val allSubtitleConfigs = mutableListOf<MediaItem.SubtitleConfiguration>()
-        if (video.subtitleTracks.isNotEmpty()) {
-            val subtitleConfigs = video.subtitleTracks.map { track ->
-                val mimeType = when {
-                    track.url.endsWith(".vtt", ignoreCase = true) -> MimeTypes.TEXT_VTT
-                    track.url.endsWith(".srt", ignoreCase = true) -> MimeTypes.APPLICATION_SUBRIP
-                    track.url.endsWith(".ass", ignoreCase = true) || track.url.endsWith(".ssa", ignoreCase = true) -> MimeTypes.TEXT_SSA
-                    else -> MimeTypes.APPLICATION_SUBRIP
-                }
-                MediaItem.SubtitleConfiguration.Builder(Uri.parse(track.url))
-                    .setMimeType(mimeType)
-                    .setLanguage(track.lang)
-                    .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
-                    .build()
-            }
-            allSubtitleConfigs.addAll(subtitleConfigs)
-        }
-        allSubtitleConfigs.addAll(externalSubtitleConfigs)
-        if (allSubtitleConfigs.isNotEmpty()) {
-            mediaItemBuilder.setSubtitleConfigurations(allSubtitleConfigs)
-        }
-        val mediaItem = mediaItemBuilder.build()
+        val mediaItem = MediaItem.Builder().setUri(video.videoUrl).build()
         val videoSource = mediaSourceFactory.createMediaSource(mediaItem)
 
-        return if (video.audioTracks.isNotEmpty()) {
-            val sources = mutableListOf<MediaSource>(videoSource)
+        val sources = mutableListOf<MediaSource>(videoSource)
+
+        // Embedded / network subtitle tracks from video object
+        if (video.subtitleTracks.isNotEmpty()) {
+            for (track in video.subtitleTracks) {
+                try {
+                    val mimeType = when {
+                        track.url.endsWith(".vtt", ignoreCase = true) -> MimeTypes.TEXT_VTT
+                        track.url.endsWith(".srt", ignoreCase = true) -> MimeTypes.APPLICATION_SUBRIP
+                        track.url.endsWith(".ass", ignoreCase = true) || track.url.endsWith(".ssa", ignoreCase = true) -> MimeTypes.TEXT_SSA
+                        else -> MimeTypes.APPLICATION_SUBRIP
+                    }
+                    val subConfig = MediaItem.SubtitleConfiguration.Builder(Uri.parse(track.url))
+                        .setMimeType(mimeType)
+                        .setLanguage(track.lang)
+                        .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                        .build()
+                    val subSource = SingleSampleMediaSource.Factory(dataSourceFactory)
+                        .createMediaSource(subConfig, C.TIME_UNSET)
+                    sources.add(subSource)
+                } catch (e: Throwable) {
+                    logcat(LogPriority.WARN, e) { "Failed to create subtitle source for ${track.url}" }
+                }
+            }
+        }
+
+        // External sidecar subtitle files added by user
+        for (subConfig in externalSubtitleConfigs) {
+            try {
+                val subSource = SingleSampleMediaSource.Factory(dataSourceFactory)
+                    .createMediaSource(subConfig, C.TIME_UNSET)
+                sources.add(subSource)
+            } catch (e: Throwable) {
+                logcat(LogPriority.WARN, e) { "Failed to create external subtitle source" }
+            }
+        }
+
+        // Additional audio tracks if present
+        if (video.audioTracks.isNotEmpty()) {
             for (audioTrack in video.audioTracks) {
                 val audioItem = MediaItem.Builder()
                     .setUri(audioTrack.url)
                     .build()
                 sources.add(mediaSourceFactory.createMediaSource(audioItem))
             }
+        }
+
+        return if (sources.size > 1) {
             MergingMediaSource(*sources.toTypedArray())
         } else {
             videoSource
@@ -646,14 +665,6 @@ class ExoPlayerActivity : BaseActivity() {
                 }
             }
 
-            val lowerName = displayName.lowercase()
-            val mimeType = when {
-                lowerName.endsWith(".vtt") -> MimeTypes.TEXT_VTT
-                lowerName.endsWith(".srt") -> MimeTypes.APPLICATION_SUBRIP
-                lowerName.endsWith(".ass") || lowerName.endsWith(".ssa") -> MimeTypes.TEXT_SSA
-                else -> MimeTypes.APPLICATION_SUBRIP
-            }
-
             // Copy subtitle stream to local cache directory so ExoPlayer has direct, persistent file access
             val subCacheDir = File(cacheDir, "subtitles").apply { mkdirs() }
             val safeName = displayName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
@@ -663,6 +674,29 @@ class ExoPlayerActivity : BaseActivity() {
                     input.copyTo(output)
                 }
             }
+
+            // Sniff format from filename or content
+            var mimeType = MimeTypes.APPLICATION_SUBRIP
+            val lowerName = displayName.lowercase()
+            if (lowerName.endsWith(".vtt")) {
+                mimeType = MimeTypes.TEXT_VTT
+            } else if (lowerName.endsWith(".ass") || lowerName.endsWith(".ssa")) {
+                mimeType = MimeTypes.TEXT_SSA
+            } else if (lowerName.endsWith(".srt")) {
+                mimeType = MimeTypes.APPLICATION_SUBRIP
+            } else if (localSubFile.exists() && localSubFile.length() > 0) {
+                try {
+                    val header = localSubFile.bufferedReader().use { reader ->
+                        (1..10).mapNotNull { reader.readLine() }.joinToString("\n")
+                    }
+                    if (header.contains("WEBVTT", ignoreCase = true)) {
+                        mimeType = MimeTypes.TEXT_VTT
+                    } else if (header.contains("[Script Info]", ignoreCase = true) || header.contains("[Events]", ignoreCase = true)) {
+                        mimeType = MimeTypes.TEXT_SSA
+                    }
+                } catch (_: Throwable) {}
+            }
+
             val targetUri = if (localSubFile.exists() && localSubFile.length() > 0) {
                 Uri.fromFile(localSubFile)
             } else {
@@ -1245,7 +1279,7 @@ class ExoPlayerActivity : BaseActivity() {
                                 null,
                             )
                             setStyle(style)
-                            setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+                            setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, 19f)
                         }
                         this@ExoPlayerActivity.playerView = this
                     }
@@ -2317,6 +2351,7 @@ class ExoPlayerActivity : BaseActivity() {
                                                     p.trackSelectionParameters = p.trackSelectionParameters
                                                         .buildUpon()
                                                         .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                                                        .clearOverridesOfType(C.TRACK_TYPE_TEXT)
                                                         .setOverrideForType(TrackSelectionOverride(sub.group.mediaTrackGroup, sub.trackIndex))
                                                         .build()
                                                 }

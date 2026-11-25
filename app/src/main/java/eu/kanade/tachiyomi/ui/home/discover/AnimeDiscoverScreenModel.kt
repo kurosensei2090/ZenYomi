@@ -6,6 +6,7 @@ import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.domain.entries.anime.model.toDomainAnime
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.animesource.AnimeCatalogueSource
+import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
@@ -13,6 +14,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
@@ -44,6 +46,7 @@ class AnimeDiscoverScreenModel(
 
     private val feedCache = ConcurrentHashMap<Long, FeedCache>()
     private var loadFeedJob: Job? = null
+    private var searchJob: Job? = null
 
     init {
         screenModelScope.launchIO {
@@ -77,6 +80,7 @@ class AnimeDiscoverScreenModel(
                         it.copy(
                             isLoading = false,
                             isRefreshing = false,
+                            isLatestLoading = false,
                             sources = persistentListOf(),
                             currentSource = null,
                             popularAnime = persistentListOf(),
@@ -105,6 +109,8 @@ class AnimeDiscoverScreenModel(
                     mutableState.update {
                         it.copy(
                             isLoading = false,
+                            isRefreshing = false,
+                            isLatestLoading = false,
                             currentSource = null,
                             popularAnime = persistentListOf(),
                             latestAnime = persistentListOf(),
@@ -118,6 +124,10 @@ class AnimeDiscoverScreenModel(
     fun selectSource(sourceId: Long) {
         sourcePreferences.preferredHomeSource().set(sourceId)
         loadSourceFeed(sourceId)
+        val currentQuery = state.value.searchQuery
+        if (!currentQuery.isNullOrBlank()) {
+            search(currentQuery)
+        }
     }
 
     fun togglePin(sourceId: Long) {
@@ -132,13 +142,72 @@ class AnimeDiscoverScreenModel(
 
     fun refresh() {
         val currentId = state.value.currentSource?.id ?: return
-        loadSourceFeed(currentId, isRefresh = true)
+        val currentQuery = state.value.searchQuery
+        if (!currentQuery.isNullOrBlank()) {
+            search(currentQuery)
+        } else {
+            loadSourceFeed(currentId, isRefresh = true)
+        }
+    }
+
+    fun search(query: String?) {
+        searchJob?.cancel()
+        val trimmed = query?.trim().orEmpty()
+        if (trimmed.isEmpty()) {
+            mutableState.update {
+                it.copy(
+                    searchQuery = null,
+                    isSearching = false,
+                    searchResults = persistentListOf(),
+                )
+            }
+            return
+        }
+
+        mutableState.update {
+            it.copy(
+                searchQuery = query,
+                isSearching = true,
+            )
+        }
+
+        searchJob = screenModelScope.launchIO {
+            delay(400)
+            val source = state.value.currentSource
+            if (source == null) {
+                mutableState.update { it.copy(isSearching = false) }
+                return@launchIO
+            }
+
+            try {
+                val page = source.getSearchAnime(1, trimmed, AnimeFilterList())
+                val results = coroutineScope {
+                    page.animes.map { anime ->
+                        async { networkToLocalAnime.await(anime.toDomainAnime(source.id)) }
+                    }.awaitAll().distinctBy { it.id }
+                }
+                mutableState.update {
+                    it.copy(
+                        isSearching = false,
+                        searchResults = results.toImmutableList(),
+                    )
+                }
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR, e) { "Failed to search source ${source.id} for '$trimmed'" }
+                mutableState.update {
+                    it.copy(
+                        isSearching = false,
+                        searchResults = persistentListOf(),
+                    )
+                }
+            }
+        }
     }
 
     private fun loadSourceFeed(sourceId: Long, isRefresh: Boolean = false) {
         val catalogueSource = sourceManager.get(sourceId) as? AnimeCatalogueSource
         if (catalogueSource == null) {
-            mutableState.update { it.copy(isLoading = false, isRefreshing = false) }
+            mutableState.update { it.copy(isLoading = false, isRefreshing = false, isLatestLoading = false) }
             return
         }
 
@@ -149,6 +218,7 @@ class AnimeDiscoverScreenModel(
                 it.copy(
                     isLoading = false,
                     isRefreshing = false,
+                    isLatestLoading = false,
                     currentSource = catalogueSource,
                     popularAnime = cached.popular.toImmutableList(),
                     latestAnime = cached.latest.toImmutableList(),
@@ -160,10 +230,12 @@ class AnimeDiscoverScreenModel(
         loadFeedJob?.cancel()
         loadFeedJob = screenModelScope.launchIO {
             val hasCache = cached != null && !isRefresh
+            val supportsLatest = catalogueSource.supportsLatest
             mutableState.update {
                 it.copy(
                     isLoading = !hasCache && !isRefresh,
                     isRefreshing = isRefresh,
+                    isLatestLoading = supportsLatest && (!hasCache || it.latestAnime.isEmpty()),
                     currentSource = catalogueSource,
                     popularAnime = if (hasCache) it.popularAnime else persistentListOf(),
                     latestAnime = if (hasCache) it.latestAnime else persistentListOf(),
@@ -171,80 +243,77 @@ class AnimeDiscoverScreenModel(
                 )
             }
 
-            try {
-                val popularJob = async {
+            var popularResult = cached?.popular.orEmpty()
+            var latestResult = cached?.latest.orEmpty()
+
+            val popularJob = launch {
+                try {
+                    val page = catalogueSource.getPopularAnime(1)
+                    val list = coroutineScope {
+                        page.animes.map { anime ->
+                            async { networkToLocalAnime.await(anime.toDomainAnime(sourceId)) }
+                        }.awaitAll().distinctBy { it.id }
+                    }
+                    if (list.isNotEmpty()) {
+                        popularResult = list
+                        mutableState.update {
+                            it.copy(
+                                isLoading = false,
+                                popularAnime = list.toImmutableList(),
+                            )
+                        }
+                    }
+                } catch (e: Throwable) {
+                    logcat(LogPriority.ERROR, e) { "Failed to load popular anime from source $sourceId" }
+                } finally {
+                    mutableState.update { it.copy(isLoading = false) }
+                }
+            }
+
+            val latestJob = launch {
+                if (supportsLatest) {
                     try {
-                        val page = catalogueSource.getPopularAnime(1)
-                        coroutineScope {
+                        val page = catalogueSource.getLatestUpdates(1)
+                        val list = coroutineScope {
                             page.animes.map { anime ->
                                 async { networkToLocalAnime.await(anime.toDomainAnime(sourceId)) }
                             }.awaitAll().distinctBy { it.id }
                         }
-                    } catch (e: Throwable) {
-                        logcat(LogPriority.ERROR, e) { "Failed to load popular anime from source $sourceId" }
-                        emptyList()
-                    }
-                }
-
-                val latestJob = async {
-                    try {
-                        if (catalogueSource.supportsLatest) {
-                            val page = catalogueSource.getLatestUpdates(1)
-                            coroutineScope {
-                                page.animes.map { anime ->
-                                    async { networkToLocalAnime.await(anime.toDomainAnime(sourceId)) }
-                                }.awaitAll().distinctBy { it.id }
+                        if (list.isNotEmpty()) {
+                            latestResult = list
+                            mutableState.update {
+                                it.copy(
+                                    isLatestLoading = false,
+                                    latestAnime = list.toImmutableList(),
+                                )
                             }
-                        } else {
-                            emptyList()
                         }
                     } catch (e: Throwable) {
                         logcat(LogPriority.ERROR, e) { "Failed to load latest anime from source $sourceId" }
-                        emptyList()
+                    } finally {
+                        mutableState.update { it.copy(isLatestLoading = false) }
                     }
+                } else {
+                    mutableState.update { it.copy(isLatestLoading = false) }
                 }
+            }
 
-                val popular = popularJob.await()
-                if (popular.isNotEmpty()) {
-                    mutableState.update {
-                        it.copy(
-                            isLoading = false,
-                            popularAnime = popular.toImmutableList(),
-                        )
-                    }
-                }
+            popularJob.join()
+            latestJob.join()
 
-                val latest = latestJob.await()
-                if (latest.isNotEmpty()) {
-                    mutableState.update {
-                        it.copy(
-                            latestAnime = latest.toImmutableList(),
-                        )
-                    }
-                }
+            if (popularResult.isNotEmpty() || latestResult.isNotEmpty()) {
+                feedCache[sourceId] = FeedCache(popularResult, latestResult)
+            }
 
-                if (popular.isNotEmpty() || latest.isNotEmpty()) {
-                    feedCache[sourceId] = FeedCache(popular, latest)
-                }
-
-                mutableState.update {
-                    it.copy(
-                        isLoading = false,
-                        isRefreshing = false,
-                        popularAnime = if (popular.isNotEmpty()) popular.toImmutableList() else it.popularAnime,
-                        latestAnime = if (latest.isNotEmpty()) latest.toImmutableList() else it.latestAnime,
-                        errorMessage = if (it.popularAnime.isEmpty() && it.latestAnime.isEmpty()) "Failed to load content" else null,
-                    )
-                }
-            } catch (e: Throwable) {
-                logcat(LogPriority.ERROR, e) { "Error loading feed for source $sourceId: ${e.message}" }
-                mutableState.update {
-                    it.copy(
-                        isLoading = false,
-                        isRefreshing = false,
-                        errorMessage = if (it.popularAnime.isEmpty() && it.latestAnime.isEmpty()) (e.message ?: "Failed to load feed") else null,
-                    )
-                }
+            mutableState.update {
+                it.copy(
+                    isLoading = false,
+                    isRefreshing = false,
+                    isLatestLoading = false,
+                    popularAnime = if (popularResult.isNotEmpty()) popularResult.toImmutableList() else it.popularAnime,
+                    latestAnime = if (latestResult.isNotEmpty()) latestResult.toImmutableList() else it.latestAnime,
+                    errorMessage = if (it.popularAnime.isEmpty() && it.latestAnime.isEmpty()) "Failed to load content" else null,
+                )
             }
         }
     }
@@ -253,10 +322,14 @@ class AnimeDiscoverScreenModel(
     data class State(
         val isLoading: Boolean = true,
         val isRefreshing: Boolean = false,
+        val isLatestLoading: Boolean = false,
         val sources: ImmutableList<AnimeSource> = persistentListOf(),
         val currentSource: AnimeCatalogueSource? = null,
         val popularAnime: ImmutableList<Anime> = persistentListOf(),
         val latestAnime: ImmutableList<Anime> = persistentListOf(),
         val errorMessage: String? = null,
+        val searchQuery: String? = null,
+        val isSearching: Boolean = false,
+        val searchResults: ImmutableList<Anime> = persistentListOf(),
     )
 }
