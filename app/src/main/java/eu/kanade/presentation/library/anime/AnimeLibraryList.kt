@@ -49,7 +49,7 @@ internal fun AnimeLibraryList(
         items(
             items = items,
             contentType = { "anime_library_list_item" },
-            key = { it.libraryAnime.id },
+            key = { "anime_${it.libraryAnime.category}_${it.libraryAnime.id}" },
         ) { libraryItem ->
             val anime = libraryItem.libraryAnime.anime
             EntryListItem(

@@ -42,7 +42,10 @@ fun BrowseMangaSourceComfortableGrid(
 
         items(
             count = mangaList.itemCount,
-            key = { index -> mangaList.peek(index)?.value?.id?.takeIf { it > 0 } ?: -(index.toLong() + 1L) },
+            key = { index ->
+                val id = mangaList.peek(index)?.value?.id
+                if (id != null && id > 0) "manga_${id}_$index" else "idx_$index"
+            },
         ) { index ->
             val manga by mangaList[index]?.collectAsState() ?: return@items
             BrowseMangaSourceComfortableGridItem(

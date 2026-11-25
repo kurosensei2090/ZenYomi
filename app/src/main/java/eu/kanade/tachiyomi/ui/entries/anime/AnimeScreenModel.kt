@@ -11,6 +11,7 @@ import aniyomi.core.common.torrent.TorrentPreferences
 import aniyomi.core.common.torrent.TorrentServerUtils
 import aniyomi.domain.anime.SeasonAnime
 import aniyomi.domain.anime.SeasonDisplayMode
+import tachiyomi.domain.library.model.LibraryDisplayMode
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.core.util.addOrRemove
@@ -176,7 +177,8 @@ class AnimeScreenModel(
     val alwaysUseExternalPlayer = playerPreferences.alwaysUseExternalPlayer().get()
     val useExternalDownloader = downloadPreferences.useExternalDownloader().get()
 
-    val relatedAnimeDisplayMode = sourcePreferences.sourceDisplayMode().get()
+    val relatedAnimeDisplayMode: LibraryDisplayMode
+        get() = sourcePreferences.sourceDisplayMode().get() ?: LibraryDisplayMode.default
 
     val isUpdateIntervalEnabled =
         LibraryPreferences.ENTRY_OUTSIDE_RELEASE_PERIOD in libraryPreferences.autoUpdateItemRestrictions().get()

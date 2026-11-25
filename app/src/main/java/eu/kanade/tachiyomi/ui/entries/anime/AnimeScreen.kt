@@ -27,6 +27,7 @@ import eu.kanade.domain.entries.anime.model.hasCustomBackground
 import eu.kanade.domain.entries.anime.model.hasCustomCover
 import eu.kanade.domain.entries.anime.model.toSAnime
 import eu.kanade.presentation.category.components.ChangeCategoryDialog
+import tachiyomi.domain.library.model.LibraryDisplayMode
 import eu.kanade.presentation.components.NavigatorAdaptiveSheet
 import eu.kanade.presentation.entries.EditCoverAction
 import eu.kanade.presentation.entries.anime.AnimeScreen
@@ -230,7 +231,7 @@ class AnimeScreen(
             onRelatedAnimeLongClicked = { relatedAnime ->
                 navigator.push(GlobalAnimeSearchScreen(relatedAnime.title))
             },
-            relatedAnimeDisplayMode = screenModel.relatedAnimeDisplayMode,
+            relatedAnimeDisplayMode = screenModel.relatedAnimeDisplayMode ?: LibraryDisplayMode.default,
         )
 
         val onDismissRequest = {
