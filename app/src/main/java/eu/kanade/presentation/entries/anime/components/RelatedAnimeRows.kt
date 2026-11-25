@@ -37,13 +37,14 @@ private const val MAX_ITEMS_PER_ROW = 3
 @Composable
 fun RelatedAnimeRows(
     relations: List<AnimeRelationGroup>,
-    displayMode: LibraryDisplayMode,
+    displayMode: LibraryDisplayMode? = LibraryDisplayMode.default,
     onRelatedClick: (Anime) -> Unit,
     onRelatedLongClick: (Anime) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (relations.isEmpty()) return
 
+    val mode = displayMode ?: LibraryDisplayMode.default
     val (smalls, multis) = relations.partition { it.anime.size <= MAX_ITEMS_PER_ROW }
 
     Column(modifier = modifier.padding(bottom = MaterialTheme.padding.medium)) {
@@ -93,7 +94,7 @@ fun RelatedAnimeRows(
                                             Box(modifier = Modifier.widthIn(max = RELATED_ITEM_WIDTH)) {
                                                 RelatedAnimeItem(
                                                     anime = anime,
-                                                    displayMode = displayMode,
+                                                    displayMode = mode,
                                                     onClick = { onRelatedClick(anime) },
                                                     onLongClick = { onRelatedLongClick(anime) },
                                                 )
@@ -132,7 +133,7 @@ fun RelatedAnimeRows(
                     Box(modifier = Modifier.width(RELATED_ITEM_WIDTH)) {
                         RelatedAnimeItem(
                             anime = anime,
-                            displayMode = displayMode,
+                            displayMode = mode,
                             onClick = { onRelatedClick(anime) },
                             onLongClick = { onRelatedLongClick(anime) },
                         )

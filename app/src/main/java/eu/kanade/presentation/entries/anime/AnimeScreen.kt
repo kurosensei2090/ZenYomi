@@ -165,7 +165,7 @@ fun AnimeScreen(
     // Related anime clicked
     onRelatedAnimeClicked: (Anime) -> Unit,
     onRelatedAnimeLongClicked: (Anime) -> Unit,
-    relatedAnimeDisplayMode: LibraryDisplayMode = LibraryDisplayMode.default,
+    relatedAnimeDisplayMode: LibraryDisplayMode? = LibraryDisplayMode.default,
 ) {
     val context = LocalContext.current
     val onCopyTagToClipboard: (tag: String) -> Unit = {
@@ -222,7 +222,7 @@ fun AnimeScreen(
             onClickContinueWatching = onContinueWatchingClicked,
             onRelatedAnimeClicked = onRelatedAnimeClicked,
             onRelatedAnimeLongClicked = onRelatedAnimeLongClicked,
-            relatedAnimeDisplayMode = relatedAnimeDisplayMode,
+            relatedAnimeDisplayMode = relatedAnimeDisplayMode ?: LibraryDisplayMode.default,
         )
     } else {
         AnimeScreenLargeImpl(
@@ -267,7 +267,7 @@ fun AnimeScreen(
             onClickContinueWatching = onContinueWatchingClicked,
             onRelatedAnimeClicked = onRelatedAnimeClicked,
             onRelatedAnimeLongClicked = onRelatedAnimeLongClicked,
-            relatedAnimeDisplayMode = relatedAnimeDisplayMode,
+            relatedAnimeDisplayMode = relatedAnimeDisplayMode ?: LibraryDisplayMode.default,
         )
     }
 }
@@ -333,7 +333,7 @@ private fun AnimeScreenSmallImpl(
     // Related anime clicked
     onRelatedAnimeClicked: (Anime) -> Unit,
     onRelatedAnimeLongClicked: (Anime) -> Unit,
-    relatedAnimeDisplayMode: LibraryDisplayMode = LibraryDisplayMode.default,
+    relatedAnimeDisplayMode: LibraryDisplayMode? = LibraryDisplayMode.default,
 ) {
     val density = LocalDensity.current
     val offsetGridPaddingPx = with(density) { GRID_PADDING.roundToPx() }
@@ -531,7 +531,7 @@ private fun AnimeScreenSmallImpl(
                             relations = state.relatedAnime,
                             onRelatedClick = onRelatedAnimeClicked,
                             onRelatedLongClick = onRelatedAnimeLongClicked,
-                            relatedDisplayMode = relatedAnimeDisplayMode,
+                            relatedDisplayMode = relatedAnimeDisplayMode ?: LibraryDisplayMode.default,
                             modifier = Modifier.ignorePadding(offsetGridPaddingPx),
                         )
                     }
@@ -687,7 +687,7 @@ fun AnimeScreenLargeImpl(
     // Related anime clicked
     onRelatedAnimeClicked: (Anime) -> Unit,
     onRelatedAnimeLongClicked: (Anime) -> Unit,
-    relatedAnimeDisplayMode: LibraryDisplayMode = LibraryDisplayMode.default,
+    relatedAnimeDisplayMode: LibraryDisplayMode? = LibraryDisplayMode.default,
 ) {
     val layoutDirection = LocalLayoutDirection.current
     val density = LocalDensity.current
@@ -854,7 +854,7 @@ fun AnimeScreenLargeImpl(
                                 relations = state.relatedAnime,
                                 onRelatedClick = onRelatedAnimeClicked,
                                 onRelatedLongClick = onRelatedAnimeLongClicked,
-                                relatedDisplayMode = relatedAnimeDisplayMode,
+                                relatedDisplayMode = relatedAnimeDisplayMode ?: LibraryDisplayMode.default,
                             )
                         }
                     },

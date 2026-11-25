@@ -152,11 +152,22 @@ class AnimeDiscoverScreenModel(
 
     fun search(query: String?) {
         searchJob?.cancel()
-        val trimmed = query?.trim().orEmpty()
-        if (trimmed.isEmpty()) {
+        if (query == null) {
             mutableState.update {
                 it.copy(
                     searchQuery = null,
+                    isSearching = false,
+                    searchResults = persistentListOf(),
+                )
+            }
+            return
+        }
+
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) {
+            mutableState.update {
+                it.copy(
+                    searchQuery = query,
                     isSearching = false,
                     searchResults = persistentListOf(),
                 )

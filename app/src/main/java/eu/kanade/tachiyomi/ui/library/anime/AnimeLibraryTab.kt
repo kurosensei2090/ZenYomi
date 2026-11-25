@@ -210,7 +210,7 @@ data object AnimeLibraryTab : Tab {
                         scrollBehavior = scrollBehavior.takeIf { !tabVisible }, // For scroll overlay when no tab
                     )
 
-                    if (activeSearchQuery.isNullOrEmpty() && state.selection.isEmpty()) {
+                    if (activeSearchQuery == null && state.selection.isEmpty()) {
                         PrimaryTabRow(
                             selectedTabIndex = if (currentMode == "DISCOVER") 0 else 1,
                             modifier = Modifier.fillMaxWidth(),
@@ -433,7 +433,7 @@ data object AnimeLibraryTab : Tab {
             null -> {}
         }
 
-        val isDiscoverSearching = isDiscover && !discoverState.searchQuery.isNullOrBlank()
+        val isDiscoverSearching = isDiscover && discoverState.searchQuery != null
         BackHandler(enabled = isDiscoverSearching || state.selectionMode || state.searchQuery != null) {
             when {
                 isDiscoverSearching -> discoverScreenModel.search(null)

@@ -252,7 +252,7 @@ fun ExpandableAnimeDescription(
     relations: List<AnimeRelationGroup>,
     onRelatedClick: (Anime) -> Unit,
     onRelatedLongClick: (Anime) -> Unit,
-    relatedDisplayMode: LibraryDisplayMode,
+    relatedDisplayMode: LibraryDisplayMode? = LibraryDisplayMode.default,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -275,7 +275,7 @@ fun ExpandableAnimeDescription(
             relations = relations,
             onRelatedClick = onRelatedClick,
             onRelatedLongClick = onRelatedLongClick,
-            relatedDisplayMode = relatedDisplayMode,
+            relatedDisplayMode = relatedDisplayMode ?: LibraryDisplayMode.default,
             modifier = Modifier
                 .padding(top = 8.dp)
                 .padding(horizontal = 16.dp)
@@ -586,7 +586,7 @@ private fun AnimeSummary(
     relations: List<AnimeRelationGroup>,
     onRelatedClick: (Anime) -> Unit,
     onRelatedLongClick: (Anime) -> Unit,
-    relatedDisplayMode: LibraryDisplayMode,
+    relatedDisplayMode: LibraryDisplayMode? = LibraryDisplayMode.default,
     modifier: Modifier = Modifier,
 ) {
     val animProgress by animateFloatAsState(if (expanded) 1f else 0f)
@@ -623,7 +623,7 @@ private fun AnimeSummary(
                             relations = relations,
                             onRelatedClick = onRelatedClick,
                             onRelatedLongClick = onRelatedLongClick,
-                            displayMode = relatedDisplayMode,
+                            displayMode = relatedDisplayMode ?: LibraryDisplayMode.default,
                         )
                     }
                 }
