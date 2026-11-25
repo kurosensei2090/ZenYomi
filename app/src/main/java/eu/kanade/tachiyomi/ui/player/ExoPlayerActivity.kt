@@ -343,10 +343,16 @@ class ExoPlayerActivity : BaseActivity() {
         val newAnimeId = intent.getLongExtra(EXTRA_ANIME_ID, -1L)
         val newEpisodeId = intent.getLongExtra(EXTRA_EPISODE_ID, -1L)
         if (newAnimeId != -1L && newEpisodeId != -1L) {
+            val isDifferentAnime = newAnimeId != animeId
             animeId = newAnimeId
             episodeId = newEpisodeId
             currentEpisodeIdState.longValue = newEpisodeId
             saveProgress()
+            if (isDifferentAnime) {
+                currentAnime = null
+                allEpisodes = emptyList()
+                episodesListState.value = emptyList()
+            }
             loadEpisodeAndPlay(newEpisodeId, 0L)
         }
     }
@@ -383,11 +389,28 @@ class ExoPlayerActivity : BaseActivity() {
                 externalSubtitleConfigs.clear()
                 pendingSelectedSubtitleLabel = null
 
+                currentEpisode = null
+                currentHosters = emptyList()
+                hostersListState.value = emptyList()
+                currentVideo = null
+                qualityInfoState.value = ""
+                availableSubtitlesState.value = emptyList()
+                availableAudioTracksState.value = emptyList()
+                availableVideoQualitiesState.value = emptyList()
+                selectedQualityLabelState.value = "Auto"
+
                 isBufferingState.value = true
                 currentEpisodeIdState.longValue = targetEpisodeId
                 episodeId = targetEpisodeId
 
-                val anime = currentAnime ?: withContext(Dispatchers.IO) { getAnime.await(animeId) }
+                val anime = if (currentAnime?.id == animeId) {
+                    currentAnime!!
+                } else {
+                    currentAnime = null
+                    allEpisodes = emptyList()
+                    episodesListState.value = emptyList()
+                    withContext(Dispatchers.IO) { getAnime.await(animeId) }
+                }
                 if (anime == null) {
                     toast("Failed to load anime details")
                     finish()
@@ -396,7 +419,7 @@ class ExoPlayerActivity : BaseActivity() {
                 currentAnime = anime
                 animeTitleState.value = anime.title
 
-                if (allEpisodes.isEmpty()) {
+                if (allEpisodes.isEmpty() || allEpisodes.none { it.animeId == anime.id }) {
                     val rawEpisodes = withContext(Dispatchers.IO) { getEpisodesByAnimeId.await(animeId) }
                     allEpisodes = rawEpisodes.sortedWith(getEpisodeSort(anime, sortDescending = false))
                     episodesListState.value = allEpisodes
