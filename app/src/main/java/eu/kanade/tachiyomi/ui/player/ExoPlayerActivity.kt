@@ -909,6 +909,7 @@ class ExoPlayerActivity : BaseActivity() {
                                     error.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED ||
                                     error.errorCode == PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED
                                 if (isCodecOrFormatError) {
+                                    saveProgress(blocking = true)
                                     toast("Hardware decoder failed. Retrying in MPV Player...")
                                     val targetAnimeId = currentAnime?.id ?: animeId
                                     val targetEpisodeId = currentEpisodeIdState.longValue.takeIf { it != -1L } ?: episodeId
@@ -987,7 +988,7 @@ class ExoPlayerActivity : BaseActivity() {
         }
     }
 
-    private fun saveProgress() {
+    private fun saveProgress(blocking: Boolean = false) {
         val exo = player ?: return
         val episode = currentEpisode ?: return
         val currentPositionSec = exo.currentPosition / 1000L
@@ -996,8 +997,7 @@ class ExoPlayerActivity : BaseActivity() {
         if (totalSec > 0 && currentPositionSec >= 0) {
             val progressThreshold = playerPreferences.progressPreference().get()
             val isWatched = (currentPositionSec.toFloat() / totalSec.toFloat()) >= progressThreshold
-
-            CoroutineScope(Dispatchers.IO + NonCancellable).launch {
+            val persist: suspend () -> Unit = {
                 updateEpisode.await(
                     EpisodeUpdate(
                         id = episode.id,
@@ -1012,6 +1012,15 @@ class ExoPlayerActivity : BaseActivity() {
                         seenAt = Date(),
                     ),
                 )
+            }
+            if (blocking) {
+                kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+                    runCatching { persist() }
+                }
+            } else {
+                CoroutineScope(Dispatchers.IO + NonCancellable).launch {
+                    persist()
+                }
             }
         }
     }

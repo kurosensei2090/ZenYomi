@@ -6,8 +6,8 @@ All notable changes to **ZenYomi** will be documented in this file.
 
 ## [v1.0.5] - 2026-11-26
 
-### 🌟 Overview of Release 1.0.5 (Builds 66 – 80)
-ZenYomi v1.0.5 brings extensive improvements across the media playback engines (both MPV and ExoPlayer), external player integrations, source browsing, and UI stability. Highlights include internal multi-resolution quality selection for MPV Player (#51), MPV startup and buffer latency optimizations (#51), fatal crash prevention and safe chooser fallback for external players (#52), official support for the mpvRx external player (#53), source search query retention across navigation (#54), upstream stability features including "Load Ahead Only on Wi-Fi" reader data saving, one-tap player playback speed preset cycling, and SQLite concurrency hardening (Build 78), CloudStream provider timeout guards, automatic ExoPlayer to MPV codec error failover, TorrServer idle auto-shutdown, and backup validation guards (Build 79), ExoPlayer preferred audio/subtitle language auto-selection, 30s backward seek cache, Coil `onTrimMemory` memory management, transient HTTP retry interceptor, and automatic extension refresh on network reconnect (Build 80), active server indicators and auto-failover in ExoPlayer (#49), real-time link discovery in episode options (#50), and external subtitle rendering fixes.
+### 🌟 Overview of Release 1.0.5 (Builds 66 – 81)
+ZenYomi v1.0.5 brings extensive improvements across the media playback engines (both MPV and ExoPlayer), external player integrations, source browsing, and UI stability. Highlights include internal multi-resolution quality selection for MPV Player (#51), MPV startup and buffer latency optimizations (#51), fatal crash prevention and safe chooser fallback for external players (#52), official support for the mpvRx external player (#53), source search query retention across navigation (#54), upstream stability features including "Load Ahead Only on Wi-Fi" reader data saving, one-tap player playback speed preset cycling, and SQLite concurrency hardening (Build 78), CloudStream provider timeout guards, automatic ExoPlayer to MPV codec error failover, TorrServer idle auto-shutdown, and backup validation guards (Build 79), ExoPlayer preferred audio/subtitle language auto-selection, 30s backward seek cache, Coil `onTrimMemory` memory management, transient HTTP retry interceptor, and automatic extension refresh on network reconnect (Build 80), failover timestamp persistence, configurable image disk cache size, and safe legacy SoC decoder profile (Build 81), active server indicators and auto-failover in ExoPlayer (#49), real-time link discovery in episode options (#50), and external subtitle rendering fixes.
 
 ---
 
@@ -56,6 +56,12 @@ ZenYomi v1.0.5 brings extensive improvements across the media playback engines (
   - Resolved network timeout errors and crashes when adding external subtitles.
 
 #### 🎨 UI & Stability Fixes
+- **ExoPlayer ➔ MPV Failover Timestamp Persistence (Build 81)**:
+  - Synchronously persists exact playback position (`saveProgress(blocking = true)`) before handing off from ExoPlayer to MPV on codec failures, ensuring zero lost seconds.
+- **Configurable Image Disk Cache Size (Build 81)**:
+  - Added **Settings -> Advanced -> Data -> Image disk cache size** (`100 MB` default, up to `1 GB`) for Coil 3's disk cache.
+- **Safe Decoder Profile for Legacy SoCs (Build 81)**:
+  - Added **Settings -> Player -> Decoder -> Safe decoder profile (Legacy SoCs)** to limit MPV hardware decoding to H.264 and cap decoder threads to `4`, preventing green screens or thermal throttling on older devices.
 - **ExoPlayer Preferred Audio & Subtitle Auto-Selection (Build 80)**:
   - Wired `AudioPreferences.preferredAudioLanguages()` and `SubtitlePreferences.preferredSubLanguages()` into ExoPlayer's `TrackSelectionParameters`, ensuring multi-audio/multi-sub streams automatically start in your preferred languages.
 - **ExoPlayer Backward Seek Cache (Build 80)**:
@@ -99,7 +105,8 @@ ZenYomi v1.0.5 brings extensive improvements across the media playback engines (
 
 | Build | Commit | Description |
 |---|---|---|
-| **Build 80** | `f767fbc` | ExoPlayer preferred languages & 30s seek cache, onTrimMemory, HTTP 502/503/504 retry, reconnect auto-refresh |
+| **Build 81** | `930a45a` | Failover timestamp persistence, configurable image cache size, safe decoder profile |
+| **Build 80** | `5c8c637` | ExoPlayer preferred languages & 30s seek cache, onTrimMemory, HTTP 502/503/504 retry, reconnect auto-refresh |
 | **Build 79** | `50f4db9` | CloudStream timeout guards, ExoPlayer-to-MPV failover, TorrServer auto-shutdown, backup validation |
 | **Build 78** | `ab0c75b` | Load ahead only on Wi-Fi, one-tap player speed cycling, SQLite concurrency hardening |
 | **Build 77** | `e34ab87` | Preserve source search query across navigation (Issue #54) |

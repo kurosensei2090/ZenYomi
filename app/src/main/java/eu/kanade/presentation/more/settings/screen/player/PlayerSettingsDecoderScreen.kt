@@ -27,6 +27,7 @@ object PlayerSettingsDecoderScreen : SearchableSettings {
         val useGpuNext = decoderPreferences.gpuNext()
         val debanding = decoderPreferences.videoDebanding()
         val yuv420p = decoderPreferences.useYUV420P()
+        val safeDecoder = decoderPreferences.safeDecoderProfile()
 
         return listOf(
             Preference.PreferenceItem.SwitchPreference(
@@ -50,6 +51,11 @@ object PlayerSettingsDecoderScreen : SearchableSettings {
                 preference = yuv420p,
                 title = stringResource(AYMR.strings.pref_use_yuv420p_title),
                 subtitle = stringResource(AYMR.strings.pref_use_yuv420p_subtitle),
+            ),
+            Preference.PreferenceItem.SwitchPreference(
+                preference = safeDecoder,
+                title = stringResource(AYMR.strings.pref_safe_decoder_profile_title),
+                subtitle = stringResource(AYMR.strings.pref_safe_decoder_profile_subtitle),
             ),
         )
     }

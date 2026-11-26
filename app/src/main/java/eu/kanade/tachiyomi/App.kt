@@ -249,7 +249,7 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
             diskCache {
                 DiskCache.Builder()
                     .directory(cacheDir.resolve("image_cache").toOkioPath())
-                    .maxSizeBytes(100L * 1024 * 1024)
+                    .maxSizeBytes(basePreferences.imageCacheSizeMb().get().toLong().coerceAtLeast(50L) * 1024 * 1024)
                     .build()
             }
 

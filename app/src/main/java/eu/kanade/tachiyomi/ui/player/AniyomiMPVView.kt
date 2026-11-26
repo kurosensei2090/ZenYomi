@@ -115,8 +115,12 @@ class AniyomiMPVView(context: Context, attributes: AttributeSet) : BaseMPVView(c
         setVo(if (decoderPreferences.gpuNext().get()) "gpu-next" else "gpu")
         MPVLib.setPropertyBoolean("pause", true)
         MPVLib.setOptionString("profile", "fast")
+        val safeDecoder = decoderPreferences.safeDecoderProfile().get()
         MPVLib.setOptionString("hwdec", if (decoderPreferences.tryHWDecoding().get()) "auto-safe" else "no")
-        MPVLib.setOptionString("hwdec-codecs", "h264,hevc,vp9,av1")
+        MPVLib.setOptionString("hwdec-codecs", if (safeDecoder) "h264" else "h264,hevc,vp9,av1")
+        if (safeDecoder) {
+            MPVLib.setOptionString("vd-lavc-threads", "4")
+        }
         MPVLib.setOptionString("network-timeout", "20")
         MPVLib.setOptionString("demuxer-lavf-o", "reconnect=1,reconnect_delay_max=5,reconnect_on_http_error=4xx,5xx,http_persistent=1")
         MPVLib.setOptionString("demuxer-lavf-buffersize", "4194304")

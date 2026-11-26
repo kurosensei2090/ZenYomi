@@ -135,7 +135,7 @@ object SettingsAdvancedScreen : SearchableSettings {
                 },
             ),
             getBackgroundActivityGroup(),
-            getDataGroup(),
+            getDataGroup(basePreferences = basePreferences),
             getNetworkGroup(networkPreferences = networkPreferences),
             getLibraryGroup(),
             getReaderGroup(basePreferences = basePreferences),
@@ -186,13 +186,30 @@ object SettingsAdvancedScreen : SearchableSettings {
     }
 
     @Composable
-    private fun getDataGroup(): Preference.PreferenceGroup {
+    private fun getDataGroup(
+        basePreferences: BasePreferences,
+    ): Preference.PreferenceGroup {
         val context = LocalContext.current
         val navigator = LocalNavigator.currentOrThrow
 
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.label_data),
             preferenceItems = persistentListOf(
+                Preference.PreferenceItem.ListPreference(
+                    preference = basePreferences.imageCacheSizeMb(),
+                    entries = persistentMapOf(
+                        100 to "100 MB",
+                        250 to "250 MB",
+                        500 to "500 MB",
+                        1024 to "1 GB",
+                    ),
+                    title = stringResource(MR.strings.pref_image_cache_size),
+                    subtitle = stringResource(MR.strings.pref_image_cache_size_summary, "%s"),
+                    onValueChanged = {
+                        context.toast(MR.strings.requires_app_restart)
+                        true
+                    },
+                ),
                 Preference.PreferenceItem.TextPreference(
                     title = stringResource(MR.strings.pref_invalidate_download_cache),
                     subtitle = stringResource(AYMR.strings.pref_invalidate_download_cache_summary),

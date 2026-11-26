@@ -148,6 +148,8 @@
     <string name="pref_debanding_yuv420p">YUV420P</string>
     <string name="pref_use_yuv420p_title">Use YUV420P pixel format</string>
     <string name="pref_use_yuv420p_subtitle">May fix black screens on some video codecs, can also improve performance at the cost of quality</string>
+    <string name="pref_safe_decoder_profile_title">Safe decoder profile (Legacy SoCs)</string>
+    <string name="pref_safe_decoder_profile_subtitle">Limits hardware decoding to H.264 and caps decoder threads to prevent green screens or thermal throttling on older devices</string>
     <!-- Player settings - Subtitles -->
     <string name="pref_player_subtitle">Subtitles</string>
     <string name="pref_player_subtitle_summary">Preferred languages, whitelist, blacklist</string>
