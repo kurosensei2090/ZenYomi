@@ -376,6 +376,11 @@
     <!-- Reader section -->
     <string name="pref_preserve_reading_position">Preserve reading position on read chapters</string>
     <string name="pref_download_slots">Maximum downloads</string>
+    <string name="pref_download_profile">Anime download mode</string>
+    <string name="pref_download_profile_summary">Balances download speed and anti-IP-block protection automatically</string>
+    <string name="download_profile_auto">Auto (Recommended)</string>
+    <string name="download_profile_safe">Safe (Anti-Ban)</string>
+    <string name="download_profile_fast">Fast</string>
     <string name="custom_button_settings">Custom buttons</string>
     <string name="local_source_badge">Local</string>
     <string name="type">Type</string>

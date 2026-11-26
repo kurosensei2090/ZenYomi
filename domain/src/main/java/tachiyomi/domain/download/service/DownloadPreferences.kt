@@ -1,6 +1,7 @@
 package tachiyomi.domain.download.service
 
 import tachiyomi.core.common.preference.PreferenceStore
+import tachiyomi.core.common.preference.getEnum
 
 class DownloadPreferences(
     private val preferenceStore: PreferenceStore,
@@ -68,6 +69,13 @@ class DownloadPreferences(
 
     fun numberOfDownloads() = preferenceStore.getInt("download_slots", 1)
     fun downloadSpeedLimit() = preferenceStore.getInt("download_speed_limit", 0)
+    fun downloadProfile() = preferenceStore.getEnum("pref_download_profile", DownloadProfile.AUTO)
+
+    enum class DownloadProfile {
+        AUTO,
+        SAFE,
+        FAST,
+    }
 
     fun downloadNewUnreadChaptersOnly() = preferenceStore.getBoolean("download_new_unread_chapters_only", false)
     fun downloadNewUnseenEpisodesOnly() = preferenceStore.getBoolean("download_new_unread_episodes_only", false)

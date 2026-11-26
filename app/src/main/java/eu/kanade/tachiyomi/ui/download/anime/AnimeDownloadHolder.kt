@@ -80,6 +80,13 @@ class AnimeDownloadHolder(private val view: View, val adapter: AnimeDownloadAdap
         } else {
             view.context.stringResource(AYMR.strings.episode_download_progress, download.progress)
         }
+        val statsSummary = download.formatStatsSummary()
+        if (statsSummary != null && download.status == AnimeDownload.State.DOWNLOADING) {
+            binding.downloadStatsText.text = statsSummary
+            binding.downloadStatsText.visibility = View.VISIBLE
+        } else {
+            binding.downloadStatsText.visibility = View.GONE
+        }
     }
 
     override fun onItemReleased(position: Int) {

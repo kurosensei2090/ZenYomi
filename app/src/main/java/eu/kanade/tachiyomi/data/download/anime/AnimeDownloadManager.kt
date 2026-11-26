@@ -452,8 +452,11 @@ class AnimeDownloadManager(
     fun progressFlow(): Flow<AnimeDownload> = queueState
         .flatMapLatest { downloads ->
             downloads
-                .map { download ->
-                    download.progressFlow.drop(1).map { download }
+                .flatMap { download ->
+                    listOf(
+                        download.progressFlow.drop(1).map { download },
+                        download.statsFlow.drop(1).map { download },
+                    )
                 }
                 .merge()
         }

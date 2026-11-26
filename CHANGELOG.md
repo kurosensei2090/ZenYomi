@@ -6,8 +6,8 @@ All notable changes to **ZenYomi** will be documented in this file.
 
 ## [v1.0.5] - 2026-11-26
 
-### 🌟 Overview of Release 1.0.5 (Builds 66 – 81)
-ZenYomi v1.0.5 brings extensive improvements across the media playback engines (both MPV and ExoPlayer), external player integrations, source browsing, and UI stability. Highlights include internal multi-resolution quality selection for MPV Player (#51), MPV startup and buffer latency optimizations (#51), fatal crash prevention and safe chooser fallback for external players (#52), official support for the mpvRx external player (#53), source search query retention across navigation (#54), upstream stability features including "Load Ahead Only on Wi-Fi" reader data saving, one-tap player playback speed preset cycling, and SQLite concurrency hardening (Build 78), CloudStream provider timeout guards, automatic ExoPlayer to MPV codec error failover, TorrServer idle auto-shutdown, and backup validation guards (Build 79), ExoPlayer preferred audio/subtitle language auto-selection, 30s backward seek cache, Coil `onTrimMemory` memory management, transient HTTP retry interceptor, and automatic extension refresh on network reconnect (Build 80), failover timestamp persistence, configurable image disk cache size, and safe legacy SoC decoder profile (Build 81), active server indicators and auto-failover in ExoPlayer (#49), real-time link discovery in episode options (#50), and external subtitle rendering fixes.
+### 🌟 Overview of Release 1.0.5 (Builds 66 – 82)
+ZenYomi v1.0.5 brings extensive improvements across the media playback engines (both MPV and ExoPlayer), external player integrations, episode downloader, source browsing, and UI stability. Highlights include internal multi-resolution quality selection for MPV Player (#51), MPV startup and buffer latency optimizations (#51), fatal crash prevention and safe chooser fallback for external players (#52), official support for the mpvRx external player (#53), source search query retention across navigation (#54), 1DM-style episode download stats (size, speed, ETA) with anti-IP-block pacing & automatic download profiles (#55, Build 82), upstream stability features including "Load Ahead Only on Wi-Fi" reader data saving, one-tap player playback speed preset cycling, and SQLite concurrency hardening (Build 78), CloudStream provider timeout guards, automatic ExoPlayer to MPV codec error failover, TorrServer idle auto-shutdown, and backup validation guards (Build 79), ExoPlayer preferred audio/subtitle language auto-selection, 30s backward seek cache, Coil `onTrimMemory` memory management, transient HTTP retry interceptor, and automatic extension refresh on network reconnect (Build 80), failover timestamp persistence, configurable image disk cache size, and safe legacy SoC decoder profile (Build 81), active server indicators and auto-failover in ExoPlayer (#49), real-time link discovery in episode options (#50), and external subtitle rendering fixes.
 
 ---
 
@@ -56,6 +56,10 @@ ZenYomi v1.0.5 brings extensive improvements across the media playback engines (
   - Resolved network timeout errors and crashes when adding external subtitles.
 
 #### 🎨 UI & Stability Fixes
+- **1DM-Style Episode Download Stats & Anti-IP-Block Pacing (Issue #55, Build 82)**:
+  - Added lightweight throttled (`800ms`) tracking of downloaded size, estimated total size, smoothed download speed (`KB/s` / `MB/s`), and ETA in `AnimeDownloader` and displayed them in the Download Queue UI and notifications.
+  - Reduced download notification polling from `50ms` to `1000ms` to eliminate SystemUI lag.
+  - Added **Settings -> Downloads -> Anime download mode** (`Auto (Recommended)`, `Safe (Anti-Ban)`, `Fast`) with automatic per-source cooldowns, per-source concurrency limits, `3x` backoff on HTTP `429`/`403` rate-limits, and `-http_persistent 1` in FFmpeg for faster HLS downloads with fewer TLS handshakes.
 - **ExoPlayer ➔ MPV Failover Timestamp Persistence (Build 81)**:
   - Synchronously persists exact playback position (`saveProgress(blocking = true)`) before handing off from ExoPlayer to MPV on codec failures, ensuring zero lost seconds.
 - **Configurable Image Disk Cache Size (Build 81)**:
@@ -105,6 +109,7 @@ ZenYomi v1.0.5 brings extensive improvements across the media playback engines (
 
 | Build | Commit | Description |
 |---|---|---|
+| **Build 82** | `c1ecfa7` | 1DM-style episode download stats (size, speed, ETA), anti-IP-block pacing, and automatic download profiles (Issue #55) |
 | **Build 81** | `d1ed9c0` | Failover timestamp persistence, configurable image cache size, safe decoder profile |
 | **Build 80** | `5c8c637` | ExoPlayer preferred languages & 30s seek cache, onTrimMemory, HTTP 502/503/504 retry, reconnect auto-refresh |
 | **Build 79** | `50f4db9` | CloudStream timeout guards, ExoPlayer-to-MPV failover, TorrServer auto-shutdown, backup validation |

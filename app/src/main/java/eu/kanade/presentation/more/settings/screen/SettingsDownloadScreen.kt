@@ -76,6 +76,16 @@ object SettingsDownloadScreen : SearchableSettings {
             )
         }
         return listOf(
+            Preference.PreferenceItem.ListPreference(
+                preference = downloadPreferences.downloadProfile(),
+                entries = persistentMapOf(
+                    DownloadPreferences.DownloadProfile.AUTO to stringResource(AYMR.strings.download_profile_auto),
+                    DownloadPreferences.DownloadProfile.SAFE to stringResource(AYMR.strings.download_profile_safe),
+                    DownloadPreferences.DownloadProfile.FAST to stringResource(AYMR.strings.download_profile_fast),
+                ),
+                title = stringResource(AYMR.strings.pref_download_profile),
+                subtitle = stringResource(AYMR.strings.pref_download_profile_summary),
+            ),
             Preference.PreferenceItem.SwitchPreference(
                 preference = downloadPreferences.downloadOnlyOverWifi(),
                 title = stringResource(MR.strings.connected_to_wifi),

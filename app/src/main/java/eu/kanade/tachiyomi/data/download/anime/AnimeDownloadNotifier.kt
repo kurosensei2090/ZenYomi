@@ -93,10 +93,16 @@ internal class AnimeDownloadNotifier(private val context: Context) {
                 )
             }
 
-            val downloadingProgressText = if (download.progress == 0) {
+            val baseProgressText = if (download.progress == 0) {
                 context.stringResource(MR.strings.update_check_notification_download_in_progress)
             } else {
                 context.stringResource(AYMR.strings.episode_downloading_progress, download.progress)
+            }
+            val statsSummary = download.formatStatsSummary()
+            val downloadingProgressText = if (statsSummary != null) {
+                "$baseProgressText • $statsSummary"
+            } else {
+                baseProgressText
             }
 
             if (preferences.hideNotificationContent().get()) {

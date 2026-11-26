@@ -122,6 +122,11 @@ class AnimeDownloader(
     private val preferences: DownloadPreferences by injectLazy()
 
     /**
+     * Tracks last completion timestamp per source ID for polite anti-IP-block cooldowns
+     */
+    private val lastSourceDownloadEndMs = java.util.concurrent.ConcurrentHashMap<Long, Long>()
+
+    /**
      * Whether the downloader is running.
      */
     val isRunning: Boolean
@@ -205,12 +210,17 @@ class AnimeDownloader(
         downloaderJob = scope.launch {
             val activeDownloadsFlow = queueState.transformLatest { queue ->
                 while (true) {
+                    val maxConcurrentSources = when (preferences.downloadProfile().get()) {
+                        DownloadPreferences.DownloadProfile.SAFE -> 1
+                        DownloadPreferences.DownloadProfile.AUTO -> 2
+                        DownloadPreferences.DownloadProfile.FAST -> 3
+                    }
                     val activeDownloads = queue.asSequence()
                         .filter {
                             it.status.value <= AnimeDownload.State.DOWNLOADING.value
                         } // Ignore completed downloads, leave them in the queue
                         .groupBy { it.source }
-                        .toList().take(3) // Concurrently download from 5 different sources
+                        .toList().take(maxConcurrentSources)
                         .map { (_, downloads) -> downloads.first() }
                     emit(activeDownloads)
 
@@ -253,13 +263,26 @@ class AnimeDownloader(
     private fun CoroutineScope.launchDownloadJob(download: AnimeDownload) = launchIO {
         // This try-catch manages the job cancellation
         try {
+            val cooldownMs = when (preferences.downloadProfile().get()) {
+                DownloadPreferences.DownloadProfile.SAFE -> 3000L
+                DownloadPreferences.DownloadProfile.AUTO -> 1500L
+                DownloadPreferences.DownloadProfile.FAST -> 500L
+            }
+            val lastEnd = lastSourceDownloadEndMs[download.source.id] ?: 0L
+            val elapsedSinceLast = System.currentTimeMillis() - lastEnd
+            if (lastEnd > 0L && elapsedSinceLast in 0 until cooldownMs) {
+                delay(cooldownMs - elapsedSinceLast)
+            }
+
             downloadEpisode(download)
+            lastSourceDownloadEndMs[download.source.id] = System.currentTimeMillis()
 
             // Remove successful download from queue
             if (download.status == AnimeDownload.State.DOWNLOADED) {
                 removeFromQueue(download)
             }
         } catch (e: Throwable) {
+            lastSourceDownloadEndMs[download.source.id] = System.currentTimeMillis()
             if (e is CancellationException) throw e
             logcat(LogPriority.ERROR, e)
             notifier.onError(e.message)
@@ -469,12 +492,13 @@ class AnimeDownloader(
 
                     download.status = AnimeDownload.State.DOWNLOADING
                     download.progress = 0
+                    download.resetStats()
 
                     // If videoFile is not existing then download it
                     if (preferences.useExternalDownloader().get() == download.changeDownloader) {
                         progressJob = scope.launch {
                             while (download.status == AnimeDownload.State.DOWNLOADING) {
-                                delay(50)
+                                delay(1000)
                                 notifier.onProgressChange(download)
                             }
                         }
@@ -549,10 +573,14 @@ class AnimeDownloader(
 
             emit(videoFile)
         }
-            // Retry 3 times, waiting 2, 4 and 8 seconds between attempts.
-            .retryWhen { _, attempt ->
+            // Retry 3 times, waiting 2, 4 and 8 seconds between attempts (or longer if rate-limited).
+            .retryWhen { cause, attempt ->
+                val isRateLimited = cause.message?.let {
+                    it.contains("429") || it.contains("Too Many Requests", ignoreCase = true) || it.contains("403")
+                } == true
                 if (attempt < 3) {
-                    delay((2L shl attempt.toInt()) * 1000)
+                    val baseDelay = (2L shl attempt.toInt()) * 1000
+                    delay(if (isRateLimited) baseDelay * 3 else baseDelay)
                     true
                 } else {
                     false
@@ -649,6 +677,9 @@ class AnimeDownloader(
         }
 
         var duration = 0L
+        var lastSampleTimeMs = System.currentTimeMillis()
+        var lastSampleBytes = 0L
+        var smoothedSpeed = 0L
 
         val logCallback = LogCallback { log ->
             if (log.level <= Level.AV_LOG_WARNING) {
@@ -659,10 +690,46 @@ class AnimeDownloader(
         }
 
         val statCallback = StatisticsCallback { s ->
-            val outTime = (s.time / 1000.0).toLong()
+            val outTimeMs = s.time
+            val outTime = (outTimeMs / 1000.0).toLong()
 
             if (duration != 0L && outTime > 0) {
-                download.progress = (100 * outTime / duration).toInt()
+                download.progress = (100 * outTime / duration).toInt().coerceIn(0, 100)
+            }
+
+            val now = System.currentTimeMillis()
+            val elapsedMs = now - lastSampleTimeMs
+            if (elapsedMs >= 800L) {
+                val currentBytes = s.size.coerceAtLeast(0L)
+                val deltaBytes = (currentBytes - lastSampleBytes).coerceAtLeast(0L)
+                val instantSpeed = (deltaBytes * 1000L) / elapsedMs
+                smoothedSpeed = if (smoothedSpeed == 0L) {
+                    instantSpeed
+                } else {
+                    (smoothedSpeed * 7L + instantSpeed * 3L) / 10L
+                }
+
+                val outTimeSec = outTimeMs / 1000.0
+                val estTotal = if (duration > 0L && outTimeSec > 0.5 && currentBytes > 0L) {
+                    (currentBytes * duration / outTimeSec).toLong().coerceAtLeast(currentBytes)
+                } else {
+                    0L
+                }
+
+                val etaSec = when {
+                    smoothedSpeed > 0L && estTotal > currentBytes -> (estTotal - currentBytes) / smoothedSpeed
+                    duration > 0L && outTimeSec > 0.5 && s.speed > 0f -> ((duration - outTimeSec) / s.speed).toLong().coerceAtLeast(0L)
+                    else -> -1L
+                }
+
+                download.downloadedBytes = currentBytes
+                download.estimatedTotalBytes = estTotal
+                download.downloadSpeedBytesPerSec = smoothedSpeed
+                download.etaSeconds = etaSec
+                download.notifyStatsUpdated()
+
+                lastSampleTimeMs = now
+                lastSampleBytes = currentBytes
             }
         }
 
@@ -696,7 +763,7 @@ class AnimeDownloader(
     }
 
     private fun getFFmpegOptions(video: Video, headerOptions: String, ffmpegFilename: String): Array<String> {
-        val networkOptions = "-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 5 -rw_timeout 15000000"
+        val networkOptions = "-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 5 -http_persistent 1 -rw_timeout 15000000"
 
         fun formatInputs(tracks: List<Track>) = tracks.joinToString(" ", postfix = " ") {
             buildList {
