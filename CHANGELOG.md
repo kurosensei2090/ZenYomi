@@ -4,6 +4,24 @@ All notable changes to **ZenYomi** will be documented in this file.
 
 ---
 
+## [v1.0.6] - 2026-11-27
+
+### 🌟 Overview of Release 1.0.6 (Build 86)
+ZenYomi v1.0.6 fixes all in-app Getting Started and Help/Troubleshooting URLs across onboarding, library empty states, settings, migration, WebView, and local sources so they point to the official `kurosensei2090/ZenYomi` repository and documentation sections instead of the non-existent `zenyomiapp/zenyomi` placeholder.
+
+### 🎨 UI & Documentation Fixes
+- **Getting Started Guide & Help URLs (Build 86)**:
+  - Updated all 14 files containing `https://github.com/zenyomiapp/zenyomi` URLs (`GuidesStep`, `Constants`, `SettingsDataScreen`, `SettingsTrackingScreen`, `PlayerSettingsCustomButtonScreen`, `WebViewScreenContent`, `AnimeLibraryUpdateJob`, `AnimeLibraryUpdateNotifier`, `MangaLibraryUpdateJob`, `MangaLibraryUpdateNotifier`, `MigrateAnimeSourceTab`, `MigrateMangaSourceTab`, `LocalAnimeSource`, `LocalMangaSource`) to point to `https://github.com/kurosensei2090/ZenYomi` with matching section anchors.
+  - Added **Getting Started**, **Tracking**, **Local Manga**, **Local Anime**, **Migration**, **Bulk Updates**, **Custom Buttons**, and **Troubleshooting** sections to `README.md`.
+
+### 📦 Build History for v1.0.6
+
+| Build | Commit | Description |
+|---|---|---|
+| **Build 86** | `0e266e2` | Fix Getting Started & Help URLs (`kurosensei2090/ZenYomi`) and add full documentation sections to `README.md` |
+
+---
+
 ## [v1.0.5] - 2026-11-26
 
 ### 🌟 Overview of Release 1.0.5 (Builds 66 – 85)

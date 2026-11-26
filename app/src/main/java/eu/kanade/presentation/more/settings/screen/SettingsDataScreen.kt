@@ -86,7 +86,7 @@ import uy.kohesive.injekt.api.get
 object SettingsDataScreen : SearchableSettings {
 
     val restorePreferenceKeyString = MR.strings.label_backup
-    const val HELP_URL = "https://github.com/zenyomiapp/zenyomi"
+    const val HELP_URL = "https://github.com/kurosensei2090/ZenYomi#getting-started"
 
     @ReadOnlyComposable
     @Composable

@@ -77,7 +77,7 @@ object SettingsTrackingScreen : SearchableSettings {
     @Composable
     override fun RowScope.AppBarAction() {
         val uriHandler = LocalUriHandler.current
-        IconButton(onClick = { uriHandler.openUri("https://github.com/zenyomiapp/zenyomi#tracking") }) {
+        IconButton(onClick = { uriHandler.openUri("https://github.com/kurosensei2090/ZenYomi#tracking") }) {
             Icon(
                 imageVector = Icons.Outlined.HelpOutline,
                 contentDescription = stringResource(MR.strings.tracking_guide),

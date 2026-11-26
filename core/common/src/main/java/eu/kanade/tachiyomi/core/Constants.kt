@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.core.common
 
 object Constants {
-    const val URL_HELP = "https://github.com/zenyomiapp/zenyomi"
-    const val URL_HELP_UPCOMING = "https://github.com/zenyomiapp/zenyomi"
+    const val URL_HELP = "https://github.com/kurosensei2090/ZenYomi#getting-started"
+    const val URL_HELP_UPCOMING = "https://github.com/kurosensei2090/ZenYomi#getting-started"
 
     const val MANGA_EXTRA = "manga"
 

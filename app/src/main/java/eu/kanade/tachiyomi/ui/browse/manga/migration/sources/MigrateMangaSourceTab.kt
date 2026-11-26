@@ -31,7 +31,7 @@ fun Screen.migrateMangaSourceTab(): TabContent {
                 title = stringResource(MR.strings.migration_help_guide),
                 icon = Icons.AutoMirrored.Outlined.HelpOutline,
                 onClick = {
-                    uriHandler.openUri("https://github.com/zenyomiapp/zenyomi#migration")
+                    uriHandler.openUri("https://github.com/kurosensei2090/ZenYomi#migration")
                 },
             ),
         ),

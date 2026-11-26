@@ -389,7 +389,7 @@ class MangaLibraryUpdateNotifier(
 
     companion object {
         const val HELP_WARNING_URL =
-            "https://github.com/zenyomiapp/zenyomi#bulk-updates"
+            "https://github.com/kurosensei2090/ZenYomi#bulk-updates"
     }
 }
 

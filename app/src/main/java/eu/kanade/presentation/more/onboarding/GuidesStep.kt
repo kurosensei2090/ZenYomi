@@ -56,7 +56,7 @@ internal class GuidesStep(
     }
 }
 
-const val GETTING_STARTED_URL = "https://github.com/zenyomiapp/zenyomi"
+const val GETTING_STARTED_URL = "https://github.com/kurosensei2090/ZenYomi#getting-started"
 
 @PreviewLightDark
 @Composable

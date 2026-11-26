@@ -41,7 +41,7 @@ object PlayerSettingsCustomButtonScreen : Screen() {
 
         CustomButtonScreen(
             state = successState,
-            onClickFAQ = { uriHandler.openUri("https://github.com/zenyomiapp/zenyomi#custom-buttons") },
+            onClickFAQ = { uriHandler.openUri("https://github.com/kurosensei2090/ZenYomi#custom-buttons") },
             onClickCreate = { screenModel.showDialog(CustomButtonDialog.Create) },
             onClickPrimary = { screenModel.togglePrimaryButton(it) },
             onClickEdit = { screenModel.showDialog(CustomButtonDialog.Edit(it)) },

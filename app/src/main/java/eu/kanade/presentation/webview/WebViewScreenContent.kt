@@ -187,7 +187,7 @@ fun WebViewScreenContent(
                                     .clip(MaterialTheme.shapes.small)
                                     .clickable {
                                         uriHandler.openUri(
-                                            "https://github.com/zenyomiapp/zenyomi#troubleshooting",
+                                            "https://github.com/kurosensei2090/ZenYomi#troubleshooting",
                                         )
                                     },
                             )

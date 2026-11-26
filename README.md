@@ -45,6 +45,42 @@
 - Biometric & PIN App Lock for privacy.
 - Automated JSON/Protobuf Backup & Restore across devices.
 
+## Getting Started
+
+Welcome to **ZenYomi**! Follow these steps to set up your library:
+
+1. **Add Extension Repositories**:
+   - Open **Browse → Extensions** (for Manga or Anime) → tap the **⋮ (Menu)** → **Extension repos** → **Add**, and paste your preferred Tachiyomi/Mihon/Aniyomi extension repo URL (or install CloudStream providers via **More → Settings → Browse**).
+2. **Install Sources**:
+   - Go to **Browse → Manga Extensions** or **Anime Extensions** and install the sources you want to use.
+3. **Add Series to Your Library**:
+   - Open any installed source in **Browse → Sources**, search for a title, and tap **Add to library** to track new chapters/episodes and customize categories.
+4. **Configure Reader & Player**:
+   - Customize reading modes in **More → Settings → Reader** and video playback (MPV / ExoPlayer, subtitles, audio tracks, and speeds) in **More → Settings → Player**.
+
+### Tracking
+Connect **AniList**, **MyAnimeList**, **Kitsu**, **Shikimori**, or **Bangumi** in **More → Settings → Tracking** to automatically sync chapters read and episodes watched.
+
+### Local Manga
+Place manga archives (`.cbz`, `.cbr`, `.zip`, `.epub`) or image folders inside `<ZenYomi folder>/local/` on your device storage, then open **Browse → Sources → Local manga source**.
+
+### Local Anime
+Place video files (`.mp4`, `.mkv`, etc.) inside `<ZenYomi folder>/localanime/` organized by series folder, then open **Browse → Sources → Local anime source**.
+
+### Migration
+Use **Browse → Migrate** to transfer a manga or anime from an old/broken source to a working source while keeping your reading/watching progress and categories.
+
+### Bulk Updates
+Configure automatic library update intervals, Wi-Fi-only restrictions, and smart update exclusions in **More → Settings → Library**.
+
+### Custom Buttons
+Add custom MPV Lua/player action buttons in **More → Settings → Player → Custom buttons** for quick gestures or scripts during playback.
+
+### Troubleshooting
+- **Cloudflare / WebView Errors**: Open the series **WebView** icon to complete any browser check, then refresh.
+- **"Refresh Chapter List" Errors**: Pull down to refresh the series entry (ZenYomi also auto-refreshes the chapter list on page load failure).
+- **Video Playback Issues**: Try switching between **ExoPlayer** and **MPV** in **More → Settings → Player** (ZenYomi also supports automatic codec failover).
+
 ## Acknowledgements & Inspirations
 
 ZenYomi stands on the shoulders of giants. Special thanks and deep appreciation to the open-source projects that inspired and paved the way:
