@@ -596,11 +596,7 @@ class ExoPlayerActivity : BaseActivity() {
         val dataSourceFactory = DefaultDataSource.Factory(this, httpDataSourceFactory)
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
 
-        // Build main video media item
-        val mediaItem = MediaItem.Builder().setUri(video.videoUrl).build()
-        val videoSource = mediaSourceFactory.createMediaSource(mediaItem)
-
-        val sources = mutableListOf<MediaSource>(videoSource)
+        val allSubtitleConfigs = mutableListOf<MediaItem.SubtitleConfiguration>()
 
         // Embedded / network subtitle tracks from video object
         if (video.subtitleTracks.isNotEmpty()) {
@@ -617,9 +613,7 @@ class ExoPlayerActivity : BaseActivity() {
                         .setLanguage(track.lang)
                         .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
                         .build()
-                    val subSource = SingleSampleMediaSource.Factory(dataSourceFactory)
-                        .createMediaSource(subConfig, C.TIME_UNSET)
-                    sources.add(subSource)
+                    allSubtitleConfigs.add(subConfig)
                 } catch (e: Throwable) {
                     logcat(LogPriority.WARN, e) { "Failed to create subtitle source for ${track.url}" }
                 }
@@ -627,31 +621,28 @@ class ExoPlayerActivity : BaseActivity() {
         }
 
         // External sidecar subtitle files added by user
-        for (subConfig in externalSubtitleConfigs) {
-            try {
-                val subSource = SingleSampleMediaSource.Factory(dataSourceFactory)
-                    .createMediaSource(subConfig, C.TIME_UNSET)
-                sources.add(subSource)
-            } catch (e: Throwable) {
-                logcat(LogPriority.WARN, e) { "Failed to create external subtitle source" }
-            }
-        }
+        allSubtitleConfigs.addAll(externalSubtitleConfigs)
+
+        // Build main video media item with subtitles attached directly
+        val mediaItem = MediaItem.Builder()
+            .setUri(video.videoUrl)
+            .setSubtitleConfigurations(allSubtitleConfigs)
+            .build()
+        val videoSource = mediaSourceFactory.createMediaSource(mediaItem)
 
         // Additional audio tracks if present
         if (video.audioTracks.isNotEmpty()) {
+            val sources = mutableListOf<MediaSource>(videoSource)
             for (audioTrack in video.audioTracks) {
                 val audioItem = MediaItem.Builder()
                     .setUri(audioTrack.url)
                     .build()
                 sources.add(mediaSourceFactory.createMediaSource(audioItem))
             }
+            return MergingMediaSource(*sources.toTypedArray())
         }
 
-        return if (sources.size > 1) {
-            MergingMediaSource(*sources.toTypedArray())
-        } else {
-            videoSource
-        }
+        return videoSource
     }
 
     private fun addExternalSubtitle(uri: Uri) {
@@ -875,6 +866,21 @@ class ExoPlayerActivity : BaseActivity() {
 
                         override fun onPlayerError(error: PlaybackException) {
                             logcat(LogPriority.WARN, error) { "ExoPlayer error: ${error.message}" }
+                            if (externalSubtitleConfigs.isNotEmpty()) {
+                                toast("Subtitle error: ${error.message ?: "Failed to display subtitle"}")
+                                externalSubtitleConfigs.clear()
+                                pendingSelectedSubtitleLabel = null
+                                currentVideo?.let { vid ->
+                                    val exo = player ?: return
+                                    val curPos = exo.currentPosition
+                                    val wasPlaying = exo.isPlaying
+                                    val mediaSource = createMediaSource(vid)
+                                    exo.setMediaSource(mediaSource, curPos)
+                                    exo.prepare()
+                                    if (wasPlaying) exo.play()
+                                }
+                                return
+                            }
                             val remaining = hostersListState.value.filter { it.hosterName !in failedHosterNames && it.hosterName != selectedHosterNameState.value }
                             if (remaining.isNotEmpty()) {
                                 switchToNextServer(reason = error.errorCodeName)

@@ -5,9 +5,11 @@ import eu.kanade.tachiyomi.animesource.AnimeSource
 class GlobalAnimeSearchScreenModel(
     initialQuery: String = "",
     initialExtensionFilter: String? = null,
+    initialFilter: AnimeSourceFilter = AnimeSourceFilter.All,
 ) : AnimeSearchScreenModel(
     State(
         searchQuery = initialQuery,
+        sourceFilter = initialFilter,
     ),
 ) {
 

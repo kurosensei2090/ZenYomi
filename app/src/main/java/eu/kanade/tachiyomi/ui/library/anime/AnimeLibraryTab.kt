@@ -58,6 +58,7 @@ import eu.kanade.presentation.more.onboarding.GETTING_STARTED_URL
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.library.anime.AnimeLibraryUpdateJob
+import eu.kanade.tachiyomi.ui.browse.anime.source.globalsearch.AnimeSourceFilter
 import eu.kanade.tachiyomi.ui.browse.anime.source.globalsearch.GlobalAnimeSearchScreen
 import eu.kanade.tachiyomi.ui.category.CategoriesTab
 import eu.kanade.tachiyomi.ui.entries.anime.AnimeScreen
@@ -207,6 +208,11 @@ data object AnimeLibraryTab : Tab {
                                 screenModel.search(q)
                             }
                         },
+                        onSearch = { q ->
+                            if (isDiscover && q.isNotBlank()) {
+                                navigator.push(GlobalAnimeSearchScreen(searchQuery = q, initialFilter = AnimeSourceFilter.All))
+                            }
+                        },
                         scrollBehavior = scrollBehavior.takeIf { !tabVisible }, // For scroll overlay when no tab
                     )
 
@@ -309,7 +315,7 @@ data object AnimeLibraryTab : Tab {
                             }
                         },
                         onGlobalSearchClick = { q ->
-                            navigator.push(GlobalAnimeSearchScreen(searchQuery = q))
+                            navigator.push(GlobalAnimeSearchScreen(searchQuery = q, initialFilter = AnimeSourceFilter.All))
                         },
                     )
                 }

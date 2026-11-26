@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import cafe.adriel.voyager.core.model.rememberScreenModel
+import cafe.adriel.voyager.core.screen.ScreenKey
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.core.util.ifAnimeSourcesLoaded
@@ -20,7 +21,11 @@ import tachiyomi.presentation.core.screens.LoadingScreen
 class GlobalAnimeSearchScreen(
     val searchQuery: String = "",
     private val extensionFilter: String? = null,
+    private val initialFilter: AnimeSourceFilter = AnimeSourceFilter.All,
 ) : Screen() {
+
+    override val key: ScreenKey
+        get() = "GlobalAnimeSearchScreen_${searchQuery}_${extensionFilter}_${initialFilter.name}"
 
     @Composable
     override fun Content() {
@@ -31,10 +36,11 @@ class GlobalAnimeSearchScreen(
 
         val navigator = LocalNavigator.currentOrThrow
 
-        val screenModel = rememberScreenModel {
+        val screenModel = rememberScreenModel(tag = "${searchQuery}_${extensionFilter}_${initialFilter.name}") {
             GlobalAnimeSearchScreenModel(
                 initialQuery = searchQuery,
                 initialExtensionFilter = extensionFilter,
+                initialFilter = initialFilter,
             )
         }
         val state by screenModel.state.collectAsState()

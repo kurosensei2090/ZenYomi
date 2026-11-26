@@ -41,6 +41,7 @@ fun LibraryToolbar(
     onSearchQueryChange: (String?) -> Unit,
     scrollBehavior: TopAppBarScrollBehavior?,
     navigateUp: (() -> Unit)? = null,
+    onSearch: (String) -> Unit = {},
 ) = when {
     selectedCount > 0 -> LibrarySelectionToolbar(
         selectedCount = selectedCount,
@@ -59,6 +60,7 @@ fun LibraryToolbar(
         onClickOpenRandomEntry = onClickOpenRandomEntry,
         scrollBehavior = scrollBehavior,
         navigateUp = navigateUp,
+        onSearch = onSearch,
     )
 }
 
@@ -74,6 +76,7 @@ private fun LibraryRegularToolbar(
     onClickOpenRandomEntry: () -> Unit,
     scrollBehavior: TopAppBarScrollBehavior?,
     navigateUp: (() -> Unit)?,
+    onSearch: (String) -> Unit = {},
 ) {
     val pillAlpha = if (isSystemInDarkTheme()) 0.12f else 0.08f
     SearchToolbar(
@@ -96,6 +99,7 @@ private fun LibraryRegularToolbar(
         },
         searchQuery = searchQuery,
         onChangeSearchQuery = onSearchQueryChange,
+        onSearch = onSearch,
         actions = {
             val filterTint = if (hasFilters) MaterialTheme.colorScheme.active else LocalContentColor.current
             AppBarActions(
