@@ -5,6 +5,7 @@ import android.app.Activity
 import android.app.Application
 import android.app.SearchManager
 import android.app.assist.AssistContent
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -628,10 +629,36 @@ class MainActivity : BaseActivity() {
                     withUIContext { Injekt.get<Application>().toast(e.message) }
                     null
                 } ?: return
-                if (externalPlayerResult != null) {
-                    externalPlayerResult?.launch(intent)
-                } else {
-                    context.startActivity(intent)
+                try {
+                    if (externalPlayerResult != null) {
+                        externalPlayerResult?.launch(intent)
+                    } else {
+                        context.startActivity(intent)
+                    }
+                } catch (e: ActivityNotFoundException) {
+                    logcat(LogPriority.ERROR, e)
+                    withUIContext {
+                        Injekt.get<Application>().toast("Could not launch external player")
+                    }
+                    if (intent.component != null || intent.`package` != null) {
+                        try {
+                            val fallbackIntent = Intent(intent).apply {
+                                component = null
+                                `package` = null
+                            }
+                            val chooser = Intent.createChooser(fallbackIntent, null)
+                            if (externalPlayerResult != null) {
+                                externalPlayerResult?.launch(chooser)
+                            } else {
+                                context.startActivity(chooser)
+                            }
+                        } catch (fallbackEx: Exception) {
+                            logcat(LogPriority.ERROR, fallbackEx)
+                        }
+                    }
+                } catch (e: Exception) {
+                    logcat(LogPriority.ERROR, e)
+                    withUIContext { Injekt.get<Application>().toast(e.message) }
                 }
             } else if (engine == PlayerEngine.EXOPLAYER) {
                 val hosterName = if (hosterIndex >= 0 && hosterList != null && hosterIndex < hosterList.size) {

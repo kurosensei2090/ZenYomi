@@ -8,9 +8,6 @@ import androidx.compose.runtime.remember
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.presentation.more.settings.screen.SearchableSettings
-import eu.kanade.tachiyomi.ui.player.CLOUDSTREAM_DEBUG
-import eu.kanade.tachiyomi.ui.player.CLOUDSTREAM_PRERELEASE
-import eu.kanade.tachiyomi.ui.player.CLOUDSTREAM_STABLE
 import eu.kanade.tachiyomi.ui.player.JUST_PLAYER
 import eu.kanade.tachiyomi.ui.player.MPV_KT
 import eu.kanade.tachiyomi.ui.player.MPV_KT_PREVIEW
@@ -327,6 +324,10 @@ object PlayerSettingsPlayerScreen : SearchableSettings {
             packageNames.zip(packageNamesReadable)
                 .toMap()
 
+        if (externalPlayerPreference.get().isNotEmpty() && externalPlayerPreference.get() !in packageNamesMap) {
+            externalPlayerPreference.set("")
+        }
+
         return Preference.PreferenceGroup(
             title = stringResource(AYMR.strings.pref_category_external_player),
             preferenceItems = persistentListOf(
@@ -357,7 +358,4 @@ val externalPlayers = listOf(
     NEXT_PLAYER,
     X_PLAYER,
     WEB_VIDEO_CASTER,
-    CLOUDSTREAM_STABLE,
-    CLOUDSTREAM_PRERELEASE,
-    CLOUDSTREAM_DEBUG,
 )

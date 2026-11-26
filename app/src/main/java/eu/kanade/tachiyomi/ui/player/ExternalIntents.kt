@@ -106,7 +106,11 @@ class ExternalIntents {
             videoUrl = getVideoUrl(source, context, video.copyHttpServer(port)) ?: return null
         }
 
-        val pkgName = playerPreferences.externalPlayerPreference().get()
+        var pkgName = playerPreferences.externalPlayerPreference().get()
+        if (pkgName.startsWith("com.lagradost.cloudstream3")) {
+            playerPreferences.externalPlayerPreference().set("")
+            pkgName = ""
+        }
 
         return if (pkgName.isEmpty()) {
             Intent(Intent.ACTION_VIEW).apply {
@@ -247,8 +251,15 @@ class ExternalIntents {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && pkgName.contains("vlc")) {
                     setPackage(pkgName)
                 } else {
-                    component = getComponent(pkgName)
+                    val comp = getComponent(pkgName)
+                    if (comp != null) {
+                        component = comp
+                    } else {
+                        setPackage(pkgName)
+                    }
                 }
+            } else {
+                setPackage(pkgName)
             }
             setDataAndType(uri, "video/*")
             addExtrasAndFlags(true, this)
@@ -357,7 +368,6 @@ class ExternalIntents {
             JUST_PLAYER -> ComponentName(packageName, "$packageName.PlayerActivity")
             NEXT_PLAYER -> ComponentName(packageName, "$packageName.feature.player.PlayerActivity")
             X_PLAYER -> ComponentName(packageName, "com.inshot.xplayer.activities.PlayerActivity")
-            CLOUDSTREAM_STABLE, CLOUDSTREAM_PRERELEASE, CLOUDSTREAM_DEBUG -> ComponentName(packageName, "$packageName.ui.player.PlayerActivity")
             else -> null
         }
     }
@@ -624,6 +634,3 @@ const val JUST_PLAYER = "com.brouken.player"
 const val NEXT_PLAYER = "dev.anilbeesetti.nextplayer"
 const val X_PLAYER = "video.player.videoplayer"
 const val WEB_VIDEO_CASTER = "com.instantbits.cast.webvideo"
-const val CLOUDSTREAM_STABLE = "com.lagradost.cloudstream3"
-const val CLOUDSTREAM_PRERELEASE = "com.lagradost.cloudstream3.prerelease"
-const val CLOUDSTREAM_DEBUG = "com.lagradost.cloudstream3.debug"
