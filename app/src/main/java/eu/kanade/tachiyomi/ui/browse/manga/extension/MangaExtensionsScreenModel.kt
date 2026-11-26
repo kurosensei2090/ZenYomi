@@ -14,6 +14,8 @@ import eu.kanade.tachiyomi.extension.manga.MangaExtensionManager
 import eu.kanade.tachiyomi.extension.manga.model.MangaExtension
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.system.LocaleHelper
+import eu.kanade.tachiyomi.util.system.activeNetworkState
+import eu.kanade.tachiyomi.util.system.networkStateFlow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -143,6 +145,19 @@ class MangaExtensionsScreenModel(
         }
 
         screenModelScope.launchIO { findAvailableExtensions() }
+
+        val app = Injekt.get<Application>()
+        var wasOnline = app.activeNetworkState().isOnline
+        app.networkStateFlow()
+            .map { it.isOnline }
+            .distinctUntilChanged()
+            .onEach { isOnline ->
+                if (isOnline && !wasOnline) {
+                    findAvailableExtensions()
+                }
+                wasOnline = isOnline
+            }
+            .launchIn(screenModelScope)
 
         preferences.mangaExtensionUpdatesCount().changes()
             .onEach { mutableState.update { state -> state.copy(updates = it) } }

@@ -6,8 +6,8 @@ All notable changes to **ZenYomi** will be documented in this file.
 
 ## [v1.0.5] - 2026-11-26
 
-### 🌟 Overview of Release 1.0.5 (Builds 66 – 79)
-ZenYomi v1.0.5 brings extensive improvements across the media playback engines (both MPV and ExoPlayer), external player integrations, source browsing, and UI stability. Highlights include internal multi-resolution quality selection for MPV Player (#51), MPV startup and buffer latency optimizations (#51), fatal crash prevention and safe chooser fallback for external players (#52), official support for the mpvRx external player (#53), source search query retention across navigation (#54), upstream stability features including "Load Ahead Only on Wi-Fi" reader data saving, one-tap player playback speed preset cycling, and SQLite concurrency hardening (Build 78), CloudStream provider timeout guards, automatic ExoPlayer to MPV codec error failover, TorrServer idle auto-shutdown, and backup validation guards (Build 79), active server indicators and auto-failover in ExoPlayer (#49), real-time link discovery in episode options (#50), and external subtitle rendering fixes.
+### 🌟 Overview of Release 1.0.5 (Builds 66 – 80)
+ZenYomi v1.0.5 brings extensive improvements across the media playback engines (both MPV and ExoPlayer), external player integrations, source browsing, and UI stability. Highlights include internal multi-resolution quality selection for MPV Player (#51), MPV startup and buffer latency optimizations (#51), fatal crash prevention and safe chooser fallback for external players (#52), official support for the mpvRx external player (#53), source search query retention across navigation (#54), upstream stability features including "Load Ahead Only on Wi-Fi" reader data saving, one-tap player playback speed preset cycling, and SQLite concurrency hardening (Build 78), CloudStream provider timeout guards, automatic ExoPlayer to MPV codec error failover, TorrServer idle auto-shutdown, and backup validation guards (Build 79), ExoPlayer preferred audio/subtitle language auto-selection, 30s backward seek cache, Coil `onTrimMemory` memory management, transient HTTP retry interceptor, and automatic extension refresh on network reconnect (Build 80), active server indicators and auto-failover in ExoPlayer (#49), real-time link discovery in episode options (#50), and external subtitle rendering fixes.
 
 ---
 
@@ -56,6 +56,16 @@ ZenYomi v1.0.5 brings extensive improvements across the media playback engines (
   - Resolved network timeout errors and crashes when adding external subtitles.
 
 #### 🎨 UI & Stability Fixes
+- **ExoPlayer Preferred Audio & Subtitle Auto-Selection (Build 80)**:
+  - Wired `AudioPreferences.preferredAudioLanguages()` and `SubtitlePreferences.preferredSubLanguages()` into ExoPlayer's `TrackSelectionParameters`, ensuring multi-audio/multi-sub streams automatically start in your preferred languages.
+- **ExoPlayer Backward Seek Cache (Build 80)**:
+  - Configured `DefaultLoadControl` with a 30-second keyframe-retained back buffer for instant backward seeking without network re-buffering.
+- **System Memory Trimming (`onTrimMemory`) (Build 80)**:
+  - Implemented `Application.onTrimMemory` in `App.kt` to dynamically trim or clear Coil 3's `MemoryCache` under memory pressure, preventing OS background kills and OOMs on 4GB–6GB RAM devices.
+- **Transient Network Error Auto-Retry (Build 80)**:
+  - Added `TransientErrorRetryInterceptor` to `NetworkHelper` to automatically retry idempotent `GET` requests once after 800ms on transient `502`/`503`/`504` gateway errors or socket/connect timeouts.
+- **Auto-Refresh Extensions on Network Reconnect (Build 80)**:
+  - Wired `networkStateFlow` into both `AnimeExtensionsScreenModel` and `MangaExtensionsScreenModel` to automatically refresh repositories when transitioning from offline to online.
 - **CloudStream Provider Timeout Guard (Build 79)**:
   - Enforced strict 15s timeouts for search/main page feeds and 20s for detail extraction in `CloudStreamAnimeSource`.
   - Prevents unresponsive, dead, or Cloudflare-blocked provider websites from hanging Global Search or catalog views.
@@ -89,7 +99,8 @@ ZenYomi v1.0.5 brings extensive improvements across the media playback engines (
 
 | Build | Commit | Description |
 |---|---|---|
-| **Build 79** | `5d9b8e6` | CloudStream timeout guards, ExoPlayer-to-MPV failover, TorrServer auto-shutdown, backup validation |
+| **Build 80** | `f767fbc` | ExoPlayer preferred languages & 30s seek cache, onTrimMemory, HTTP 502/503/504 retry, reconnect auto-refresh |
+| **Build 79** | `50f4db9` | CloudStream timeout guards, ExoPlayer-to-MPV failover, TorrServer auto-shutdown, backup validation |
 | **Build 78** | `ab0c75b` | Load ahead only on Wi-Fi, one-tap player speed cycling, SQLite concurrency hardening |
 | **Build 77** | `e34ab87` | Preserve source search query across navigation (Issue #54) |
 | **Build 76** | `6a7e0dc` | Add mpvRx external player support (Issue #53) |

@@ -18,6 +18,9 @@ import android.util.TypedValue
 import android.view.WindowManager
 import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadJob
 import eu.kanade.tachiyomi.data.torrent.service.TorrentServerService
+import eu.kanade.tachiyomi.ui.player.settings.AudioPreferences
+import eu.kanade.tachiyomi.ui.player.settings.SubtitlePreferences
+import androidx.media3.exoplayer.DefaultLoadControl
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import androidx.activity.OnBackPressedCallback
@@ -763,9 +766,20 @@ class ExoPlayerActivity : BaseActivity() {
             setEnableDecoderFallback(true)
         }
 
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                30_000,
+                60_000,
+                2_000,
+                5_000,
+            )
+            .setBackBuffer(30_000, true)
+            .build()
+
         // Reuse existing player if available to prevent Surface detachment or recreation flicker
         val exo = player ?: ExoPlayer.Builder(this, renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
+            .setLoadControl(loadControl)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
             .setSeekBackIncrementMs(10000L)
@@ -915,11 +929,29 @@ class ExoPlayerActivity : BaseActivity() {
         exo.stop()
         exo.clearMediaItems()
         exo.volume = 1.0f
-        exo.trackSelectionParameters = exo.trackSelectionParameters
+
+        val audioLangs = Injekt.get<AudioPreferences>().preferredAudioLanguages().get()
+            .split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .toTypedArray()
+        val subLangs = Injekt.get<SubtitlePreferences>().preferredSubLanguages().get()
+            .split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .toTypedArray()
+
+        val paramsBuilder = exo.trackSelectionParameters
             .buildUpon()
             .clearOverrides()
             .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
-            .build()
+        if (audioLangs.isNotEmpty()) {
+            paramsBuilder.setPreferredAudioLanguages(*audioLangs)
+        }
+        if (subLangs.isNotEmpty()) {
+            paramsBuilder.setPreferredTextLanguages(*subLangs)
+        }
+        exo.trackSelectionParameters = paramsBuilder.build()
 
         val mediaSource = createMediaSource(video)
         exo.setMediaSource(mediaSource)

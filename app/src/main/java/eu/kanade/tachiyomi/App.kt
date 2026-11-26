@@ -5,6 +5,7 @@ import android.app.Activity
 import android.app.Application
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
+import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -270,6 +271,23 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
 
     override fun onStop(owner: LifecycleOwner) {
         SecureActivityDelegate.onApplicationStopped()
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        runCatching {
+            val memoryCache = SingletonImageLoader.get(this).memoryCache ?: return
+            when {
+                level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE ||
+                    level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL -> {
+                    memoryCache.clear()
+                }
+                level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND ||
+                    level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW -> {
+                    memoryCache.trimToSize(memoryCache.size / 2)
+                }
+            }
+        }
     }
 
     private fun setupNotificationChannels() {
