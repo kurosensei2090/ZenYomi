@@ -1,0 +1,121 @@
+# Changelog
+
+All notable changes to **ZenYomi** will be documented in this file.
+
+---
+
+## [v1.0.5] - 2026-11-26
+
+### 🌟 Overview of Release 1.0.5 (Builds 66 – 77)
+ZenYomi v1.0.5 brings extensive improvements across the media playback engines (both MPV and ExoPlayer), external player integrations, source browsing, and UI stability. Highlights include internal multi-resolution quality selection for MPV Player (#51), MPV startup and buffer latency optimizations (#51), fatal crash prevention and safe chooser fallback for external players (#52), official support for the mpvRx external player (#53), source search query retention across navigation (#54), active server indicators and auto-failover in ExoPlayer (#49), real-time link discovery in episode options (#50), and external subtitle rendering fixes.
+
+---
+
+### 🚀 Highlights & Features by Category
+
+#### 🎬 MPV Player Enhancements
+- **Multi-Quality Stream Resolution Selection (Issue #51, Build 74)**:
+  - Extracted internal video tracks from MPV's `track-list` (`type == video`).
+  - Added a dedicated **Stream Quality** resolution selector inside MPV Player's `QualitySheet` (e.g. *Auto (Adaptive)*, *1080p*, *720p*, *480p*, *360p*) with live stream switching via `vid`.
+- **Buffering & Startup Performance Optimization (Issue #51, Build 74)**:
+  - Removed hardcoded `hls-bitrate = max`, enabling fast adaptive chunk loading and preventing buffering freezes on slow connections.
+  - Tuned initial buffer readahead from 25s down to 8s and optimized stream buffer size (4MB) and cache settings for instant playback start.
+- **HLS Master Playlist Variant Expansion (Issue #51, Build 74)**:
+  - In `CloudStreamAnimeSource` and `M3u8Helper`, auto-expanded `#EXT-X-STREAM-INF` master playlists so sources like *Carateen* expose individual quality links (`1080p`, `720p`, `480p`, `360p`, `Auto`) across all players and downloaders.
+
+#### 🎮 External Media Players
+- **Fatal Crash Prevention (`ActivityNotFoundException`) (Issue #52, Build 75)**:
+  - Wrapped `externalPlayerResult.launch(intent)` and `context.startActivity(intent)` in defensive `try-catch` blocks to prevent crashes when an external player is missing, uninstalled, or restricted.
+  - Added user-friendly toast notifications (*"Could not launch external player"*) and automatic graceful fallback to the Android system app chooser (`Intent.createChooser`).
+- **External Player Whitelist & Preference Sanitization (Issue #52, Build 75)**:
+  - Removed unsupported `CloudStream` entries from `externalPlayers` and `getComponent()` as CloudStream does not provide a standalone third-party video player activity.
+  - Added automatic preference sanitization to reset invalid/uninstalled external player choices back to "None" on launch and settings display.
+- **Support for `mpvRx` Player (Issue #53, Build 76)**:
+  - Added official integration for **mpvRx** (`app.gyrolet.mpvrx`, `com.gyrolet.mpvrx`, `app.gyrolet.mpvrx.debug`) in **Settings -> Player -> Preferred external player**.
+  - Directly targets `app.gyrolet.mpvrx.ui.player.PlayerActivity` with complete video stream parameters, headers, subtitles, and last-seen position sync.
+
+#### 🔍 Browse & Sources
+- **Preserve Source Search Query Across Navigation (Issue #54, Build 77)**:
+  - In **CloudStream Sources**, switched search query state to `rememberSaveable` so the entered query is preserved when clicking into a source's catalog and pressing Back.
+  - In **Anime Sources**, hoisted `AnimeSourcesScreenModel` to the `BrowseTab` level, ensuring the screen model and filtered search state persist when returning from a source.
+  - Search query is now only cleared when explicitly clicking the **Clear ("X")** button or deleting the text.
+- **In-Source Search on Discover Tab (Build 71)**:
+  - Added ability to search within individual sources directly from the Discover screen.
+
+#### ⚡ ExoPlayer Engine, Subtitles & Servers
+- **Active Server Visual Indicator & Auto-Failover (Issue #49, Build 68)**:
+  - Added a distinct visual indicator for the actively playing server/hoster in the ExoPlayer server sheet.
+  - Implemented automatic server failover: if a server link errors out or fails to load, ExoPlayer automatically attempts playback from the next available hoster server.
+- **Real-Time Episode Options Discovery & Direct External Player (Issue #50, Build 69)**:
+  - Enabled real-time link discovery inside the Episode Options dialog, allowing users to pick server and quality before playing.
+  - Supported passing chosen servers and qualities directly to external players from the dialog.
+- **Cross-Source Playback State Reset (Build 66)**:
+  - Reset anime, episode, and hoster states when switching between anime from different sources, eliminating stale state carry-overs.
+- **External Subtitle Rendering & Stability (Builds 70, 71, 73)**:
+  - Fixed ExoPlayer external subtitle rendering (WebVTT / SRT / ASS parsing and display).
+  - Resolved network timeout errors and crashes when adding external subtitles.
+
+#### 🎨 UI & Stability Fixes
+- **Discover Tab Feed Stability (Build 71)**:
+  - Resolved UI shifting / jittering when scrolling through popular releases in Discover.
+- **Discover Search Bar State (Builds 72, 73)**:
+  - Fixed clickability and open state of the Discover search bar and restored Global Search execution.
+- **Display Mode NPE & Grid Item Key Fixes (Builds 67, 72)**:
+  - Fixed `relatedAnimeDisplayMode` NullPointerExceptions on AnimeScreen.
+  - Fixed duplicate grid item keys that could crash Compose lazy grids.
+
+---
+
+### 📦 Build History for v1.0.5
+
+| Build | Commit | Description |
+|---|---|---|
+| **Build 77** | `e34ab87` | Preserve source search query across navigation (Issue #54) |
+| **Build 76** | `6a7e0dc` | Add mpvRx external player support (Issue #53) |
+| **Build 75** | `48d8cf7` | Fix external player ActivityNotFoundException crash and sanitize preferences (Issue #52) |
+| **Build 74** | `5124680` | Improve MPV Player quality selection, buffering speed, and HLS variant expansion (Issue #51) |
+| **Build 73** | `7be5781` | Fix ExoPlayer external subtitles crash and Discover global search |
+| **Build 72** | `1221b21` | Fix AnimeScreen relatedDisplayMode NPE and Discover search bar open state |
+| **Build 71** | `a4728a8` | Fix external subtitle loading, Discover feed stability, and source search |
+| **Build 70** | `d0fd4a3` | Fix ExoPlayer external subtitle rendering and optimize Discover source feed caching |
+| **Build 69** | `56c68bb` | Fix episode options dialog real-time discovery and external player playback (Issue #50) |
+| **Build 68** | `aeac447` | Improve ExoPlayer: active server indicator and auto-failover (Issue #49) |
+| **Build 67** | `394d365` | Browse/Details: fix duplicate grid item keys and relatedAnimeDisplayMode NPE |
+| **Build 66** | `27225ac` | ExoPlayer: reset anime, episode, and hoster states on cross-source playback |
+
+---
+
+## [v1.0.4] - 2026-11-25
+
+### Highlights in v1.0.4 (Builds 53 – 65):
+- Fixed `IndexOutOfBoundsException` when dynamically toggling Browse tab sections (Build 65).
+- Real-time dynamic server extraction and live quality streaming in video player (#48, Build 64).
+- High-performance source resolution, concurrent in-memory metadata caching, and navigation optimizations (#47, Build 63).
+- Inline search box for CloudStream Sources and native Anime Sources (#46, Build 62).
+- Live Stream Info HUD ("Stats for Nerds") and external subtitle loader in ExoPlayer (#45, Build 61).
+- MPV Player stream buffer expansion (16MB buffer, 25s readahead) and anti-distortion fixes (#44, Build 60).
+- ExoPlayer Picture-in-Picture (PiP) overhaul with instant audio termination on dismiss (Builds 54–55).
+- Seamless episode transitions without SurfaceView detachment (Builds 58–59).
+- Media3 AudioAttributes, audio focus routing, and volume stream binding (Build 57).
+
+---
+
+## [v1.0.3] - 2026-11-20
+
+### Highlights in v1.0.3:
+- Introduced built-in native ExoPlayer engine alongside MPV Player with full CloudStream UI overlay (#36, Build 50).
+- Fast-start eager stream yielding (#38, #40, Build 49).
+- Press-and-hold 2.0x playback speed boost with HUD indicator (Build 53).
+- Memory downsampling optimizations for source icons preventing OOM crashes (#34, Build 48).
+- Alphabetical sorting for unpinned sources with pinned sources anchored at top (#41, Build 51).
+
+---
+
+## [v1.0.2] - 2026-11-15
+
+### Highlights in v1.0.2:
+- CloudStream 3 plugin integration and provider loader.
+- Repository management for CloudStream extensions.
+- Hybrid content library support for anime streaming and manga reading.
+- Bi-directional tracking integration (AniList, MAL, Kitsu, Shikimori, Bangumi).
+- Material 3 dynamic color theming and AMOLED pitch-black dark mode.
