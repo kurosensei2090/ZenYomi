@@ -105,7 +105,7 @@ ZenYomi v1.0.5 brings extensive improvements across the media playback engines (
 
 | Build | Commit | Description |
 |---|---|---|
-| **Build 81** | `930a45a` | Failover timestamp persistence, configurable image cache size, safe decoder profile |
+| **Build 81** | `d1ed9c0` | Failover timestamp persistence, configurable image cache size, safe decoder profile |
 | **Build 80** | `5c8c637` | ExoPlayer preferred languages & 30s seek cache, onTrimMemory, HTTP 502/503/504 retry, reconnect auto-refresh |
 | **Build 79** | `50f4db9` | CloudStream timeout guards, ExoPlayer-to-MPV failover, TorrServer auto-shutdown, backup validation |
 | **Build 78** | `ab0c75b` | Load ahead only on Wi-Fi, one-tap player speed cycling, SQLite concurrency hardening |
