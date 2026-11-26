@@ -82,9 +82,13 @@ class BackupRestorer(
     private suspend fun restoreFromFile(uri: Uri, options: RestoreOptions) {
         val backup = BackupDecoder(context).decode(uri)
 
+        if (backup.backupAnime.isEmpty() && backup.backupManga.isEmpty() && backup.backupPreferences.isEmpty() && backup.backupCategories.isEmpty() && backup.backupAnimeCategories.isEmpty()) {
+            throw IllegalStateException("Backup file contains no recognizable data")
+        }
+
         // Store source mapping for error messages
         val backupAnimeMaps = backup.backupAnimeSources
-        mangaSourceMapping = backupAnimeMaps.associate { it.sourceId to it.name }
+        animeSourceMapping = backupAnimeMaps.associate { it.sourceId to it.name }
         val backupMangaMaps = backup.backupSources
         mangaSourceMapping = backupMangaMaps.associate { it.sourceId to it.name }
 

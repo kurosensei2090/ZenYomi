@@ -6,8 +6,8 @@ All notable changes to **ZenYomi** will be documented in this file.
 
 ## [v1.0.5] - 2026-11-26
 
-### 🌟 Overview of Release 1.0.5 (Builds 66 – 78)
-ZenYomi v1.0.5 brings extensive improvements across the media playback engines (both MPV and ExoPlayer), external player integrations, source browsing, and UI stability. Highlights include internal multi-resolution quality selection for MPV Player (#51), MPV startup and buffer latency optimizations (#51), fatal crash prevention and safe chooser fallback for external players (#52), official support for the mpvRx external player (#53), source search query retention across navigation (#54), upstream stability features including "Load Ahead Only on Wi-Fi" reader data saving, one-tap player playback speed preset cycling, and SQLite concurrency hardening (Build 78), active server indicators and auto-failover in ExoPlayer (#49), real-time link discovery in episode options (#50), and external subtitle rendering fixes.
+### 🌟 Overview of Release 1.0.5 (Builds 66 – 79)
+ZenYomi v1.0.5 brings extensive improvements across the media playback engines (both MPV and ExoPlayer), external player integrations, source browsing, and UI stability. Highlights include internal multi-resolution quality selection for MPV Player (#51), MPV startup and buffer latency optimizations (#51), fatal crash prevention and safe chooser fallback for external players (#52), official support for the mpvRx external player (#53), source search query retention across navigation (#54), upstream stability features including "Load Ahead Only on Wi-Fi" reader data saving, one-tap player playback speed preset cycling, and SQLite concurrency hardening (Build 78), CloudStream provider timeout guards, automatic ExoPlayer to MPV codec error failover, TorrServer idle auto-shutdown, and backup validation guards (Build 79), active server indicators and auto-failover in ExoPlayer (#49), real-time link discovery in episode options (#50), and external subtitle rendering fixes.
 
 ---
 
@@ -56,6 +56,16 @@ ZenYomi v1.0.5 brings extensive improvements across the media playback engines (
   - Resolved network timeout errors and crashes when adding external subtitles.
 
 #### 🎨 UI & Stability Fixes
+- **CloudStream Provider Timeout Guard (Build 79)**:
+  - Enforced strict 15s timeouts for search/main page feeds and 20s for detail extraction in `CloudStreamAnimeSource`.
+  - Prevents unresponsive, dead, or Cloudflare-blocked provider websites from hanging Global Search or catalog views.
+- **ExoPlayer to MPV Codec/Format Failover (Build 79)**:
+  - Automatically fails over to MPV Player when ExoPlayer hits fatal hardware decoder initialization failures (`ERROR_CODE_DECODER_INIT_FAILED`, unsupported containers/manifests).
+  - Guarantees seamless video playback regardless of whether a device has hardware decoders for exotic codecs (10-bit HEVC, Hi10P).
+- **TorrServer Idle Auto-Shutdown (Build 79)**:
+  - Added cleanup handlers in `PlayerActivity` and `ExoPlayerActivity` to terminate the TorrServer daemon upon exiting the player if no background torrent downloads are active, saving CPU and battery.
+- **Backup Restorer Validation & Source Map Fix (Build 79)**:
+  - Fixed `animeSourceMapping` typo in `BackupRestorer` and added dry-run validation to guard against corrupted or empty backup files.
 - **Manga Reader Data Saver ("Load Ahead Only on Wi-Fi", Build 78)**:
   - Added new toggle in Reader Settings to restrict pre-fetching chapters and pages ahead strictly to Wi-Fi networks.
   - Prevents unwanted cellular data consumption by loading only immediate reading view on mobile networks.
@@ -79,7 +89,8 @@ ZenYomi v1.0.5 brings extensive improvements across the media playback engines (
 
 | Build | Commit | Description |
 |---|---|---|
-| **Build 78** | `16cc2fc` | Load ahead only on Wi-Fi, one-tap player speed cycling, SQLite concurrency hardening |
+| **Build 79** | `5d9b8e6` | CloudStream timeout guards, ExoPlayer-to-MPV failover, TorrServer auto-shutdown, backup validation |
+| **Build 78** | `ab0c75b` | Load ahead only on Wi-Fi, one-tap player speed cycling, SQLite concurrency hardening |
 | **Build 77** | `e34ab87` | Preserve source search query across navigation (Issue #54) |
 | **Build 76** | `6a7e0dc` | Add mpvRx external player support (Issue #53) |
 | **Build 75** | `48d8cf7` | Fix external player ActivityNotFoundException crash and sanitize preferences (Issue #52) |

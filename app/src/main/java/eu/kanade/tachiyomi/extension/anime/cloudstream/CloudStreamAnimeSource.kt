@@ -111,7 +111,9 @@ class CloudStreamAnimeSource(
                 val deferredList = pagesToFetch.map { mp ->
                     async {
                         try {
-                            api.getMainPage(page, MainPageRequest(mp.name, mp.data, mp.horizontalImages))
+                            withTimeoutOrNull(15_000L) {
+                                api.getMainPage(page, MainPageRequest(mp.name, mp.data, mp.horizontalImages))
+                            }
                         } catch (e: Throwable) {
                             logcat(LogPriority.WARN, e) { "Failed to load main page row ${mp.name} for ${api.name}" }
                             null
@@ -129,7 +131,9 @@ class CloudStreamAnimeSource(
             }
         } else if (api.hasMainPage) {
             try {
-                val resp = api.getMainPage(page, MainPageRequest("Home", baseUrl))
+                val resp = withTimeoutOrNull(15_000L) {
+                    api.getMainPage(page, MainPageRequest("Home", baseUrl))
+                }
                 resp?.items?.forEach { hpList ->
                     list.addAll(hpList.list)
                 }
@@ -177,7 +181,9 @@ class CloudStreamAnimeSource(
         }
         if (latestRow != null) {
             try {
-                val resp = api.getMainPage(page, MainPageRequest(latestRow.name, latestRow.data, latestRow.horizontalImages))
+                val resp = withTimeoutOrNull(15_000L) {
+                    api.getMainPage(page, MainPageRequest(latestRow.name, latestRow.data, latestRow.horizontalImages))
+                }
                 resp?.items?.forEach { hpList ->
                     list.addAll(hpList.list)
                 }
@@ -202,7 +208,9 @@ class CloudStreamAnimeSource(
             return getPopularAnime(page)
         }
         val results = try {
-            api.search(query) ?: emptyList()
+            withTimeoutOrNull(15_000L) {
+                api.search(query)
+            } ?: emptyList()
         } catch (e: Throwable) {
             emptyList()
         }
@@ -649,7 +657,9 @@ class CloudStreamAnimeSource(
         }
         for (candidate in candidates) {
             try {
-                val resp = api.load(candidate)
+                val resp = withTimeoutOrNull(20_000L) {
+                    api.load(candidate)
+                }
                 if (resp != null) return resp
             } catch (e: Throwable) {
                 logcat(LogPriority.DEBUG, e) { "api.load failed for candidate '$candidate' in ${api.name}" }

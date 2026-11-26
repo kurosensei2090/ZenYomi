@@ -16,6 +16,10 @@ import android.provider.OpenableColumns
 import android.util.Rational
 import android.util.TypedValue
 import android.view.WindowManager
+import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadJob
+import eu.kanade.tachiyomi.data.torrent.service.TorrentServerService
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -885,6 +889,20 @@ class ExoPlayerActivity : BaseActivity() {
                             if (remaining.isNotEmpty()) {
                                 switchToNextServer(reason = error.errorCodeName)
                             } else {
+                                val isCodecOrFormatError = error.errorCode == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ||
+                                    error.errorCode == PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED ||
+                                    error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED ||
+                                    error.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED ||
+                                    error.errorCode == PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED
+                                if (isCodecOrFormatError) {
+                                    toast("Hardware decoder failed. Retrying in MPV Player...")
+                                    val targetAnimeId = currentAnime?.id ?: animeId
+                                    val targetEpisodeId = currentEpisodeIdState.longValue.takeIf { it != -1L } ?: episodeId
+                                    val intent = PlayerActivity.newIntent(this@ExoPlayerActivity, targetAnimeId, targetEpisodeId)
+                                    startActivity(intent)
+                                    finish()
+                                    return
+                                }
                                 toast("Playback error: ${error.message}")
                                 isBufferingState.value = false
                             }
@@ -1177,6 +1195,9 @@ class ExoPlayerActivity : BaseActivity() {
 
     override fun onDestroy() {
         CloudStreamAnimeSource.cancelExtraction()
+        if (!AnimeDownloadJob.isRunning(this)) {
+            TorrentServerService.stop()
+        }
         super.onDestroy()
         releasePlayerAndFinish()
     }
