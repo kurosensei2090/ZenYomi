@@ -18,6 +18,7 @@ import android.util.TypedValue
 import android.view.WindowManager
 import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadJob
 import eu.kanade.tachiyomi.data.torrent.service.TorrentServerService
+import eu.kanade.tachiyomi.ui.player.controls.components.PlayerLoadingStatusBadge
 import eu.kanade.tachiyomi.ui.player.settings.AudioPreferences
 import eu.kanade.tachiyomi.ui.player.settings.SubtitlePreferences
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -229,6 +230,7 @@ class ExoPlayerActivity : BaseActivity() {
     private var currentEpisodeIdState = mutableLongStateOf(-1L)
     private var isPlayingState = mutableStateOf(false)
     private var isBufferingState = mutableStateOf(true)
+    private var loadingStatusTextState = mutableStateOf("Searching servers…")
     private var positionState = mutableLongStateOf(0L)
     private var durationState = mutableLongStateOf(0L)
     private var animeTitleState = mutableStateOf("")
@@ -417,6 +419,7 @@ class ExoPlayerActivity : BaseActivity() {
                 selectedQualityLabelState.value = "Auto"
 
                 isBufferingState.value = true
+                loadingStatusTextState.value = "Searching servers…"
                 currentEpisodeIdState.longValue = targetEpisodeId
                 episodeId = targetEpisodeId
 
@@ -508,6 +511,7 @@ class ExoPlayerActivity : BaseActivity() {
 
                 val (chosenHoster, bestVideo) = hosterAndVideo
                 selectedHosterNameState.value = chosenHoster.hosterName
+                loadingStatusTextState.value = "Connecting to ${chosenHoster.hosterName}…"
                 currentVideo = bestVideo
                 qualityInfoState.value = buildString {
                     append(bestVideo.videoTitle.ifEmpty { "Default" })
@@ -574,6 +578,7 @@ class ExoPlayerActivity : BaseActivity() {
                 if (chosenVideo != null && chosenVideo.videoUrl.isNotEmpty()) {
                     currentVideo = chosenVideo
                     selectedHosterNameState.value = nextHoster.hosterName
+                    loadingStatusTextState.value = "Switching to ${nextHoster.hosterName}…"
                     qualityInfoState.value = chosenVideo.videoTitle
                     initExoPlayer(chosenVideo, currentPosSec)
                 } else {
@@ -797,7 +802,14 @@ class ExoPlayerActivity : BaseActivity() {
 
                         override fun onPlaybackStateChanged(state: Int) {
                             isBufferingState.value = (state == Player.STATE_BUFFERING)
-                            if (state == Player.STATE_READY) {
+                            if (state == Player.STATE_BUFFERING) {
+                                val pct = newPlayer.bufferedPercentage
+                                loadingStatusTextState.value = if (pct in 1..99) {
+                                    "Buffering ($pct%)…"
+                                } else {
+                                    "Buffering…"
+                                }
+                            } else if (state == Player.STATE_READY) {
                                 durationState.longValue = newPlayer.duration.coerceAtLeast(0L)
                                 updatePipParams()
                             } else if (state == Player.STATE_ENDED) {
@@ -1250,6 +1262,7 @@ class ExoPlayerActivity : BaseActivity() {
     private fun ExoPlayerScreen() {
         val isPlaying by isPlayingState
         val isBuffering by isBufferingState
+        val loadingStatusText by loadingStatusTextState
         val duration by durationState
         val animeTitle by animeTitleState
         val episodeName by episodeNameState
@@ -1789,6 +1802,16 @@ class ExoPlayerActivity : BaseActivity() {
                                 modifier = Modifier.size(36.dp),
                             )
                         }
+                    }
+
+                    if (isBuffering && !isInPipMode) {
+                        PlayerLoadingStatusBadge(
+                            statusText = loadingStatusText,
+                            active = true,
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .padding(top = 124.dp),
+                        )
                     }
 
                     // BOTTOM CONTROLS: Scrubber & CloudStream Action Bar

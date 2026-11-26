@@ -10,6 +10,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -33,6 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.player.controls.components.ControlsButton
+import eu.kanade.tachiyomi.ui.player.controls.components.PlayerLoadingStatusBadge
 import `is`.xyz.mpv.Utils
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.padding
@@ -63,11 +65,15 @@ fun MiddlePlayerControls(
     exit: ExitTransition,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.large),
+    val isSpinning = (isLoading || isLoadingEpisode) && showLoadingCircle && gestureSeekAmount == null
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center,
     ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.large),
+        ) {
         AnimatedVisibility(
             visible = controlsShown && !areControlsLocked,
             enter = enter,
@@ -139,6 +145,21 @@ fun MiddlePlayerControls(
                     enabled = hasNext,
                 )
             }
+        }
+        }
+        if (isSpinning) {
+            val statusText = if (isLoadingEpisode) {
+                stringResource(AYMR.strings.player_status_searching_servers)
+            } else {
+                stringResource(AYMR.strings.player_status_buffering)
+            }
+            PlayerLoadingStatusBadge(
+                statusText = statusText,
+                active = true,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(top = 136.dp),
+            )
         }
     }
 }
