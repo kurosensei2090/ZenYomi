@@ -368,6 +368,7 @@ class ExternalIntents {
             JUST_PLAYER -> ComponentName(packageName, "$packageName.PlayerActivity")
             NEXT_PLAYER -> ComponentName(packageName, "$packageName.feature.player.PlayerActivity")
             X_PLAYER -> ComponentName(packageName, "com.inshot.xplayer.activities.PlayerActivity")
+            MPVRX, MPVRX_PLAY, MPVRX_DEBUG -> ComponentName(packageName, "$packageName.ui.player.PlayerActivity")
             else -> null
         }
     }
@@ -634,3 +635,6 @@ const val JUST_PLAYER = "com.brouken.player"
 const val NEXT_PLAYER = "dev.anilbeesetti.nextplayer"
 const val X_PLAYER = "video.player.videoplayer"
 const val WEB_VIDEO_CASTER = "com.instantbits.cast.webvideo"
+const val MPVRX = "app.gyrolet.mpvrx"
+const val MPVRX_PLAY = "com.gyrolet.mpvrx"
+const val MPVRX_DEBUG = "app.gyrolet.mpvrx.debug"

@@ -13,6 +13,9 @@ import eu.kanade.tachiyomi.ui.player.MPV_KT
 import eu.kanade.tachiyomi.ui.player.MPV_KT_PREVIEW
 import eu.kanade.tachiyomi.ui.player.MPV_PLAYER
 import eu.kanade.tachiyomi.ui.player.MPV_REMOTE
+import eu.kanade.tachiyomi.ui.player.MPVRX
+import eu.kanade.tachiyomi.ui.player.MPVRX_DEBUG
+import eu.kanade.tachiyomi.ui.player.MPVRX_PLAY
 import eu.kanade.tachiyomi.ui.player.MX_PLAYER
 import eu.kanade.tachiyomi.ui.player.MX_PLAYER_FREE
 import eu.kanade.tachiyomi.ui.player.MX_PLAYER_PRO
@@ -358,4 +361,7 @@ val externalPlayers = listOf(
     NEXT_PLAYER,
     X_PLAYER,
     WEB_VIDEO_CASTER,
+    MPVRX,
+    MPVRX_PLAY,
+    MPVRX_DEBUG,
 )
