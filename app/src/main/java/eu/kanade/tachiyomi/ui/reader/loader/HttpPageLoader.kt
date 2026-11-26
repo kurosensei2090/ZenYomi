@@ -3,6 +3,9 @@ package eu.kanade.tachiyomi.ui.reader.loader
 import android.app.Application
 import aniyomi.util.DataSaver
 import aniyomi.util.DataSaver.Companion.getImage
+import eu.kanade.domain.entries.manga.model.toSManga
+import eu.kanade.domain.items.chapter.interactor.SyncChaptersWithSource
+import eu.kanade.domain.items.chapter.model.toSChapter
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.data.cache.ChapterCache
 import eu.kanade.tachiyomi.data.database.models.manga.toDomainChapter
@@ -100,24 +103,64 @@ internal class HttpPageLoader(
                 source.getPageList(chapter.chapter)
             } catch (err: Throwable) {
                 if (err is CancellationException) throw err
+                val isRefreshError = err.message?.let { msg ->
+                    msg.contains("refresh", ignoreCase = true) && msg.contains("chapter list", ignoreCase = true)
+                } == true
+                if (!isRefreshError) throw err
+
                 val originalUrl = chapter.chapter.url
-                if (err.message?.contains("Refresh the chapter list", ignoreCase = true) == true) {
-                    val slug = originalUrl.trimEnd('/').substringAfterLast('/')
-                    chapter.chapter.url = slug
-                    if (mangaUrl.isNotEmpty()) {
-                        chapter.chapter.memo = buildJsonObject {
-                            chapter.chapter.memo.forEach { (k, v) -> put(k, v) }
-                            put("mangaPath", mangaUrl)
-                        }
+                val originalMemo = chapter.chapter.memo
+                val domainManga = manga ?: chapter.chapter.manga_id?.let { getManga.await(it) }
+
+                // 1. Try slug + mangaPath fallback first
+                val slug = originalUrl.trimEnd('/').substringAfterLast('/')
+                chapter.chapter.url = slug
+                if (mangaUrl.isNotEmpty()) {
+                    chapter.chapter.memo = buildJsonObject {
+                        originalMemo.forEach { (k, v) -> put(k, v) }
+                        put("mangaPath", mangaUrl)
                     }
-                    try {
-                        source.getPageList(chapter.chapter)
-                    } catch (retryErr: Throwable) {
-                        chapter.chapter.url = originalUrl
-                        throw retryErr
-                    }
+                }
+                val slugPages = try {
+                    source.getPageList(chapter.chapter)
+                } catch (slugErr: Throwable) {
+                    if (slugErr is CancellationException) throw slugErr
+                    null
+                }
+                if (slugPages != null) {
+                    slugPages
                 } else {
-                    throw err
+                    chapter.chapter.url = originalUrl
+                    chapter.chapter.memo = originalMemo
+
+                    // 2. Auto-refresh chapter list from source and retry with fresh URL & memo
+                    if (domainManga == null) throw err
+                    val freshSChapters = source.getChapterList(domainManga.toSManga())
+                    val synced = Injekt.get<SyncChaptersWithSource>().await(
+                        freshSChapters,
+                        domainManga,
+                        source,
+                        manualFetch = true,
+                    )
+                    val refreshed = synced.firstOrNull {
+                        it.url == originalUrl ||
+                            (chapter.chapter.chapter_number >= 0f && it.chapterNumber.toFloat() == chapter.chapter.chapter_number) ||
+                            it.name.equals(chapter.chapter.name, ignoreCase = true)
+                    } ?: freshSChapters.firstOrNull {
+                        it.url == originalUrl ||
+                            (chapter.chapter.chapter_number >= 0f && it.chapter_number == chapter.chapter.chapter_number) ||
+                            it.name.equals(chapter.chapter.name, ignoreCase = true)
+                    }?.let { sChap ->
+                        chapter.chapter.url = sChap.url
+                        chapter.chapter.memo = sChap.memo
+                        null
+                    }
+                    if (refreshed != null) {
+                        val sChap = refreshed.toSChapter()
+                        chapter.chapter.url = sChap.url
+                        chapter.chapter.memo = sChap.memo
+                    }
+                    source.getPageList(chapter.chapter)
                 }
             }
         }
