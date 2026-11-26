@@ -22,6 +22,7 @@ import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.browse.anime.extension.AnimeExtensionsScreenModel
 import eu.kanade.tachiyomi.ui.browse.anime.extension.animeExtensionsTab
 import eu.kanade.tachiyomi.ui.browse.anime.migration.sources.migrateAnimeSourceTab
+import eu.kanade.tachiyomi.ui.browse.anime.source.AnimeSourcesScreenModel
 import eu.kanade.tachiyomi.ui.browse.anime.source.animeSourcesTab
 import eu.kanade.tachiyomi.ui.browse.anime.source.globalsearch.GlobalAnimeSearchScreen
 import eu.kanade.tachiyomi.ui.browse.cloudstream.csExtensionsTab
@@ -104,7 +105,9 @@ data object BrowseTab : Tab {
         val animeExtensionsScreenModel = if (showAnime) rememberScreenModel { AnimeExtensionsScreenModel() } else null
         val animeExtensionsState = animeExtensionsScreenModel?.state?.collectAsState()?.value
 
-        val animeSources = if (showAnime) animeSourcesTab() else null
+        val animeSourcesScreenModel = if (showAnime) rememberScreenModel { AnimeSourcesScreenModel() } else null
+
+        val animeSources = if (showAnime && animeSourcesScreenModel != null) animeSourcesTab(animeSourcesScreenModel) else null
         val mangaSources = if (showManga) mangaSourcesTab() else null
         val csSources = if (showCloudStream) csSourcesTab() else null
         val animeExtensions = if (showAnime && animeExtensionsScreenModel != null) animeExtensionsTab(animeExtensionsScreenModel) else null

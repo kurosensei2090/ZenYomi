@@ -25,7 +25,9 @@ import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable
-fun Screen.animeSourcesTab(): TabContent {
+fun Screen.animeSourcesTab(
+    screenModel: AnimeSourcesScreenModel = rememberScreenModel { AnimeSourcesScreenModel() },
+): TabContent {
     val navigator = LocalNavigator.currentOrThrow
 
     return TabContent(
@@ -43,7 +45,6 @@ fun Screen.animeSourcesTab(): TabContent {
             ),
         ),
         content = { contentPadding, snackbarHostState ->
-            val screenModel = rememberScreenModel { AnimeSourcesScreenModel() }
             val state by screenModel.state.collectAsState()
             val isRefreshing by screenModel.isRefreshing.collectAsState()
 

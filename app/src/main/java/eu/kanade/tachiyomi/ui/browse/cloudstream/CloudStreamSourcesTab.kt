@@ -48,6 +48,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -123,7 +124,7 @@ fun Screen.csSourcesTab(): TabContent {
             val isOtherExpanded by sourcePreferences.isOtherCsSourcesExpanded().collectAsState()
 
             val savedRepoFilter by sourcePreferences.lastSelectedCsRepoFilter().collectAsState()
-            var searchQuery by remember { mutableStateOf("") }
+            var searchQuery by rememberSaveable { mutableStateOf("") }
 
             // Precompute plugin to repo mapping once in a single pass O(N)
             val pluginToRepoMap = remember(sources, repos) {
