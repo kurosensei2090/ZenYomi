@@ -220,6 +220,11 @@ class PlayerViewModel @JvmOverloads constructor(
     private val _selectedAudio = MutableStateFlow(-1)
     val selectedAudio = _selectedAudio.asStateFlow()
 
+    private val _videoQualityTracks = MutableStateFlow<List<VideoQualityTrack>>(emptyList())
+    val videoQualityTracks = _videoQualityTracks.asStateFlow()
+    private val _selectedVideoQualityId = MutableStateFlow<Int>(-1)
+    val selectedVideoQualityId = _selectedVideoQualityId.asStateFlow()
+
     val isLoadingTracks = MutableStateFlow(true)
 
     private val _hosterList = MutableStateFlow<List<Hoster>>(emptyList())
@@ -419,26 +424,46 @@ class PlayerViewModel @JvmOverloads constructor(
     fun loadTracks() {
         trackLoadingJob?.cancel()
         trackLoadingJob = viewModelScope.launch {
-            val possibleTrackTypes = listOf("audio", "sub")
             val subTracks = mutableListOf<VideoTrack>()
             val audioTracks = mutableListOf(
                 VideoTrack(-1, activity.stringResource(MR.strings.off), null),
             )
+            val videoQualities = mutableListOf<VideoQualityTrack>()
             try {
                 val tracksCount = MPVLib.getPropertyInt("track-list/count") ?: 0
                 for (i in 0..<tracksCount) {
-                    val type = getTrackType(i)
-                    if (!possibleTrackTypes.contains(type) || type == null) continue
+                    val type = getTrackType(i) ?: continue
+                    val id = getTrackMPVId(i)
                     when (type) {
-                        "sub" -> subTracks.add(VideoTrack(getTrackMPVId(i), getTrackTitle(i), getTrackLanguage(i)))
-                        "audio" -> audioTracks.add(VideoTrack(getTrackMPVId(i), getTrackTitle(i), getTrackLanguage(i)))
-                        else -> error("Unrecognized track type")
+                        "video" -> {
+                            val w = MPVLib.getPropertyInt("track-list/$i/demux-w") ?: 0
+                            val h = MPVLib.getPropertyInt("track-list/$i/demux-h") ?: 0
+                            val bitrate = MPVLib.getPropertyInt("track-list/$i/hls-bitrate") ?: 0
+                            val title = MPVLib.getPropertyString("track-list/$i/title")
+                            val isSelected = MPVLib.getPropertyBoolean("track-list/$i/selected") ?: false
+                            val label = when {
+                                !title.isNullOrBlank() -> title
+                                h > 0 && w > 0 -> "${h}p (${w}x${h})"
+                                h > 0 -> "${h}p"
+                                bitrate > 0 -> "${bitrate / 1000}k"
+                                else -> "Video track $id"
+                            }
+                            videoQualities.add(VideoQualityTrack(id, label, w, h, bitrate, isSelected))
+                        }
+                        "sub" -> subTracks.add(VideoTrack(id, getTrackTitle(i), getTrackLanguage(i)))
+                        "audio" -> audioTracks.add(VideoTrack(id, getTrackTitle(i), getTrackLanguage(i)))
                     }
                 }
-            } catch (e: NullPointerException) {
-                logcat(LogPriority.ERROR) { "Couldn't load tracks, probably cause mpv was destroyed" }
+                if (videoQualities.size > 1) {
+                    val isAuto = _selectedVideoQualityId.value == -1
+                    videoQualities.sortByDescending { it.height.takeIf { h -> h > 0 } ?: it.bitrate }
+                    videoQualities.add(0, VideoQualityTrack(-1, "Auto (Adaptive)", 0, 0, 0, isAuto))
+                }
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR, e) { "Couldn't load tracks, probably cause mpv was destroyed" }
                 return@launch
             }
+            _videoQualityTracks.update { videoQualities }
             _subtitleTracks.update { subTracks }
             _audioTracks.update { audioTracks }
 
@@ -446,6 +471,16 @@ class PlayerViewModel @JvmOverloads constructor(
                 onFinishLoadingTracks()
             }
         }
+    }
+
+    fun selectVideoQuality(id: Int) {
+        _selectedVideoQualityId.update { id }
+        if (id == -1) {
+            MPVLib.setPropertyString("vid", "auto")
+        } else {
+            MPVLib.setPropertyInt("vid", id)
+        }
+        loadTracks()
     }
 
     /**
@@ -468,6 +503,16 @@ class PlayerViewModel @JvmOverloads constructor(
         updateIsLoadingEpisode(false)
         setPausedState()
     }
+
+    @Immutable
+    data class VideoQualityTrack(
+        val id: Int,
+        val name: String,
+        val width: Int,
+        val height: Int,
+        val bitrate: Int,
+        val isSelected: Boolean,
+    )
 
     @Immutable
     data class VideoTrack(

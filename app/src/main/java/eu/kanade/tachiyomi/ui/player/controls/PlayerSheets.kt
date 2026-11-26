@@ -25,6 +25,7 @@ import dev.vivvvek.seeker.Segment
 import eu.kanade.tachiyomi.ui.player.ArtType
 import eu.kanade.tachiyomi.ui.player.Decoder
 import eu.kanade.tachiyomi.ui.player.Panels
+import eu.kanade.tachiyomi.ui.player.PlayerViewModel.VideoQualityTrack
 import eu.kanade.tachiyomi.ui.player.PlayerViewModel.VideoTrack
 import eu.kanade.tachiyomi.ui.player.Sheets
 import eu.kanade.tachiyomi.ui.player.controls.components.sheets.AudioTracksSheet
@@ -64,6 +65,8 @@ fun PlayerSheets(
     onClickHoster: (Int) -> Unit,
     onClickVideo: (Int, Int) -> Unit,
     displayHosters: Pair<Boolean, Boolean>,
+    videoQualityTracks: List<VideoQualityTrack> = emptyList(),
+    onSelectVideoQuality: (Int) -> Unit = {},
 
     // chapters sheet
     chapter: Segment?,
@@ -144,6 +147,8 @@ fun PlayerSheets(
                 onClickHoster = onClickHoster,
                 onClickVideo = onClickVideo,
                 displayHosters = displayHosters,
+                videoQualityTracks = videoQualityTracks,
+                onSelectVideoQuality = onSelectVideoQuality,
                 onDismissRequest = onDismissRequest,
                 dismissSheet = dismissSheet,
             )

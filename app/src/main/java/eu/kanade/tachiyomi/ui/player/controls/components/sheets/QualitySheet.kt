@@ -8,6 +8,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,11 +23,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -42,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.player.components.PlayerSheet
 import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.Video
+import eu.kanade.tachiyomi.ui.player.PlayerViewModel.VideoQualityTrack
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.DISABLED_ALPHA
 import tachiyomi.presentation.core.components.material.padding
@@ -80,6 +85,8 @@ fun QualitySheet(
     onClickHoster: (Int) -> Unit,
     onClickVideo: (Int, Int) -> Unit,
     displayHosters: Pair<Boolean, Boolean>,
+    videoQualityTracks: List<VideoQualityTrack> = emptyList(),
+    onSelectVideoQuality: (Int) -> Unit = {},
     onDismissRequest: () -> Unit,
     dismissSheet: Boolean,
     modifier: Modifier = Modifier,
@@ -101,6 +108,42 @@ fun QualitySheet(
                     bottom = MaterialTheme.padding.extraSmall,
                 ),
             )
+
+            if (videoQualityTracks.size > 1) {
+                Text(
+                    text = "Stream Quality",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(
+                        top = MaterialTheme.padding.small,
+                        start = MaterialTheme.padding.medium,
+                        end = MaterialTheme.padding.medium,
+                        bottom = 4.dp,
+                    ),
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = MaterialTheme.padding.medium, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+                ) {
+                    for (track in videoQualityTracks) {
+                        FilterChip(
+                            selected = track.isSelected,
+                            onClick = { onSelectVideoQuality(track.id) },
+                            label = { Text(track.name) },
+                        )
+                    }
+                }
+                HorizontalDivider(
+                    modifier = Modifier.padding(
+                        horizontal = MaterialTheme.padding.medium,
+                        vertical = MaterialTheme.padding.small,
+                    ),
+                )
+            }
 
             AnimatedVisibility(
                 visible = isLoadingHosters,

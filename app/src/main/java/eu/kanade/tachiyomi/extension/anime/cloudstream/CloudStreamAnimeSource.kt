@@ -482,6 +482,40 @@ class CloudStreamAnimeSource(
                         }
                     }
                 }
+
+                // If this is an HLS master playlist, parse and expand child variant qualities (1080p, 720p, etc.)
+                if (link.isM3u8 || link.url.contains(".m3u8", ignoreCase = true)) {
+                    extractionScope.launch {
+                        try {
+                            val req = Request.Builder()
+                                .url(link.url)
+                                .headers(okhttpHeaders.toHeaders())
+                                .build()
+                            val res = client.newCall(req).execute()
+                            if (res.isSuccessful) {
+                                val content = res.body?.string() ?: ""
+                                if (content.contains("#EXT-X-STREAM-INF")) {
+                                    val variants = parseM3u8Variants(
+                                        content = content,
+                                        masterUrl = link.url,
+                                        serverName = serverName,
+                                        headers = okhttpHeaders.toHeaders(),
+                                        subtitles = subtitles.toList(),
+                                    )
+                                    for (v in variants) {
+                                        if (videos.none { it.videoUrl == v.videoUrl }) {
+                                            videos.add(v)
+                                            if (isInitialYieldDone.get()) {
+                                                val hosters = listOf(v).toHosterList()
+                                                discoveredHostersFlow.tryEmit(DiscoveredHostersEvent(episode.url, hosters))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (_: Throwable) {}
+                    }
+                }
             }
         }
 
@@ -660,5 +694,57 @@ class CloudStreamAnimeSource(
         sEpisode.url = this.data.ifBlank { this.url }
         sEpisode.episode_number = (this.episode ?: index.toInt()).toFloat()
         return sEpisode
+    }
+
+    private fun parseM3u8Variants(
+        content: String,
+        masterUrl: String,
+        serverName: String,
+        headers: okhttp3.Headers,
+        subtitles: List<Track>,
+    ): List<Video> {
+        val variants = mutableListOf<Video>()
+        val lines = content.lines()
+        var currentQuality: String? = null
+        val baseUri = try { java.net.URI(masterUrl) } catch (_: Exception) { null }
+
+        for (line in lines) {
+            val trimmed = line.trim()
+            if (trimmed.startsWith("#EXT-X-STREAM-INF:")) {
+                val resMatch = Regex("""RESOLUTION=(\d+x\d+)""").find(trimmed)
+                if (resMatch != null) {
+                    val h = resMatch.groupValues[1].substringAfter("x")
+                    currentQuality = "${h}p"
+                } else {
+                    val bwMatch = Regex("""BANDWIDTH=(\d+)""").find(trimmed)
+                    if (bwMatch != null) {
+                        val bw = bwMatch.groupValues[1].toLongOrNull() ?: 0L
+                        currentQuality = "${bw / 1000}k"
+                    }
+                }
+            } else if (trimmed.isNotEmpty() && !trimmed.startsWith("#")) {
+                val q = currentQuality ?: "Default"
+                val resolvedUrl = try {
+                    baseUri?.resolve(trimmed)?.toString() ?: trimmed
+                } catch (_: Exception) {
+                    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+                        trimmed
+                    } else {
+                        "${masterUrl.substringBeforeLast('/')}/$trimmed"
+                    }
+                }
+                variants.add(
+                    Video(
+                        videoUrl = resolvedUrl,
+                        videoTitle = "$serverName - $q",
+                        headers = headers,
+                        subtitleTracks = subtitles,
+                        initialized = true,
+                    ),
+                )
+                currentQuality = null
+            }
+        }
+        return variants
     }
 }

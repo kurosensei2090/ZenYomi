@@ -586,6 +586,7 @@ fun PlayerControls(
         val currentSource by viewModel.currentSource.collectAsState()
         val showFailedHosters by playerPreferences.showFailedHosters().collectAsState()
         val emptyHosters by playerPreferences.showEmptyHosters().collectAsState()
+        val videoQualityTracks by viewModel.videoQualityTracks.collectAsState()
 
         PlayerSheets(
             sheetShown = sheetShown,
@@ -606,6 +607,8 @@ fun PlayerControls(
             onClickHoster = viewModel::onHosterClicked,
             onClickVideo = viewModel::onVideoClicked,
             displayHosters = Pair(showFailedHosters, emptyHosters),
+            videoQualityTracks = videoQualityTracks,
+            onSelectVideoQuality = viewModel::selectVideoQuality,
 
             chapter = currentChapter?.toSegment(),
             chapters = chapters,
