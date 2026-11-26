@@ -6,8 +6,8 @@ All notable changes to **ZenYomi** will be documented in this file.
 
 ## [v1.0.5] - 2026-11-26
 
-### 🌟 Overview of Release 1.0.5 (Builds 66 – 77)
-ZenYomi v1.0.5 brings extensive improvements across the media playback engines (both MPV and ExoPlayer), external player integrations, source browsing, and UI stability. Highlights include internal multi-resolution quality selection for MPV Player (#51), MPV startup and buffer latency optimizations (#51), fatal crash prevention and safe chooser fallback for external players (#52), official support for the mpvRx external player (#53), source search query retention across navigation (#54), active server indicators and auto-failover in ExoPlayer (#49), real-time link discovery in episode options (#50), and external subtitle rendering fixes.
+### 🌟 Overview of Release 1.0.5 (Builds 66 – 78)
+ZenYomi v1.0.5 brings extensive improvements across the media playback engines (both MPV and ExoPlayer), external player integrations, source browsing, and UI stability. Highlights include internal multi-resolution quality selection for MPV Player (#51), MPV startup and buffer latency optimizations (#51), fatal crash prevention and safe chooser fallback for external players (#52), official support for the mpvRx external player (#53), source search query retention across navigation (#54), upstream stability features including "Load Ahead Only on Wi-Fi" reader data saving, one-tap player playback speed preset cycling, and SQLite concurrency hardening (Build 78), active server indicators and auto-failover in ExoPlayer (#49), real-time link discovery in episode options (#50), and external subtitle rendering fixes.
 
 ---
 
@@ -56,6 +56,15 @@ ZenYomi v1.0.5 brings extensive improvements across the media playback engines (
   - Resolved network timeout errors and crashes when adding external subtitles.
 
 #### 🎨 UI & Stability Fixes
+- **Manga Reader Data Saver ("Load Ahead Only on Wi-Fi", Build 78)**:
+  - Added new toggle in Reader Settings to restrict pre-fetching chapters and pages ahead strictly to Wi-Fi networks.
+  - Prevents unwanted cellular data consumption by loading only immediate reading view on mobile networks.
+- **One-Tap Player Speed Preset Cycling (Build 78)**:
+  - Short-tapping the playback speed icon now cycles through user-defined speed presets in ascending order with wraparound.
+  - Leaves the saved default playback speed setting untouched (unlike previous short-clicks that accidentally overwrote it).
+- **SQLite Database Concurrency & Locking Hardening (Build 78)**:
+  - Configured 5-second `busy_timeout` pragma across both Manga and Anime SQLite databases.
+  - Eliminates `SQLiteDatabaseLockedException` during concurrent background library updates and active reading/playback.
 - **Discover Tab Feed Stability (Build 71)**:
   - Resolved UI shifting / jittering when scrolling through popular releases in Discover.
 - **Discover Search Bar State (Builds 72, 73)**:
@@ -70,6 +79,7 @@ ZenYomi v1.0.5 brings extensive improvements across the media playback engines (
 
 | Build | Commit | Description |
 |---|---|---|
+| **Build 78** | `16cc2fc` | Load ahead only on Wi-Fi, one-tap player speed cycling, SQLite concurrency hardening |
 | **Build 77** | `e34ab87` | Preserve source search query across navigation (Issue #54) |
 | **Build 76** | `6a7e0dc` | Add mpvRx external player support (Issue #53) |
 | **Build 75** | `48d8cf7` | Fix external player ActivityNotFoundException crash and sanitize preferences (Issue #52) |
