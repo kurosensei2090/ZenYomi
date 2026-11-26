@@ -279,10 +279,11 @@ class CloudStreamAnimeSource(
                 }
             }
             is TvSeriesLoadResponse -> {
+                val seasonNamesMap = details.seasonNames?.associate { it.season to it.name }.orEmpty()
                 var order = 1f
                 details.episodes?.forEach { ep ->
                     if (ep != null) {
-                        episodes.add(ep.toSEpisode(order++))
+                        episodes.add(ep.toSEpisode(order++, seasonNamesMap))
                     }
                 }
             }
@@ -698,11 +699,23 @@ class CloudStreamAnimeSource(
         return sAnime
     }
 
-    private fun Episode.toSEpisode(index: Float): SEpisode {
+    private fun Episode.toSEpisode(
+        index: Float,
+        seasonNames: Map<Int, String?> = emptyMap(),
+    ): SEpisode {
         val sEpisode = SEpisode.create()
         sEpisode.name = this.name ?: "Episode ${this.episode ?: index.toInt()}"
         sEpisode.url = this.data.ifBlank { this.url }
         sEpisode.episode_number = (this.episode ?: index.toInt()).toFloat()
+        val seasonNum = this.season
+        if (seasonNum != null && seasonNum > 0) {
+            val customName = seasonNames[seasonNum]?.trim()?.takeIf { it.isNotEmpty() }
+            sEpisode.scanlator = when {
+                customName == null -> "Season $seasonNum"
+                customName.startsWith("Season", ignoreCase = true) -> customName
+                else -> "Season $seasonNum: $customName"
+            }
+        }
         return sEpisode
     }
 

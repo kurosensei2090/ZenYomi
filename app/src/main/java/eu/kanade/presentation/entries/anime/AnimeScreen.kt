@@ -27,8 +27,13 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -39,7 +44,9 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -342,8 +349,19 @@ private fun AnimeScreenSmallImpl(
     val itemListState = rememberLazyGridState()
 
     val seasons = remember(state) { state.processedSeasons }
-    val episodes = remember(state) { state.processedEpisodes }
-    val listItem = remember(state) { state.episodeListItems }
+    val allEpisodes = remember(state) { state.processedEpisodes }
+    val allListItems = remember(state) { state.episodeListItems }
+    val seasonOptions = remember(allEpisodes) { extractSeasonOptions(allEpisodes) }
+    var selectedSeason by rememberSaveable(state.anime.id) { mutableStateOf<String?>(null) }
+    val activeSeason = remember(seasonOptions, selectedSeason, allEpisodes) {
+        resolveActiveSeason(seasonOptions, selectedSeason, allEpisodes)
+    }
+    val episodes = remember(allEpisodes, seasonOptions, activeSeason) {
+        filterEpisodesBySeason(allEpisodes, seasonOptions, activeSeason)
+    }
+    val listItem = remember(allListItems, episodes, seasonOptions, activeSeason) {
+        if (seasonOptions.size >= 2 && activeSeason != ALL_SEASONS_KEY) episodes else allListItems
+    }
     val hasFilters = remember(state) {
         when (state.anime.fetchType) {
             FetchType.Seasons -> state.anime.seasonsFiltered()
@@ -547,18 +565,27 @@ private fun AnimeScreenSmallImpl(
                         val missingSeasonsCount = remember(seasons) {
                             seasons.map { it.seasonAnime.anime.seasonNumber }.missingEntriesCount()
                         }
-                        ItemHeader(
-                            enabled = !isAnySelected,
-                            itemCount = when (state.anime.fetchType) {
-                                FetchType.Seasons -> seasons.size
-                                FetchType.Episodes -> episodes.size
-                            },
-                            missingItemsCount = maxOf(missingEpisodesCount, missingSeasonsCount),
-                            onClick = onFilterClicked,
-                            isManga = false,
-                            fetchType = state.anime.fetchType,
-                            modifier = Modifier.ignorePadding(offsetGridPaddingPx),
-                        )
+                        Column(modifier = Modifier.ignorePadding(offsetGridPaddingPx)) {
+                            ItemHeader(
+                                enabled = !isAnySelected,
+                                itemCount = when (state.anime.fetchType) {
+                                    FetchType.Seasons -> seasons.size
+                                    FetchType.Episodes -> episodes.size
+                                },
+                                missingItemsCount = maxOf(missingEpisodesCount, missingSeasonsCount),
+                                onClick = onFilterClicked,
+                                isManga = false,
+                                fetchType = state.anime.fetchType,
+                            )
+                            if (state.anime.fetchType == FetchType.Episodes && seasonOptions.size >= 2) {
+                                SeasonSelectorRow(
+                                    seasonOptions = seasonOptions,
+                                    allEpisodes = allEpisodes,
+                                    activeSeason = activeSeason,
+                                    onSeasonSelected = { selectedSeason = it },
+                                )
+                            }
+                        }
                     }
 
                     when (state.anime.fetchType) {
@@ -693,8 +720,19 @@ fun AnimeScreenLargeImpl(
     val density = LocalDensity.current
 
     val seasons = remember(state) { state.processedSeasons }
-    val episodes = remember(state) { state.processedEpisodes }
-    val listItem = remember(state) { state.episodeListItems }
+    val allEpisodes = remember(state) { state.processedEpisodes }
+    val allListItems = remember(state) { state.episodeListItems }
+    val seasonOptions = remember(allEpisodes) { extractSeasonOptions(allEpisodes) }
+    var selectedSeason by rememberSaveable(state.anime.id) { mutableStateOf<String?>(null) }
+    val activeSeason = remember(seasonOptions, selectedSeason, allEpisodes) {
+        resolveActiveSeason(seasonOptions, selectedSeason, allEpisodes)
+    }
+    val episodes = remember(allEpisodes, seasonOptions, activeSeason) {
+        filterEpisodesBySeason(allEpisodes, seasonOptions, activeSeason)
+    }
+    val listItem = remember(allListItems, episodes, seasonOptions, activeSeason) {
+        if (seasonOptions.size >= 2 && activeSeason != ALL_SEASONS_KEY) episodes else allListItems
+    }
 
     val isAnySelected by remember {
         derivedStateOf {
@@ -881,18 +919,27 @@ fun AnimeScreenLargeImpl(
                                 val missingSeasonsCount = remember(seasons) {
                                     seasons.map { it.seasonAnime.anime.seasonNumber }.missingEntriesCount()
                                 }
-                                ItemHeader(
-                                    enabled = !isAnySelected,
-                                    itemCount = when (state.anime.fetchType) {
-                                        FetchType.Seasons -> seasons.size
-                                        FetchType.Episodes -> episodes.size
-                                    },
-                                    missingItemsCount = maxOf(missingEpisodesCount, missingSeasonsCount),
-                                    onClick = onFilterButtonClicked,
-                                    isManga = false,
-                                    fetchType = state.anime.fetchType,
-                                    modifier = Modifier.ignorePadding(offsetGridPaddingPx),
-                                )
+                                Column(modifier = Modifier.ignorePadding(offsetGridPaddingPx)) {
+                                    ItemHeader(
+                                        enabled = !isAnySelected,
+                                        itemCount = when (state.anime.fetchType) {
+                                            FetchType.Seasons -> seasons.size
+                                            FetchType.Episodes -> episodes.size
+                                        },
+                                        missingItemsCount = maxOf(missingEpisodesCount, missingSeasonsCount),
+                                        onClick = onFilterButtonClicked,
+                                        isManga = false,
+                                        fetchType = state.anime.fetchType,
+                                    )
+                                    if (state.anime.fetchType == FetchType.Episodes && seasonOptions.size >= 2) {
+                                        SeasonSelectorRow(
+                                            seasonOptions = seasonOptions,
+                                            allEpisodes = allEpisodes,
+                                            activeSeason = activeSeason,
+                                            onSeasonSelected = { selectedSeason = it },
+                                        )
+                                    }
+                                }
                             }
 
                             when (state.anime.fetchType) {
@@ -1178,6 +1225,111 @@ private fun formatTime(milliseconds: Long, useDayFormat: Boolean = false): Strin
             TimeUnit.MILLISECONDS.toSeconds(milliseconds) -
                 TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(milliseconds)),
         )
+    }
+}
+
+private const val ALL_SEASONS_KEY = "__ALL_SEASONS__"
+private val SEASON_NUMBER_REGEX = Regex("""\d+""")
+
+private fun extractSeasonOptions(episodes: List<EpisodeList.Item>): List<String> {
+    val distinct = episodes
+        .mapNotNull { it.episode.scanlator?.trim()?.takeIf { s -> s.isNotEmpty() } }
+        .distinct()
+    if (distinct.size < 2) return emptyList()
+    if (!distinct.all { it.startsWith("Season ", ignoreCase = true) }) return emptyList()
+    return distinct.sortedBy { label ->
+        SEASON_NUMBER_REGEX.find(label)?.value?.toIntOrNull() ?: Int.MAX_VALUE
+    }
+}
+
+private fun resolveActiveSeason(
+    seasonOptions: List<String>,
+    selectedSeason: String?,
+    allEpisodes: List<EpisodeList.Item>,
+): String {
+    if (seasonOptions.size < 2) return ALL_SEASONS_KEY
+    if (selectedSeason == ALL_SEASONS_KEY || (selectedSeason != null && selectedSeason in seasonOptions)) {
+        return selectedSeason
+    }
+    val firstUnseenSeason = allEpisodes
+        .firstOrNull { !it.episode.seen && it.episode.scanlator in seasonOptions }
+        ?.episode?.scanlator
+    return firstUnseenSeason ?: seasonOptions.first()
+}
+
+private fun filterEpisodesBySeason(
+    allEpisodes: List<EpisodeList.Item>,
+    seasonOptions: List<String>,
+    activeSeason: String,
+): List<EpisodeList.Item> {
+    if (seasonOptions.size < 2 || activeSeason == ALL_SEASONS_KEY) return allEpisodes
+    return allEpisodes.filter { it.episode.scanlator == activeSeason }
+}
+
+@Composable
+private fun SeasonSelectorRow(
+    seasonOptions: List<String>,
+    allEpisodes: List<EpisodeList.Item>,
+    activeSeason: String,
+    onSeasonSelected: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val allSeasonsLabel = stringResource(AYMR.strings.all_seasons)
+    val selectedLabel = if (activeSeason == ALL_SEASONS_KEY) {
+        "$allSeasonsLabel (${allEpisodes.size})"
+    } else {
+        val count = allEpisodes.count { it.episode.scanlator == activeSeason }
+        "$activeSeason ($count)"
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+    ) {
+        FilterChip(
+            selected = true,
+            onClick = { expanded = true },
+            label = { Text(text = selectedLabel) },
+            trailingIcon = {
+                Icon(
+                    imageVector = Icons.Default.ArrowDropDown,
+                    contentDescription = null,
+                )
+            },
+        )
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            seasonOptions.forEach { season ->
+                val count = allEpisodes.count { it.episode.scanlator == season }
+                DropdownMenuItem(
+                    text = { Text(text = "$season ($count)") },
+                    trailingIcon = if (activeSeason == season) {
+                        { Icon(imageVector = Icons.Default.Check, contentDescription = null) }
+                    } else {
+                        null
+                    },
+                    onClick = {
+                        onSeasonSelected(season)
+                        expanded = false
+                    },
+                )
+            }
+            DropdownMenuItem(
+                text = { Text(text = "$allSeasonsLabel (${allEpisodes.size})") },
+                trailingIcon = if (activeSeason == ALL_SEASONS_KEY) {
+                    { Icon(imageVector = Icons.Default.Check, contentDescription = null) }
+                } else {
+                    null
+                },
+                onClick = {
+                    onSeasonSelected(ALL_SEASONS_KEY)
+                    expanded = false
+                },
+            )
+        }
     }
 }
 

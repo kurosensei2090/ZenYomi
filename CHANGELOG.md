@@ -6,8 +6,8 @@ All notable changes to **ZenYomi** will be documented in this file.
 
 ## [v1.0.5] - 2026-11-26
 
-### 🌟 Overview of Release 1.0.5 (Builds 66 – 83)
-ZenYomi v1.0.5 brings extensive improvements across the media playback engines (both MPV and ExoPlayer), external player integrations, episode downloader, source browsing, and UI stability. Highlights include internal multi-resolution quality selection for MPV Player (#51), MPV startup and buffer latency optimizations (#51), fatal crash prevention and safe chooser fallback for external players (#52), official support for the mpvRx external player (#53), source search query retention across navigation (#54), 1DM-style episode download stats (size, speed, ETA) with anti-IP-block pacing & automatic download profiles (#55, Build 82), live video player loading stage & network speed indicator across MPV and ExoPlayer (#56, Build 83), upstream stability features including "Load Ahead Only on Wi-Fi" reader data saving, one-tap player playback speed preset cycling, and SQLite concurrency hardening (Build 78), CloudStream provider timeout guards, automatic ExoPlayer to MPV codec error failover, TorrServer idle auto-shutdown, and backup validation guards (Build 79), ExoPlayer preferred audio/subtitle language auto-selection, 30s backward seek cache, Coil `onTrimMemory` memory management, transient HTTP retry interceptor, and automatic extension refresh on network reconnect (Build 80), failover timestamp persistence, configurable image disk cache size, and safe legacy SoC decoder profile (Build 81), active server indicators and auto-failover in ExoPlayer (#49), real-time link discovery in episode options (#50), and external subtitle rendering fixes.
+### 🌟 Overview of Release 1.0.5 (Builds 66 – 84)
+ZenYomi v1.0.5 brings extensive improvements across the media playback engines (both MPV and ExoPlayer), external player integrations, episode downloader, multi-season presentation, source browsing, and UI stability. Highlights include internal multi-resolution quality selection for MPV Player (#51), MPV startup and buffer latency optimizations (#51), fatal crash prevention and safe chooser fallback for external players (#52), official support for the mpvRx external player (#53), source search query retention across navigation (#54), 1DM-style episode download stats (size, speed, ETA) with anti-IP-block pacing & automatic download profiles (#55, Build 82), live video player loading stage & network speed indicator across MPV and ExoPlayer (#56, Build 83), multi-season selector dropdown for CloudStream anime (#57, Build 84), upstream stability features including "Load Ahead Only on Wi-Fi" reader data saving, one-tap player playback speed preset cycling, and SQLite concurrency hardening (Build 78), CloudStream provider timeout guards, automatic ExoPlayer to MPV codec error failover, TorrServer idle auto-shutdown, and backup validation guards (Build 79), ExoPlayer preferred audio/subtitle language auto-selection, 30s backward seek cache, Coil `onTrimMemory` memory management, transient HTTP retry interceptor, and automatic extension refresh on network reconnect (Build 80), failover timestamp persistence, configurable image disk cache size, and safe legacy SoC decoder profile (Build 81), active server indicators and auto-failover in ExoPlayer (#49), real-time link discovery in episode options (#50), and external subtitle rendering fixes.
 
 ---
 
@@ -56,6 +56,9 @@ ZenYomi v1.0.5 brings extensive improvements across the media playback engines (
   - Resolved network timeout errors and crashes when adding external subtitles.
 
 #### 🎨 UI & Stability Fixes
+- **Multi-Season Anime Presentation & Season Selector (Issue #57, Build 84)**:
+  - Preserved CloudStream `Episode.season` and `TvSeriesLoadResponse.seasonNames` metadata in `CloudStreamAnimeSource.toSEpisode()`.
+  - Added a Material 3 Season Selector dropdown (`Season 1`, `Season 2`, ..., plus `All seasons`) right below the episode header on `AnimeScreen`, filtering episodes and episode counts cleanly by season while defaulting to the season of the next unwatched episode.
 - **Video Player Loading Stage & Live Speed Indicator (Issue #56, Build 83)**:
   - Added `PlayerLoadingStatusBadge` (`TrafficStats.getUidRxBytes` sampled once per second only while buffering) across both MPV Player and ExoPlayer.
   - Displays clear progress stages underneath the loading spinner (e.g., *"Searching servers…"*, *"Connecting to [Server]…"*, *"Switching to [Server]…"*, or *"Buffering (42%)… • 2.1 MB/s"*).
@@ -112,7 +115,8 @@ ZenYomi v1.0.5 brings extensive improvements across the media playback engines (
 
 | Build | Commit | Description |
 |---|---|---|
-| **Build 83** | `26b9926` | Live video player loading stage & network speed indicator in MPV and ExoPlayer (Issue #56) |
+| **Build 84** | `258b382` | Multi-season CloudStream metadata preservation & Season Selector dropdown on AnimeScreen (Issue #57) |
+| **Build 83** | `8f87e95` | Live video player loading stage & network speed indicator in MPV and ExoPlayer (Issue #56) |
 | **Build 82** | `7d6b2b0` | 1DM-style episode download stats (size, speed, ETA), anti-IP-block pacing, and automatic download profiles (Issue #55) |
 | **Build 81** | `d1ed9c0` | Failover timestamp persistence, configurable image cache size, safe decoder profile |
 | **Build 80** | `5c8c637` | ExoPlayer preferred languages & 30s seek cache, onTrimMemory, HTTP 502/503/504 retry, reconnect auto-refresh |
