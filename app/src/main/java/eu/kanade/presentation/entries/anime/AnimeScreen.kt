@@ -352,7 +352,13 @@ private fun AnimeScreenSmallImpl(
     val allEpisodes = remember(state) { state.processedEpisodes }
     val allListItems = remember(state) { state.episodeListItems }
     val seasonOptions = remember(allEpisodes) { extractSeasonOptions(allEpisodes) }
-    var selectedSeason by rememberSaveable(state.anime.id) { mutableStateOf<String?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val seasonPrefs = remember(context) {
+        context.getSharedPreferences("anime_selected_seasons", android.content.Context.MODE_PRIVATE)
+    }
+    var selectedSeason by remember(state.anime.id) {
+        mutableStateOf(seasonPrefs.getString(state.anime.id.toString(), null))
+    }
     val activeSeason = remember(seasonOptions, selectedSeason, allEpisodes) {
         resolveActiveSeason(seasonOptions, selectedSeason, allEpisodes)
     }
@@ -582,7 +588,10 @@ private fun AnimeScreenSmallImpl(
                                     seasonOptions = seasonOptions,
                                     allEpisodes = allEpisodes,
                                     activeSeason = activeSeason,
-                                    onSeasonSelected = { selectedSeason = it },
+                                    onSeasonSelected = { season ->
+                                        selectedSeason = season
+                                        seasonPrefs.edit().putString(state.anime.id.toString(), season).apply()
+                                    },
                                 )
                             }
                         }
@@ -723,7 +732,13 @@ fun AnimeScreenLargeImpl(
     val allEpisodes = remember(state) { state.processedEpisodes }
     val allListItems = remember(state) { state.episodeListItems }
     val seasonOptions = remember(allEpisodes) { extractSeasonOptions(allEpisodes) }
-    var selectedSeason by rememberSaveable(state.anime.id) { mutableStateOf<String?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val seasonPrefs = remember(context) {
+        context.getSharedPreferences("anime_selected_seasons", android.content.Context.MODE_PRIVATE)
+    }
+    var selectedSeason by remember(state.anime.id) {
+        mutableStateOf(seasonPrefs.getString(state.anime.id.toString(), null))
+    }
     val activeSeason = remember(seasonOptions, selectedSeason, allEpisodes) {
         resolveActiveSeason(seasonOptions, selectedSeason, allEpisodes)
     }
@@ -936,7 +951,10 @@ fun AnimeScreenLargeImpl(
                                             seasonOptions = seasonOptions,
                                             allEpisodes = allEpisodes,
                                             activeSeason = activeSeason,
-                                            onSeasonSelected = { selectedSeason = it },
+                                            onSeasonSelected = { season ->
+                                                selectedSeason = season
+                                                seasonPrefs.edit().putString(state.anime.id.toString(), season).apply()
+                                            },
                                         )
                                     }
                                 }

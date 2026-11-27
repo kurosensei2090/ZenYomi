@@ -6,10 +6,12 @@ All notable changes to **ZenYomi** will be documented in this file.
 
 ## [v1.0.6] - 2026-11-27
 
-### 🌟 Overview of Release 1.0.6 (Builds 86 – 91)
-ZenYomi v1.0.6 fixes all in-app Getting Started and Help/Troubleshooting URLs across onboarding, library empty states, settings, migration, WebView, and local sources (`kurosensei2090/ZenYomi`), stabilizes Discover scroll position on open/refresh, smooths out Manga details screen transitions, improves ExoPlayer external subtitle loading, fixes CloudStream server discovery disappearing when restarting an episode (#58), adds same-source related seasons/recommendations with cover badges (#59), fixes MPV server switching & adds in-player server refresh/deduplication (#60), and fixes episode downloader Wi-Fi/VPN detection, WorkManager auto-retry, and link-resolution timeouts (#61).
+### 🌟 Overview of Release 1.0.6 (Builds 86 – 92)
+ZenYomi v1.0.6 fixes all in-app Getting Started and Help/Troubleshooting URLs across onboarding, library empty states, settings, migration, WebView, and local sources (`kurosensei2090/ZenYomi`), stabilizes Discover scroll position on open/refresh, smooths out Manga details screen transitions, improves ExoPlayer external subtitle loading, fixes CloudStream server discovery disappearing when restarting an episode (#58), adds same-source related seasons/recommendations with cover badges (#59), fixes MPV server switching & adds in-player server refresh/deduplication (#60), fixes episode downloader Wi-Fi/VPN detection, WorkManager auto-retry, and link-resolution timeouts (#61), and persists the user's selected anime season across navigation (#62).
 
 ### 🎨 UI, Player & Documentation Fixes
+- **Persistent Anime Season Selection (Issue #62, Build 92)**:
+  - Saved the user's selected season per anime ID (`anime_selected_seasons` preferences) in `AnimeScreen` so returning to an anime restores the chosen season instead of reverting to the first unseen season.
 - **Downloader Wi-Fi/VPN Detection, Auto-Retry & Timeouts (Issue #61, Build 91)**:
   - **Wi-Fi & VPN Detection (`NetworkStateTracker`)**: Fixed `isWifi` detection to support `NET_CAPABILITY_NOT_METERED` alongside `TRANSPORT_WIFI` so downloads don't falsely report "no Wi-Fi" when using a VPN.
   - **WorkManager Constraints & Auto-Retry (`AnimeDownloadJob`, `MangaDownloadJob`)**: Added `NetworkType.UNMETERED` / `CONNECTED` constraints, returned `Result.retry()` when waiting for Wi-Fi/network, and replaced the tight busy-wait loop with `delay(250L)`.
@@ -36,7 +38,8 @@ ZenYomi v1.0.6 fixes all in-app Getting Started and Help/Troubleshooting URLs ac
 
 | Build | Commit | Description |
 |---|---|---|
-| **Build 91** | `8ccfeb7` | Fix downloader Wi-Fi/VPN detection, add WorkManager network constraints & auto-retry, and add hoster resolution timeouts (Issue #61) |
+| **Build 92** | `b11f411` | Persist selected anime season per anime ID across navigation and app restarts (Issue #62) |
+| **Build 91** | `367b519` | Fix downloader Wi-Fi/VPN detection, add WorkManager network constraints & auto-retry, and add hoster resolution timeouts (Issue #61) |
 | **Build 90** | `ce64ca4` | Fix MPV server-switching stall, add 15s resolver timeout, deduplicate hoster videos, and add Refresh button in Qualities sheet (Issue #60) |
 | **Build 89** | `eebf677` | Same-source related seasons/recommendations discovery, CloudStream `getRelatedAnimeList()`, and season/part cover badges (Issue #59) |
 | **Build 88** | `9278ca1` | Session-scoped CloudStream server extraction & replay buffer for `discoveredHostersFlow` (Issue #58) |
