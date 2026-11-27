@@ -44,6 +44,7 @@ class ReleaseServiceImpl(
 
     private fun extractBuildCode(name: String?, tag: String?, info: String?): Int? {
         val regex = Regex("""(?i)\bbuild\s*[:#\-]?\s*(\d+)\b|\bb(\d+)\b""")
+        val rangeRegex = Regex("""(?i)\bbuilds?\s+\d+\s*[–\-]\s*(\d+)\b""")
 
         // 1. Release title / name
         name?.let {
@@ -61,12 +62,16 @@ class ReleaseServiceImpl(
             if (code != null) return code
         }
 
-        // 3. First few lines of release body
-        info?.lines()?.take(5)?.forEach { line ->
-            val match = regex.find(line)
-            val code = match?.groupValues?.getOrNull(1)?.toIntOrNull()
-                ?: match?.groupValues?.getOrNull(2)?.toIntOrNull()
-            if (code != null) return code
+        // 3. Release body (supports "Builds X - Y" ranges and highest "Build N" in history)
+        info?.let { body ->
+            rangeRegex.find(body)?.groupValues?.getOrNull(1)?.toIntOrNull()?.let { return it }
+            val maxBuild = regex.findAll(body)
+                .mapNotNull { m ->
+                    m.groupValues.getOrNull(1)?.toIntOrNull()
+                        ?: m.groupValues.getOrNull(2)?.toIntOrNull()
+                }
+                .maxOrNull()
+            if (maxBuild != null) return maxBuild
         }
 
         return null

@@ -6,7 +6,7 @@ All notable changes to **ZenYomi** will be documented in this file.
 
 ## [v1.0.6] - 2026-11-27
 
-### 🌟 Overview of Release 1.0.6 (Builds 86 – 99)
+### 🌟 Overview of Release 1.0.6 (Builds 86 – 100)
 ZenYomi v1.0.6 fixes all in-app Getting Started and Help/Troubleshooting URLs across onboarding, library empty states, settings, migration, WebView, and local sources (`kurosensei2090/ZenYomi`), stabilizes Discover scroll position on open/refresh, smooths out Manga details screen transitions, improves ExoPlayer external subtitle loading, fixes CloudStream server discovery disappearing when restarting an episode (#58), adds same-source related seasons/recommendations with cover badges (#59), fixes MPV server switching & adds in-player server refresh/deduplication (#60), fixes episode downloader Wi-Fi/VPN detection, WorkManager auto-retry, and link-resolution timeouts (#61), persists the user's selected anime season across navigation (#62), and switches Manga/Anime extension installation to private in-app loading without `REQUEST_INSTALL_PACKAGES` (Build 93).
 
 ### 🎨 UI, Player & Documentation Fixes
@@ -41,7 +41,8 @@ ZenYomi v1.0.6 fixes all in-app Getting Started and Help/Troubleshooting URLs ac
 
 | Build | Commit | Description |
 |---|---|---|
-| **Build 99** | `b3b33b8` | Smooth Anime details screen transition by deferring background syncs until slide animation settles |
+| **Build 100** | `d7ba334` | Fix `ReleaseServiceImpl` build-number parsing (`Builds X – Y` & body scan) and route update notification download to browser |
+| **Build 99** | `98480b9` | Smooth Anime details screen transition by deferring background syncs until slide animation settles |
 | **Build 98** | `1d5833c` | Remove unused `PackageInstaller`, `Legacy`, and `Shizuku` installer classes/dependencies (private-only extension loading) |
 | **Build 97** | `2dc6979` | Release verification build & Issue #65 resolution |
 | **Build 96** | `de004ca` | Improve external downloader chooser/cleanup, add Seal/YTDLnis/ADM Pro support, and harden episode download candidate retry cleanup (Issue #64) |

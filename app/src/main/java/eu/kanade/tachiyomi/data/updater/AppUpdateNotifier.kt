@@ -36,11 +36,15 @@ internal class AppUpdateNotifier(private val context: Context) {
 
     @SuppressLint("LaunchActivityFromNotification")
     fun promptUpdate(release: Release) {
-        val updateIntent = NotificationReceiver.downloadAppUpdatePendingBroadcast(
-            context,
-            release.downloadLink,
-            release.version,
-        )
+        val updateIntent = Intent(Intent.ACTION_VIEW, release.downloadLink.toUri()).run {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            PendingIntent.getActivity(
+                context,
+                release.downloadLink.hashCode(),
+                this,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
 
         val releaseIntent = Intent(Intent.ACTION_VIEW, release.releaseLink.toUri()).run {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
