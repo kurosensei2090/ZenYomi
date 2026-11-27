@@ -407,6 +407,9 @@ class AnimeDownloader(
 
                 for (candidate in candidateQueue) {
                     try {
+                        download.status = AnimeDownload.State.DOWNLOADING
+                        download.progress = 0
+                        download.resetStats()
                         val resolved = kotlinx.coroutines.withTimeoutOrNull(15_000L) {
                             HosterLoader.getResolvedVideo(download.source, candidate)
                         } ?: candidate
@@ -421,6 +424,8 @@ class AnimeDownloader(
                     } catch (e: Throwable) {
                         if (e is CancellationException) throw e
                         lastError = e
+                        // Clean up partial temp files before trying the next candidate
+                        tmpDir.listFiles()?.forEach { it.delete() }
                         logcat(LogPriority.WARN, e) { "Failed downloading ${download.episode.name} with ${candidate.videoTitle}, trying next candidate..." }
                     }
                 }
@@ -922,32 +927,32 @@ class AnimeDownloader(
                         }
                         file.delete()
                         tmpDir.delete()
-                        queueState.value.find { anime -> anime.video == video }?.let { download ->
-                            download.status = AnimeDownload.State.DOWNLOADED
-                            // Delete successful downloads from queue
-                            if (download.status == AnimeDownload.State.DOWNLOADED) {
-                                // Remove downloaded episode from queue
-                                removeFromQueue(download)
-                            }
-                            if (areAllAnimeDownloadsFinished()) {
-                                stop()
-                            }
-                        }
                     }
                 }
+                context.startActivity(intent)
             } else {
                 val headers = (video.headers ?: source.headers)
                 val bundle = Bundle()
                 headers.forEach { (k, v) -> bundle.putString(k, v) }
-                intent = Intent(Intent.ACTION_VIEW).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                val baseIntent = Intent(Intent.ACTION_VIEW).apply {
                     setDataAndType(video.videoUrl.toUri(), "video/*")
-                    putExtra("extra_filename", filename)
+                    putExtra("extra_filename", "$filename.mkv")
                     putExtra("android.media.intent.extra.HTTP_HEADERS", bundle)
                 }
+                val chooser = Intent.createChooser(baseIntent, "Download episode with").apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                file.delete()
+                tmpDir.delete()
+                context.startActivity(chooser)
             }
-            context.startActivity(intent)
+            queueState.value.find { anime -> anime.video == video }?.let { download ->
+                download.status = AnimeDownload.State.DOWNLOADED
+                removeFromQueue(download)
+                if (areAllAnimeDownloadsFinished()) {
+                    stop()
+                }
+            }
             return file
         } catch (e: Exception) {
             tmpDir.findFile("${filename}_tmp.mkv")?.delete()

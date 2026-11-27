@@ -6,7 +6,7 @@ All notable changes to **ZenYomi** will be documented in this file.
 
 ## [v1.0.6] - 2026-11-27
 
-### 🌟 Overview of Release 1.0.6 (Builds 86 – 95)
+### 🌟 Overview of Release 1.0.6 (Builds 86 – 96)
 ZenYomi v1.0.6 fixes all in-app Getting Started and Help/Troubleshooting URLs across onboarding, library empty states, settings, migration, WebView, and local sources (`kurosensei2090/ZenYomi`), stabilizes Discover scroll position on open/refresh, smooths out Manga details screen transitions, improves ExoPlayer external subtitle loading, fixes CloudStream server discovery disappearing when restarting an episode (#58), adds same-source related seasons/recommendations with cover badges (#59), fixes MPV server switching & adds in-player server refresh/deduplication (#60), fixes episode downloader Wi-Fi/VPN detection, WorkManager auto-retry, and link-resolution timeouts (#61), persists the user's selected anime season across navigation (#62), and switches Manga/Anime extension installation to private in-app loading without `REQUEST_INSTALL_PACKAGES` (Build 93).
 
 ### 🎨 UI, Player & Documentation Fixes
@@ -41,7 +41,8 @@ ZenYomi v1.0.6 fixes all in-app Getting Started and Help/Troubleshooting URLs ac
 
 | Build | Commit | Description |
 |---|---|---|
-| **Build 95** | `631fffa` | Release verification build & Issue #63 resolution |
+| **Build 96** | `08836f9` | Improve external downloader chooser/cleanup, add Seal/YTDLnis/ADM Pro support, and harden episode download candidate retry cleanup (Issue #64) |
+| **Build 95** | `ef145be` | Release verification build & Issue #63 resolution |
 | **Build 94** | `4327a7f` | Guard `canRequestPackageInstalls()` against `SecurityException` when `REQUEST_INSTALL_PACKAGES` is omitted (Issue #63) |
 | **Build 93** | `2e3edf4` | Switch Manga/Anime extension loading to private in-app mode & remove `REQUEST_INSTALL_PACKAGES` |
 | **Build 92** | `acc30b3` | Persist selected anime season per anime ID across navigation and app restarts (Issue #62) |

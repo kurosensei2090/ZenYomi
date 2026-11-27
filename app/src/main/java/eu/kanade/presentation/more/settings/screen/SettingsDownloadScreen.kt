@@ -374,6 +374,9 @@ object SettingsDownloadScreen : SearchableSettings {
                 "idm.internet.download.manager.plus" -> true
                 "idm.internet.download.manager.adm.lite" -> true
                 "com.dv.adm" -> true
+                "com.dv.adm.pay" -> true
+                "com.junkfood.seal" -> true
+                "com.deniscerri.ytdl" -> true
                 else -> false
             }
         }
@@ -382,7 +385,7 @@ object SettingsDownloadScreen : SearchableSettings {
             .map { pm.getApplicationLabel(it.applicationInfo!!).toString() }
 
         val packageNamesMap: Map<String, String> =
-            mapOf("" to "None") + packageNames.zip(packageNamesReadable).toMap()
+            mapOf("" to "Ask every time (Chooser)") + packageNames.zip(packageNamesReadable).toMap()
 
         return Preference.PreferenceGroup(
             title = stringResource(AYMR.strings.pref_category_external_downloader),
