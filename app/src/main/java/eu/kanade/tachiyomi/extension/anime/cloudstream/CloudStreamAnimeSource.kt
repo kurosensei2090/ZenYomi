@@ -627,13 +627,25 @@ class CloudStreamAnimeSource(
         )
 
         val discoveredHostersFlow = MutableSharedFlow<DiscoveredHostersEvent>(
-            replay = 0,
+            replay = 8,
             extraBufferCapacity = 64,
             onBufferOverflow = BufferOverflow.DROP_OLDEST,
         )
 
         private val extractionScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         private var activeExtractionJob: Job? = null
+        private val activeSessionId = java.util.concurrent.atomic.AtomicLong(0L)
+
+        fun beginPlayerSession(): Long {
+            cancelExtraction()
+            return activeSessionId.incrementAndGet()
+        }
+
+        fun cancelExtractionIfSession(sessionId: Long) {
+            if (activeSessionId.get() == sessionId) {
+                cancelExtraction()
+            }
+        }
 
         fun cancelExtraction() {
             activeExtractionJob?.cancel()

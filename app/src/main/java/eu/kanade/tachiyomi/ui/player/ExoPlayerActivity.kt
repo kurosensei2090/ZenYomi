@@ -255,6 +255,7 @@ class ExoPlayerActivity : BaseActivity() {
     private var pendingSelectedSubtitleLabel: String? = null
     private var pipReceiver: BroadcastReceiver? = null
     private var isPipClosing = false
+    private var playerSessionId: Long = 0L
 
     private val subtitlePickerLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -396,7 +397,7 @@ class ExoPlayerActivity : BaseActivity() {
     }
 
     private fun loadEpisodeAndPlay(targetEpisodeId: Long, resumePosition: Long = -1L) {
-        CloudStreamAnimeSource.cancelExtraction()
+        playerSessionId = CloudStreamAnimeSource.beginPlayerSession()
         currentLoadingJob?.cancel()
         currentLoadingJob = lifecycleScope.launch {
             try {
@@ -1276,7 +1277,7 @@ class ExoPlayerActivity : BaseActivity() {
     }
 
     override fun onDestroy() {
-        CloudStreamAnimeSource.cancelExtraction()
+        CloudStreamAnimeSource.cancelExtractionIfSession(playerSessionId)
         if (!AnimeDownloadJob.isRunning(this)) {
             TorrentServerService.stop()
         }

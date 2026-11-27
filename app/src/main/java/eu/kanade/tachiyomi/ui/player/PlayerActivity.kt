@@ -201,7 +201,7 @@ class PlayerActivity : BaseActivity() {
         )
 
         viewModel.saveCurrentEpisodeWatchingProgress()
-        CloudStreamAnimeSource.cancelExtraction()
+        playerSessionId = CloudStreamAnimeSource.beginPlayerSession()
 
         lifecycleScope.launchNonCancellable {
             viewModel.updateIsLoadingEpisode(true)
@@ -231,6 +231,8 @@ class PlayerActivity : BaseActivity() {
 
         setIntent(intent)
     }
+
+    private var playerSessionId: Long = 0L
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -329,7 +331,7 @@ class PlayerActivity : BaseActivity() {
 
         MPVLib.removeLogObserver(playerObserver)
         MPVLib.removeObserver(playerObserver)
-        CloudStreamAnimeSource.cancelExtraction()
+        CloudStreamAnimeSource.cancelExtractionIfSession(playerSessionId)
         if (!AnimeDownloadJob.isRunning(this)) {
             TorrentServerService.stop()
         }
