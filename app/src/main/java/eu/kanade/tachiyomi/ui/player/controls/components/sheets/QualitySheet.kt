@@ -25,6 +25,8 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -87,6 +89,7 @@ fun QualitySheet(
     displayHosters: Pair<Boolean, Boolean>,
     videoQualityTracks: List<VideoQualityTrack> = emptyList(),
     onSelectVideoQuality: (Int) -> Unit = {},
+    onRefreshHosters: () -> Unit = {},
     onDismissRequest: () -> Unit,
     dismissSheet: Boolean,
     modifier: Modifier = Modifier,
@@ -99,15 +102,29 @@ fun QualitySheet(
         modifier = modifier,
     ) {
         Column {
-            Text(
-                text = stringResource(AYMR.strings.player_sheets_qualities_title),
-                style = MaterialTheme.typography.headlineMedium,
-                modifier = Modifier.padding(
-                    top = MaterialTheme.padding.medium,
-                    start = MaterialTheme.padding.medium,
-                    bottom = MaterialTheme.padding.extraSmall,
-                ),
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        top = MaterialTheme.padding.medium,
+                        start = MaterialTheme.padding.medium,
+                        end = MaterialTheme.padding.small,
+                        bottom = MaterialTheme.padding.extraSmall,
+                    ),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(AYMR.strings.player_sheets_qualities_title),
+                    style = MaterialTheme.typography.headlineMedium,
+                )
+                IconButton(onClick = onRefreshHosters) {
+                    Icon(
+                        imageVector = Icons.Outlined.Refresh,
+                        contentDescription = "Refresh servers",
+                    )
+                }
+            }
 
             if (videoQualityTracks.size > 1) {
                 Text(

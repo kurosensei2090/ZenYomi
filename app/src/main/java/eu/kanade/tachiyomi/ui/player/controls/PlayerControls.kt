@@ -609,6 +609,7 @@ fun PlayerControls(
             displayHosters = Pair(showFailedHosters, emptyHosters),
             videoQualityTracks = videoQualityTracks,
             onSelectVideoQuality = viewModel::selectVideoQuality,
+            onRefreshHosters = viewModel::refreshHosters,
 
             chapter = currentChapter?.toSegment(),
             chapters = chapters,

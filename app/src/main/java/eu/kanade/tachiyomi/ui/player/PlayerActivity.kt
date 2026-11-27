@@ -1126,11 +1126,10 @@ class PlayerActivity : BaseActivity() {
             viewModel.pos.value.takeIf { it > 0F } ?: 0F
         }
 
-        // Cleanly stop any existing stream before loading a new one
-        MPVLib.command(arrayOf("stop"))
-
         if (resumePosSec > 0F) {
             MPVLib.command(arrayOf("set", "start", "$resumePosSec"))
+        } else {
+            MPVLib.command(arrayOf("set", "start", "none"))
         }
 
         val videoOptions = video.mpvArgs.joinToString(",") { (option, value) ->
@@ -1179,6 +1178,7 @@ class PlayerActivity : BaseActivity() {
                         videoOptions,
                     ),
                 )
+                MPVLib.setPropertyBoolean("pause", false)
             }
         }
     }

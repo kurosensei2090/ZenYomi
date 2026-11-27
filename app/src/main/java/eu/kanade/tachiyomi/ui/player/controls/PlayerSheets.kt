@@ -67,6 +67,7 @@ fun PlayerSheets(
     displayHosters: Pair<Boolean, Boolean>,
     videoQualityTracks: List<VideoQualityTrack> = emptyList(),
     onSelectVideoQuality: (Int) -> Unit = {},
+    onRefreshHosters: () -> Unit = {},
 
     // chapters sheet
     chapter: Segment?,
@@ -149,6 +150,7 @@ fun PlayerSheets(
                 displayHosters = displayHosters,
                 videoQualityTracks = videoQualityTracks,
                 onSelectVideoQuality = onSelectVideoQuality,
+                onRefreshHosters = onRefreshHosters,
                 onDismissRequest = onDismissRequest,
                 dismissSheet = dismissSheet,
             )

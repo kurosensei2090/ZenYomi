@@ -6,10 +6,13 @@ All notable changes to **ZenYomi** will be documented in this file.
 
 ## [v1.0.6] - 2026-11-27
 
-### 🌟 Overview of Release 1.0.6 (Builds 86 – 89)
-ZenYomi v1.0.6 fixes all in-app Getting Started and Help/Troubleshooting URLs across onboarding, library empty states, settings, migration, WebView, and local sources (`kurosensei2090/ZenYomi`), stabilizes Discover scroll position on open/refresh, smooths out Manga details screen transitions, improves ExoPlayer external subtitle loading, fixes CloudStream server discovery disappearing when restarting an episode (#58), and adds same-source related seasons/recommendations with cover badges (#59).
+### 🌟 Overview of Release 1.0.6 (Builds 86 – 90)
+ZenYomi v1.0.6 fixes all in-app Getting Started and Help/Troubleshooting URLs across onboarding, library empty states, settings, migration, WebView, and local sources (`kurosensei2090/ZenYomi`), stabilizes Discover scroll position on open/refresh, smooths out Manga details screen transitions, improves ExoPlayer external subtitle loading, fixes CloudStream server discovery disappearing when restarting an episode (#58), adds same-source related seasons/recommendations with cover badges (#59), and fixes MPV server switching & adds in-player server refresh/deduplication (#60).
 
 ### 🎨 UI, Player & Documentation Fixes
+- **MPV Server Switching, Refresh & Deduplication (Issue #60, Build 90)**:
+  - **Clean MPV Stream Replacement (`PlayerActivity`, `PlayerViewModel`)**: Removed the racy `MPVLib.command("stop")` before `loadfile(..., "replace")`, reset MPV `start` option when `resumePosSec == 0`, unpaused MPV after `loadfile`, and added a 15s resolver timeout + cancellable `manualSwitchJob` so switching servers no longer gets stuck.
+  - **In-Player Server Refresh & Deduplication (`QualitySheet`, `PlayerViewModel`)**: Added a **Refresh** button in the Qualities sheet to re-fetch servers without leaving playback, and deduplicated identical `videoUrl` entries per hoster.
 - **Same-Source Related Seasons & Cover Badges (Issue #59, Build 89)**:
   - **Same-Source Season Auto-Discovery (`SyncRelatedAnimeWithSource`, `AnimeScreenModel`)**: Automatically searches the same source for previous/next seasons and parts when an extension doesn't implement `getRelatedAnimeList()`, grouping them into **Previous Seasons**, **Next Seasons**, and **Related Seasons**.
   - **CloudStream Recommendations (`CloudStreamAnimeSource`)**: Enabled `supportsRelatedAnime` and `getRelatedAnimeList()` using `LoadResponse.recommendations`.
@@ -29,7 +32,8 @@ ZenYomi v1.0.6 fixes all in-app Getting Started and Help/Troubleshooting URLs ac
 
 | Build | Commit | Description |
 |---|---|---|
-| **Build 89** | `8ac9ae6` | Same-source related seasons/recommendations discovery, CloudStream `getRelatedAnimeList()`, and season/part cover badges (Issue #59) |
+| **Build 90** | `6dadf78` | Fix MPV server-switching stall, add 15s resolver timeout, deduplicate hoster videos, and add Refresh button in Qualities sheet (Issue #60) |
+| **Build 89** | `eebf677` | Same-source related seasons/recommendations discovery, CloudStream `getRelatedAnimeList()`, and season/part cover badges (Issue #59) |
 | **Build 88** | `9278ca1` | Session-scoped CloudStream server extraction & replay buffer for `discoveredHostersFlow` (Issue #58) |
 | **Build 87** | `62fa705` | Fix Discover scroll jump, smooth Manga details transition, and fix ExoPlayer external subtitles |
 | **Build 86** | `2a7af78` | Fix Getting Started & Help URLs (`kurosensei2090/ZenYomi`) and add full documentation sections to `README.md` |

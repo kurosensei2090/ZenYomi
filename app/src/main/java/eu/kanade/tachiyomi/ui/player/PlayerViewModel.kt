@@ -1412,15 +1412,21 @@ class PlayerViewModel @JvmOverloads constructor(
     fun loadHosters(source: AnimeSource, hosterList: List<Hoster>, hosterIndex: Int, videoIndex: Int) {
         val hasFoundPreferredVideo = AtomicBoolean(false)
 
-        _hosterList.update { _ -> hosterList }
+        val dedupedHosters = hosterList.map { hoster ->
+            val list = hoster.videoList ?: return@map hoster
+            val deduped = list.distinctBy { it.videoUrl.ifBlank { it.videoTitle } }
+            hoster.copy(videoList = deduped)
+        }
+
+        _hosterList.update { _ -> dedupedHosters }
         _hosterExpandedList.update { _ ->
-            List(hosterList.size) { true }
+            List(dedupedHosters.size) { true }
         }
 
         getHosterVideoLinksJob?.cancel()
         getHosterVideoLinksJob = viewModelScope.launchIO {
             _hosterState.update { _ ->
-                hosterList.map { hoster ->
+                dedupedHosters.map { hoster ->
                     if (hoster.lazy) {
                         HosterState.Idle(hoster.hosterName)
                     } else if (hoster.videoList == null) {
@@ -1438,7 +1444,7 @@ class PlayerViewModel @JvmOverloads constructor(
 
             try {
                 coroutineScope {
-                    hosterList.mapIndexed { hosterIdx, hoster ->
+                    dedupedHosters.mapIndexed { hosterIdx, hoster ->
                         async {
                             val hosterState = EpisodeLoader.loadHosterVideos(source, hoster)
 
@@ -1710,7 +1716,9 @@ class PlayerViewModel @JvmOverloads constructor(
         pause()
 
         val resolvedVideo = if (selectedHosterState.videoState.getOrNull(videoIndex) != Video.State.READY) {
-            HosterLoader.getResolvedVideo(source, video)
+            kotlinx.coroutines.withTimeoutOrNull(15_000L) {
+                HosterLoader.getResolvedVideo(source, video)
+            }
         } else {
             video
         }
@@ -1773,8 +1781,30 @@ class PlayerViewModel @JvmOverloads constructor(
             loadThumbnails(resolvedVideo, source)
         }
 
+        _pausedState.update { false }
         activity.setVideo(resolvedVideo)
         return true
+    }
+
+    private var manualSwitchJob: kotlinx.coroutines.Job? = null
+
+    fun refreshHosters() {
+        val ep = currentEpisode.value?.toDomainEpisode() ?: return
+        val anime = currentAnime.value ?: return
+        val source = currentSource.value ?: return
+        viewModelScope.launchIO {
+            updateIsLoadingHosters(true)
+            try {
+                val freshHosters = EpisodeLoader.getHosters(ep, anime, source)
+                if (freshHosters.isNotEmpty()) {
+                    loadHosters(source, freshHosters, -1, -1)
+                }
+            } catch (e: Throwable) {
+                logcat(LogPriority.WARN, e) { "Failed to refresh hosters: ${e.message}" }
+            } finally {
+                updateIsLoadingHosters(false)
+            }
+        }
     }
 
     fun updateVideo(video: Video) {
@@ -1800,7 +1830,8 @@ class PlayerViewModel @JvmOverloads constructor(
             )
         }
 
-        viewModelScope.launchIO {
+        manualSwitchJob?.cancel()
+        manualSwitchJob = viewModelScope.launchIO {
             try {
                 _pausedState.update { false }
                 val success = loadVideo(currentSource.value, video, hosterIndex, videoIndex, autoFailover = false)
