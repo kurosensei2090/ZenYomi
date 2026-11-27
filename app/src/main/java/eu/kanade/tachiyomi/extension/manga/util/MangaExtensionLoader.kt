@@ -97,8 +97,9 @@ internal object MangaExtensionLoader {
             }
         }
 
+        val privateDir = getPrivateExtensionDir(context).apply { mkdirs() }
         val target = File(
-            getPrivateExtensionDir(context),
+            privateDir,
             "${extension.packageName}.$PRIVATE_EXTENSION_EXTENSION",
         )
         return try {

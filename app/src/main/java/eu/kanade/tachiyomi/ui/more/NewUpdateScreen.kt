@@ -54,21 +54,7 @@ class NewUpdateScreen(
                 }
             },
             onAcceptUpdate = {
-                when (val state = downloadState) {
-                    is AppUpdateDownloadJob.State.Idle, is AppUpdateDownloadJob.State.Error -> {
-                        AppUpdateDownloadJob.start(
-                            context = context,
-                            url = downloadLink,
-                            title = versionName,
-                        )
-                    }
-                    is AppUpdateDownloadJob.State.Finished -> {
-                        installApk(context, state.uri)
-                    }
-                    is AppUpdateDownloadJob.State.Downloading -> {
-                        // Already downloading
-                    }
-                }
+                context.openInBrowser(downloadLink)
             },
         )
     }
