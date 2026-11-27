@@ -21,7 +21,11 @@ fun rememberRequestPackageInstallsPermissionState(initialValue: Boolean = false)
     DisposableEffect(lifecycleOwner.lifecycle) {
         val observer = object : DefaultLifecycleObserver {
             override fun onResume(owner: LifecycleOwner) {
-                installGranted = context.packageManager.canRequestPackageInstalls()
+                installGranted = try {
+                    context.packageManager.canRequestPackageInstalls()
+                } catch (_: SecurityException) {
+                    true
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
