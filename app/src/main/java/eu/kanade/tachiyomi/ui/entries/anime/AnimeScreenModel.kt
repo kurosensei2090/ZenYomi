@@ -263,6 +263,9 @@ class AnimeScreenModel(
                     dialog = null,
                 )
             }
+            // Let the 200ms screen slide transition settle before starting background syncs
+            kotlinx.coroutines.delay(220L)
+
             // Start observe tracking since it only needs animeId
             observeTrackers()
 
