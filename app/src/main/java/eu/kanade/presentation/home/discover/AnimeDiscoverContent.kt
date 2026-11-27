@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -228,7 +230,17 @@ fun AnimeDiscoverContent(
                 }
 
                 else -> {
+                    val listState = rememberLazyListState()
+                    LaunchedEffect(state.currentSource?.id) {
+                        listState.scrollToItem(0)
+                    }
+                    LaunchedEffect(state.popularAnime.isNotEmpty(), state.isRefreshing) {
+                        if (!state.isRefreshing && listState.firstVisibleItemIndex <= 1) {
+                            listState.scrollToItem(0)
+                        }
+                    }
                     LazyColumn(
+                        state = listState,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = contentPadding + PaddingValues(top = 8.dp, bottom = 88.dp),
                     ) {

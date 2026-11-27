@@ -614,10 +614,11 @@ class ExoPlayerActivity : BaseActivity() {
         if (video.subtitleTracks.isNotEmpty()) {
             for (track in video.subtitleTracks) {
                 try {
+                    val path = (Uri.parse(track.url).path ?: track.url).lowercase()
                     val mimeType = when {
-                        track.url.endsWith(".vtt", ignoreCase = true) -> MimeTypes.TEXT_VTT
-                        track.url.endsWith(".srt", ignoreCase = true) -> MimeTypes.APPLICATION_SUBRIP
-                        track.url.endsWith(".ass", ignoreCase = true) || track.url.endsWith(".ssa", ignoreCase = true) -> MimeTypes.TEXT_SSA
+                        path.endsWith(".vtt") -> MimeTypes.TEXT_VTT
+                        path.endsWith(".srt") -> MimeTypes.APPLICATION_SUBRIP
+                        path.endsWith(".ass") || path.endsWith(".ssa") -> MimeTypes.TEXT_SSA
                         else -> MimeTypes.APPLICATION_SUBRIP
                     }
                     val subConfig = MediaItem.SubtitleConfiguration.Builder(Uri.parse(track.url))
@@ -632,29 +633,42 @@ class ExoPlayerActivity : BaseActivity() {
             }
         }
 
-        // External sidecar subtitle files added by user
-        allSubtitleConfigs.addAll(externalSubtitleConfigs)
-
-        // Build main video media item with subtitles attached directly
+        // Build main video media item with network subtitles attached
         val mediaItem = MediaItem.Builder()
             .setUri(video.videoUrl)
             .setSubtitleConfigurations(allSubtitleConfigs)
             .build()
         val videoSource = mediaSourceFactory.createMediaSource(mediaItem)
 
+        val extraSources = mutableListOf<MediaSource>(videoSource)
+
+        // Merge local external sidecar subtitle files via SingleSampleMediaSource for reliable loading
+        if (externalSubtitleConfigs.isNotEmpty()) {
+            val singleSampleFactory = SingleSampleMediaSource.Factory(dataSourceFactory)
+            for (extSubConfig in externalSubtitleConfigs) {
+                try {
+                    extraSources.add(singleSampleFactory.createMediaSource(extSubConfig, C.TIME_UNSET))
+                } catch (e: Throwable) {
+                    logcat(LogPriority.WARN, e) { "Failed to create external subtitle source for ${extSubConfig.uri}" }
+                }
+            }
+        }
+
         // Additional audio tracks if present
         if (video.audioTracks.isNotEmpty()) {
-            val sources = mutableListOf<MediaSource>(videoSource)
             for (audioTrack in video.audioTracks) {
                 val audioItem = MediaItem.Builder()
                     .setUri(audioTrack.url)
                     .build()
-                sources.add(mediaSourceFactory.createMediaSource(audioItem))
+                extraSources.add(mediaSourceFactory.createMediaSource(audioItem))
             }
-            return MergingMediaSource(*sources.toTypedArray())
         }
 
-        return videoSource
+        return if (extraSources.size > 1) {
+            MergingMediaSource(*extraSources.toTypedArray())
+        } else {
+            videoSource
+        }
     }
 
     private fun addExternalSubtitle(uri: Uri) {
@@ -668,13 +682,22 @@ class ExoPlayerActivity : BaseActivity() {
                 }
             }
 
-            // Copy subtitle stream to local cache directory so ExoPlayer has direct, persistent file access
+            // Copy subtitle stream to local cache directory (stripping UTF-8 BOM if present)
             val subCacheDir = File(cacheDir, "subtitles").apply { mkdirs() }
             val safeName = displayName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
             val localSubFile = File(subCacheDir, "${System.currentTimeMillis()}_$safeName")
             contentResolver.openInputStream(uri)?.use { input ->
+                val rawBytes = input.readBytes()
+                val hasBom = rawBytes.size >= 3 &&
+                    rawBytes[0] == 0xEF.toByte() &&
+                    rawBytes[1] == 0xBB.toByte() &&
+                    rawBytes[2] == 0xBF.toByte()
                 localSubFile.outputStream().use { output ->
-                    input.copyTo(output)
+                    if (hasBom) {
+                        output.write(rawBytes, 3, rawBytes.size - 3)
+                    } else {
+                        output.write(rawBytes)
+                    }
                 }
             }
 
@@ -722,6 +745,12 @@ class ExoPlayerActivity : BaseActivity() {
             if (exo != null && video != null) {
                 val currentPos = exo.currentPosition
                 val wasPlaying = exo.isPlaying
+                exo.trackSelectionParameters = exo.trackSelectionParameters
+                    .buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                    .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                    .build()
+                isSubtitleDisabledState.value = false
                 val mediaSource = createMediaSource(video)
                 exo.setMediaSource(mediaSource, currentPos)
                 exo.prepare()

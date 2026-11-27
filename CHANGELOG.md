@@ -6,10 +6,14 @@ All notable changes to **ZenYomi** will be documented in this file.
 
 ## [v1.0.6] - 2026-11-27
 
-### 🌟 Overview of Release 1.0.6 (Build 86)
-ZenYomi v1.0.6 fixes all in-app Getting Started and Help/Troubleshooting URLs across onboarding, library empty states, settings, migration, WebView, and local sources so they point to the official `kurosensei2090/ZenYomi` repository and documentation sections instead of the non-existent `zenyomiapp/zenyomi` placeholder.
+### 🌟 Overview of Release 1.0.6 (Builds 86 – 87)
+ZenYomi v1.0.6 fixes all in-app Getting Started and Help/Troubleshooting URLs across onboarding, library empty states, settings, migration, WebView, and local sources (`kurosensei2090/ZenYomi`), stabilizes Discover scroll position on open/refresh, smooths out Manga details screen transitions, and improves ExoPlayer external subtitle loading.
 
-### 🎨 UI & Documentation Fixes
+### 🎨 UI, Player & Documentation Fixes
+- **Discover Scroll, Manga Transition & ExoPlayer External Subtitles (Build 87)**:
+  - **Discover Scroll Position (`AnimeDiscoverContent`)**: Added `rememberLazyListState()` and anchored scroll to top on source switch, initial load, and refresh completion so content no longer jumps upward when sections populate.
+  - **Smoother Manga Details Transition (`MangaScreenModel`)**: Deferred background tracker observation and remote metadata/chapter syncs by 220ms so the 200ms screen slide transition completes smoothly before heavy updates run.
+  - **ExoPlayer External Subtitles (`ExoPlayerActivity`)**: Fixed remote subtitle MIME detection for URLs with query parameters, stripped UTF-8 BOM from picked subtitle files, merged local sidecar subtitles via `SingleSampleMediaSource` + `MergingMediaSource`, and ensured text track selection is enabled before prepare.
 - **Getting Started Guide & Help URLs (Build 86)**:
   - Updated all 14 files containing `https://github.com/zenyomiapp/zenyomi` URLs (`GuidesStep`, `Constants`, `SettingsDataScreen`, `SettingsTrackingScreen`, `PlayerSettingsCustomButtonScreen`, `WebViewScreenContent`, `AnimeLibraryUpdateJob`, `AnimeLibraryUpdateNotifier`, `MangaLibraryUpdateJob`, `MangaLibraryUpdateNotifier`, `MigrateAnimeSourceTab`, `MigrateMangaSourceTab`, `LocalAnimeSource`, `LocalMangaSource`) to point to `https://github.com/kurosensei2090/ZenYomi` with matching section anchors.
   - Added **Getting Started**, **Tracking**, **Local Manga**, **Local Anime**, **Migration**, **Bulk Updates**, **Custom Buttons**, and **Troubleshooting** sections to `README.md`.
@@ -18,7 +22,8 @@ ZenYomi v1.0.6 fixes all in-app Getting Started and Help/Troubleshooting URLs ac
 
 | Build | Commit | Description |
 |---|---|---|
-| **Build 86** | `0e266e2` | Fix Getting Started & Help URLs (`kurosensei2090/ZenYomi`) and add full documentation sections to `README.md` |
+| **Build 87** | `d5b4305` | Fix Discover scroll jump, smooth Manga details transition, and fix ExoPlayer external subtitles |
+| **Build 86** | `2a7af78` | Fix Getting Started & Help URLs (`kurosensei2090/ZenYomi`) and add full documentation sections to `README.md` |
 
 ---
 

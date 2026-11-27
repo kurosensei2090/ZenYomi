@@ -238,6 +238,9 @@ class MangaScreenModel(
                 )
             }
 
+            // Let the 200ms screen slide transition settle before starting network/tracker syncs
+            kotlinx.coroutines.delay(220L)
+
             // Start observe tracking since it only needs mangaId
             observeTrackers()
 
