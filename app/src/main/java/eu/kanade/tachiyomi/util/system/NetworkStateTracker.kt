@@ -18,10 +18,14 @@ data class NetworkState(
 @Suppress("DEPRECATION")
 fun Context.activeNetworkState(): NetworkState {
     val capabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
+    val isUnmeteredWifi = capabilities != null && (
+        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+            (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED) && wifiManager.isWifiEnabled)
+        )
     return NetworkState(
-        isConnected = connectivityManager.activeNetworkInfo?.isConnected ?: false,
+        isConnected = connectivityManager.activeNetworkInfo?.isConnected ?: (capabilities != null),
         isValidated = capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) ?: false,
-        isWifi = wifiManager.isWifiEnabled && capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ?: false,
+        isWifi = isUnmeteredWifi,
     )
 }
 

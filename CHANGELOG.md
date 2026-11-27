@@ -6,10 +6,14 @@ All notable changes to **ZenYomi** will be documented in this file.
 
 ## [v1.0.6] - 2026-11-27
 
-### 🌟 Overview of Release 1.0.6 (Builds 86 – 90)
-ZenYomi v1.0.6 fixes all in-app Getting Started and Help/Troubleshooting URLs across onboarding, library empty states, settings, migration, WebView, and local sources (`kurosensei2090/ZenYomi`), stabilizes Discover scroll position on open/refresh, smooths out Manga details screen transitions, improves ExoPlayer external subtitle loading, fixes CloudStream server discovery disappearing when restarting an episode (#58), adds same-source related seasons/recommendations with cover badges (#59), and fixes MPV server switching & adds in-player server refresh/deduplication (#60).
+### 🌟 Overview of Release 1.0.6 (Builds 86 – 91)
+ZenYomi v1.0.6 fixes all in-app Getting Started and Help/Troubleshooting URLs across onboarding, library empty states, settings, migration, WebView, and local sources (`kurosensei2090/ZenYomi`), stabilizes Discover scroll position on open/refresh, smooths out Manga details screen transitions, improves ExoPlayer external subtitle loading, fixes CloudStream server discovery disappearing when restarting an episode (#58), adds same-source related seasons/recommendations with cover badges (#59), fixes MPV server switching & adds in-player server refresh/deduplication (#60), and fixes episode downloader Wi-Fi/VPN detection, WorkManager auto-retry, and link-resolution timeouts (#61).
 
 ### 🎨 UI, Player & Documentation Fixes
+- **Downloader Wi-Fi/VPN Detection, Auto-Retry & Timeouts (Issue #61, Build 91)**:
+  - **Wi-Fi & VPN Detection (`NetworkStateTracker`)**: Fixed `isWifi` detection to support `NET_CAPABILITY_NOT_METERED` alongside `TRANSPORT_WIFI` so downloads don't falsely report "no Wi-Fi" when using a VPN.
+  - **WorkManager Constraints & Auto-Retry (`AnimeDownloadJob`, `MangaDownloadJob`)**: Added `NetworkType.UNMETERED` / `CONNECTED` constraints, returned `Result.retry()` when waiting for Wi-Fi/network, and replaced the tight busy-wait loop with `delay(250L)`.
+  - **Resolver Timeouts (`AnimeDownloader`)**: Added 25s/15s timeouts to `getHosters()`, `getBestVideo()`, and `getResolvedVideo()` so hanging hosters fail over instead of getting stuck at `"Downloading"`.
 - **MPV Server Switching, Refresh & Deduplication (Issue #60, Build 90)**:
   - **Clean MPV Stream Replacement (`PlayerActivity`, `PlayerViewModel`)**: Removed the racy `MPVLib.command("stop")` before `loadfile(..., "replace")`, reset MPV `start` option when `resumePosSec == 0`, unpaused MPV after `loadfile`, and added a 15s resolver timeout + cancellable `manualSwitchJob` so switching servers no longer gets stuck.
   - **In-Player Server Refresh & Deduplication (`QualitySheet`, `PlayerViewModel`)**: Added a **Refresh** button in the Qualities sheet to re-fetch servers without leaving playback, and deduplicated identical `videoUrl` entries per hoster.
@@ -32,7 +36,8 @@ ZenYomi v1.0.6 fixes all in-app Getting Started and Help/Troubleshooting URLs ac
 
 | Build | Commit | Description |
 |---|---|---|
-| **Build 90** | `6dadf78` | Fix MPV server-switching stall, add 15s resolver timeout, deduplicate hoster videos, and add Refresh button in Qualities sheet (Issue #60) |
+| **Build 91** | `8ccfeb7` | Fix downloader Wi-Fi/VPN detection, add WorkManager network constraints & auto-retry, and add hoster resolution timeouts (Issue #61) |
+| **Build 90** | `ce64ca4` | Fix MPV server-switching stall, add 15s resolver timeout, deduplicate hoster videos, and add Refresh button in Qualities sheet (Issue #60) |
 | **Build 89** | `eebf677` | Same-source related seasons/recommendations discovery, CloudStream `getRelatedAnimeList()`, and season/part cover badges (Issue #59) |
 | **Build 88** | `9278ca1` | Session-scoped CloudStream server extraction & replay buffer for `discoveredHostersFlow` (Issue #58) |
 | **Build 87** | `62fa705` | Fix Discover scroll jump, smooth Manga details transition, and fix ExoPlayer external subtitles |

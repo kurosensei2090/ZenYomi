@@ -60,6 +60,10 @@ class AnimeDownloadJob(context: Context, workerParams: WorkerParameters) : Corou
         )
         var active = networkCheck && downloadManager.downloaderStart()
 
+        if (!networkCheck) {
+            return Result.retry()
+        }
+
         if (!active) {
             return Result.failure()
         }
@@ -78,10 +82,11 @@ class AnimeDownloadJob(context: Context, workerParams: WorkerParameters) : Corou
 
         // Keep the worker running when needed
         while (active) {
+            kotlinx.coroutines.delay(250L)
             active = !isStopped && downloadManager.isRunning && networkCheck
         }
 
-        return Result.success()
+        return if (!networkCheck && !isStopped) Result.retry() else Result.success()
     }
 
     private fun checkNetworkState(state: NetworkState, requireWifi: Boolean): Boolean {
@@ -103,7 +108,14 @@ class AnimeDownloadJob(context: Context, workerParams: WorkerParameters) : Corou
         private const val TAG = "AnimeDownloader"
 
         fun start(context: Context) {
+            val onlyWifi = Injekt.get<DownloadPreferences>().downloadOnlyOverWifi().get()
+            val constraints = androidx.work.Constraints.Builder()
+                .setRequiredNetworkType(
+                    if (onlyWifi) androidx.work.NetworkType.UNMETERED else androidx.work.NetworkType.CONNECTED,
+                )
+                .build()
             val request = OneTimeWorkRequestBuilder<AnimeDownloadJob>()
+                .setConstraints(constraints)
                 .addTag(TAG)
                 .build()
             WorkManager.getInstance(context)

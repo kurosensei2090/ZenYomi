@@ -384,8 +384,10 @@ class AnimeDownloader(
 
         try {
             if (download.video == null) {
-                // Pull video from network and add them to download object
-                val hosters = EpisodeLoader.getHosters(download.episode, download.anime, download.source)
+                // Pull video from network with timeouts so a hanging hoster doesn't stall forever
+                val hosters = kotlinx.coroutines.withTimeoutOrNull(25_000L) {
+                    EpisodeLoader.getHosters(download.episode, download.anime, download.source)
+                } ?: emptyList()
                 if (hosters.isEmpty()) {
                     throw Exception(context.stringResource(AYMR.strings.video_list_empty_error))
                 }
@@ -393,8 +395,9 @@ class AnimeDownloader(
                 if (candidateVideos.isEmpty()) {
                     throw Exception(context.stringResource(AYMR.strings.video_list_empty_error))
                 }
-                val bestVideo = HosterLoader.getBestVideo(download.source, hosters)
-                    ?: candidateVideos.first()
+                val bestVideo = kotlinx.coroutines.withTimeoutOrNull(15_000L) {
+                    HosterLoader.getBestVideo(download.source, hosters)
+                } ?: candidateVideos.first()
                 val candidateQueue = linkedSetOf<Video>()
                 candidateQueue.add(bestVideo)
                 candidateQueue.addAll(candidateVideos)
@@ -404,7 +407,9 @@ class AnimeDownloader(
 
                 for (candidate in candidateQueue) {
                     try {
-                        val resolved = HosterLoader.getResolvedVideo(download.source, candidate) ?: candidate
+                        val resolved = kotlinx.coroutines.withTimeoutOrNull(15_000L) {
+                            HosterLoader.getResolvedVideo(download.source, candidate)
+                        } ?: candidate
                         download.video = resolved
                         withIOContext {
                             getOrDownloadVideoFile(download, tmpDir)
