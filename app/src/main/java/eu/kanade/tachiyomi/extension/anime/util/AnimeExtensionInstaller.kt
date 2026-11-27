@@ -13,7 +13,6 @@ import androidx.core.net.toUri
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.tachiyomi.extension.InstallStep
 import eu.kanade.tachiyomi.extension.anime.AnimeExtensionManager
-import eu.kanade.tachiyomi.extension.anime.installer.InstallerAnime
 import eu.kanade.tachiyomi.extension.anime.model.AnimeExtension
 import eu.kanade.tachiyomi.util.storage.getUriCompat
 import eu.kanade.tachiyomi.util.system.isPackageInstalled
@@ -156,52 +155,33 @@ internal class AnimeExtensionInstaller(private val context: Context) {
      * @param uri The uri of the extension to install.
      */
     fun installApk(downloadId: Long, uri: Uri) {
-        when (val installer = extensionInstaller.get()) {
-            BasePreferences.ExtensionInstaller.LEGACY -> {
-                val intent = Intent(context, AnimeExtensionInstallActivity::class.java)
-                    .setDataAndType(uri, APK_MIME)
-                    .putExtra(EXTRA_DOWNLOAD_ID, downloadId)
-                    .setFlags(
-                        Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION,
-                    )
+        val extensionManager = Injekt.get<AnimeExtensionManager>()
+        val tempFile = File(context.cacheDir, "temp_$downloadId")
 
-                context.startActivity(intent)
-            }
-            BasePreferences.ExtensionInstaller.PRIVATE -> {
-                val extensionManager = Injekt.get<AnimeExtensionManager>()
-                val tempFile = File(context.cacheDir, "temp_$downloadId")
-
-                if (tempFile.exists() && !tempFile.delete()) {
-                    // Unlikely but just in case
-                    extensionManager.updateInstallStep(downloadId, InstallStep.Error)
-                    return
-                }
-
-                try {
-                    context.contentResolver.openInputStream(uri)?.use { input ->
-                        tempFile.outputStream().use { output ->
-                            input.copyTo(output)
-                        }
-                    }
-
-                    if (AnimeExtensionLoader.installPrivateExtensionFile(context, tempFile)) {
-                        extensionManager.updateInstallStep(downloadId, InstallStep.Installed)
-                    } else {
-                        extensionManager.updateInstallStep(downloadId, InstallStep.Error)
-                    }
-                } catch (e: Exception) {
-                    logcat(LogPriority.ERROR, e) { "Failed to read downloaded extension file." }
-                    extensionManager.updateInstallStep(downloadId, InstallStep.Error)
-                }
-
-                tempFile.delete()
-            }
-            else -> {
-                val intent =
-                    AnimeExtensionInstallService.getIntent(context, downloadId, uri, installer)
-                ContextCompat.startForegroundService(context, intent)
-            }
+        if (tempFile.exists() && !tempFile.delete()) {
+            // Unlikely but just in case
+            extensionManager.updateInstallStep(downloadId, InstallStep.Error)
+            return
         }
+
+        try {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                tempFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+
+            if (AnimeExtensionLoader.installPrivateExtensionFile(context, tempFile)) {
+                extensionManager.updateInstallStep(downloadId, InstallStep.Installed)
+            } else {
+                extensionManager.updateInstallStep(downloadId, InstallStep.Error)
+            }
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e) { "Failed to read downloaded extension file." }
+            extensionManager.updateInstallStep(downloadId, InstallStep.Error)
+        }
+
+        tempFile.delete()
     }
 
     /**
@@ -210,7 +190,6 @@ internal class AnimeExtensionInstaller(private val context: Context) {
     fun cancelInstall(pkgName: String) {
         val downloadId = activeDownloads.remove(pkgName) ?: return
         downloadManager.remove(downloadId)
-        InstallerAnime.cancelInstallQueue(context, downloadId)
     }
 
     /**

@@ -237,16 +237,6 @@
             android:exported="false" />
 
         <activity
-            android:name=".extension.manga.util.MangaExtensionInstallActivity"
-            android:exported="false"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-
-        <activity
-            android:name=".extension.anime.util.AnimeExtensionInstallActivity"
-            android:exported="false"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-
-        <activity
             android:name=".ui.setting.track.TrackLoginActivity"
             android:exported="true"
             android:label="@string/track_activity_name">
@@ -269,16 +259,6 @@
         <receiver
             android:name=".data.notification.NotificationReceiver"
             android:exported="false" />
-
-        <service
-            android:name=".extension.manga.util.MangaExtensionInstallService"
-            android:exported="false"
-            android:foregroundServiceType="shortService" />
-
-        <service
-            android:name=".extension.anime.util.AnimeExtensionInstallService"
-            android:exported="false"
-            android:foregroundServiceType="shortService" />
         <service
             android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
             android:enabled="false"
@@ -310,14 +290,6 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/provider_paths" />
         </provider>
-
-        <provider
-            android:name="rikka.shizuku.ShizukuProvider"
-            android:authorities="${applicationId}.shizuku"
-            android:enabled="true"
-            android:exported="true"
-            android:multiprocess="false"
-            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
 
         <meta-data
             android:name="android.webkit.WebView.EnableSafeBrowsing"

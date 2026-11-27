@@ -18,21 +18,11 @@ class ExtensionInstallerPreference(
 
     override fun key() = "extension_installer"
 
-    val entries get() = ExtensionInstaller.entries.filter {
-        it == ExtensionInstaller.PRIVATE || (it == ExtensionInstaller.SHIZUKU && context.isShizukuInstalled)
-    }
+    val entries get() = listOf(ExtensionInstaller.PRIVATE)
 
     override fun defaultValue() = ExtensionInstaller.PRIVATE
 
-    private fun check(value: ExtensionInstaller): ExtensionInstaller {
-        return when (value) {
-            ExtensionInstaller.SHIZUKU -> if (context.isShizukuInstalled) value else ExtensionInstaller.PRIVATE
-            ExtensionInstaller.PRIVATE -> value
-            ExtensionInstaller.PACKAGEINSTALLER,
-            ExtensionInstaller.LEGACY,
-            -> ExtensionInstaller.PRIVATE
-        }
-    }
+    private fun check(value: ExtensionInstaller): ExtensionInstaller = ExtensionInstaller.PRIVATE
 
     override fun get(): ExtensionInstaller {
         val value = basePref.get()
