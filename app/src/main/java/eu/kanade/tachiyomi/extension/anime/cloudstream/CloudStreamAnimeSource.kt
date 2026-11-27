@@ -221,6 +221,21 @@ class CloudStreamAnimeSource(
         throw UnsupportedOperationException("Using suspend getAnimeDetails")
     }
 
+    override val supportsRelatedAnime: Boolean = true
+
+    override suspend fun getRelatedAnimeList(anime: SAnime): List<eu.kanade.tachiyomi.animesource.model.AnimeRelation> {
+        val details = loadDetailsSafely(anime.url) ?: return emptyList()
+        val recs = details.recommendations
+            ?.map { it.toSAnime() }
+            ?.filter { it.url.isNotBlank() && it.url != anime.url }
+            .orEmpty()
+        return if (recs.isNotEmpty()) {
+            listOf(eu.kanade.tachiyomi.animesource.model.AnimeRelation("Recommendations", recs))
+        } else {
+            emptyList()
+        }
+    }
+
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
         val details = loadDetailsSafely(anime.url) ?: return anime
 

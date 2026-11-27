@@ -1477,7 +1477,7 @@ class AnimeScreenModel(
 
     fun syncRelatedAnime(forceRefresh: Boolean = false) {
         val state = successState ?: return
-        if (!state.source.supportsRelatedAnime) return
+        if (state.source !is eu.kanade.tachiyomi.animesource.AnimeCatalogueSource) return
 
         screenModelScope.launchIO {
             updateSuccessState { it.copy(isLoadingRelatedAnime = true) }

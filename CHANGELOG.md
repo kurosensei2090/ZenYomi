@@ -6,10 +6,14 @@ All notable changes to **ZenYomi** will be documented in this file.
 
 ## [v1.0.6] - 2026-11-27
 
-### 🌟 Overview of Release 1.0.6 (Builds 86 – 88)
-ZenYomi v1.0.6 fixes all in-app Getting Started and Help/Troubleshooting URLs across onboarding, library empty states, settings, migration, WebView, and local sources (`kurosensei2090/ZenYomi`), stabilizes Discover scroll position on open/refresh, smooths out Manga details screen transitions, improves ExoPlayer external subtitle loading, and fixes CloudStream server discovery disappearing when restarting an episode (#58).
+### 🌟 Overview of Release 1.0.6 (Builds 86 – 89)
+ZenYomi v1.0.6 fixes all in-app Getting Started and Help/Troubleshooting URLs across onboarding, library empty states, settings, migration, WebView, and local sources (`kurosensei2090/ZenYomi`), stabilizes Discover scroll position on open/refresh, smooths out Manga details screen transitions, improves ExoPlayer external subtitle loading, fixes CloudStream server discovery disappearing when restarting an episode (#58), and adds same-source related seasons/recommendations with cover badges (#59).
 
 ### 🎨 UI, Player & Documentation Fixes
+- **Same-Source Related Seasons & Cover Badges (Issue #59, Build 89)**:
+  - **Same-Source Season Auto-Discovery (`SyncRelatedAnimeWithSource`, `AnimeScreenModel`)**: Automatically searches the same source for previous/next seasons and parts when an extension doesn't implement `getRelatedAnimeList()`, grouping them into **Previous Seasons**, **Next Seasons**, and **Related Seasons**.
+  - **CloudStream Recommendations (`CloudStreamAnimeSource`)**: Enabled `supportsRelatedAnime` and `getRelatedAnimeList()` using `LoadResponse.recommendations`.
+  - **Season/Part Cover Badges (`RelatedAnimeRows`)**: Added cover overlay badges (`Season 1`, `Season 2`, `Part 2`, `Prequel`, `Sequel`, etc.) on related anime cards.
 - **Session-Scoped CloudStream Server Extraction (Issue #58, Build 88)**:
   - Scoped `CloudStreamAnimeSource.cancelExtraction()` to the active player session (`beginPlayerSession()` / `cancelExtractionIfSession()`) in both `PlayerActivity` and `ExoPlayerActivity`, preventing an exiting player's `onDestroy()` from cancelling a newly restarted episode's server extraction job.
   - Added a replay buffer (`replay = 8`) to `CloudStreamAnimeSource.discoveredHostersFlow` so late-discovered servers aren't lost before the player UI attaches.
@@ -25,7 +29,8 @@ ZenYomi v1.0.6 fixes all in-app Getting Started and Help/Troubleshooting URLs ac
 
 | Build | Commit | Description |
 |---|---|---|
-| **Build 88** | `245bffe` | Session-scoped CloudStream server extraction & replay buffer for `discoveredHostersFlow` (Issue #58) |
+| **Build 89** | `8ac9ae6` | Same-source related seasons/recommendations discovery, CloudStream `getRelatedAnimeList()`, and season/part cover badges (Issue #59) |
+| **Build 88** | `9278ca1` | Session-scoped CloudStream server extraction & replay buffer for `discoveredHostersFlow` (Issue #58) |
 | **Build 87** | `62fa705` | Fix Discover scroll jump, smooth Manga details transition, and fix ExoPlayer external subtitles |
 | **Build 86** | `2a7af78` | Fix Getting Started & Help URLs (`kurosensei2090/ZenYomi`) and add full documentation sections to `README.md` |
 
