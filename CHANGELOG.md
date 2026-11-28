@@ -4,6 +4,23 @@ All notable changes to **ZenYomi** will be documented in this file.
 
 ---
 
+## [v1.0.7] - 2026-11-28
+
+### 🌟 Overview of Release 1.0.7 (Build 101)
+ZenYomi v1.0.7 adds direct `OkHttpClient` episode downloading for non-manifest HTTP streams so internal episode downloads work reliably with Cloudflare cookies, HTTP/2, and redirects just like external downloaders (#67).
+
+### 🎨 Player & Downloader Fixes
+- **Direct OkHttp Internal Episode Downloader (Issue #67, Build 101)**:
+  - Routed single-stream HTTP video downloads (`.mp4`, `.mkv`, `.webm`, direct hosters) through ZenYomi's `NetworkHelper.client` (`OkHttpClient` with Cloudflare `CookieJar`, HTTP/2, redirects, and live speed/ETA stats) instead of FFmpeg's HTTP stack, while keeping FFmpeg for `.m3u8` / `.mpd` and multi-track muxing.
+
+### 📦 Build History for v1.0.7
+
+| Build | Commit | Description |
+|---|---|---|
+| **Build 101** | `08b012a` | Direct `OkHttpClient` internal episode downloader for non-manifest HTTP video streams (Issue #67) |
+
+---
+
 ## [v1.0.6] - 2026-11-27
 
 ### 🌟 Overview of Release 1.0.6 (Builds 86 – 100)
@@ -41,7 +58,7 @@ ZenYomi v1.0.6 fixes all in-app Getting Started and Help/Troubleshooting URLs ac
 
 | Build | Commit | Description |
 |---|---|---|
-| **Build 100** | `d7ba334` | Fix `ReleaseServiceImpl` build-number parsing (`Builds X – Y` & body scan) and route update notification download to browser |
+| **Build 100** | `e517bd1` | Fix `ReleaseServiceImpl` build-number parsing (`Builds X – Y` & body scan) and route update notification download to browser |
 | **Build 99** | `98480b9` | Smooth Anime details screen transition by deferring background syncs until slide animation settles |
 | **Build 98** | `1d5833c` | Remove unused `PackageInstaller`, `Legacy`, and `Shizuku` installer classes/dependencies (private-only extension loading) |
 | **Build 97** | `2dc6979` | Release verification build & Issue #65 resolution |

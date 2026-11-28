@@ -573,6 +573,8 @@ class AnimeDownloader(
             try {
                 if (torrentPreferences.torrServerEnable().get() && isTorrent(download.video)) {
                     torrentDownload(download, tmpDir, videoFile, filename)
+                } else if (canUseDirectHttpDownload(download.video)) {
+                    directHttpDownload(download, videoFile, filename)
                 } else {
                     ffmpegDownload(download, tmpDir, videoFile, filename)
                 }
@@ -603,6 +605,128 @@ class AnimeDownloader(
     private fun isTorrent(video: Video?): Boolean {
         val url = video?.videoUrl ?: return false
         return url.startsWith("magnet") || url.endsWith(".torrent") || url.startsWith(torrentServerApi.hostUrl)
+    }
+
+    private fun canUseDirectHttpDownload(video: Video?): Boolean {
+        if (video == null) return false
+        val url = video.videoUrl
+        if (!url.startsWith("http://", ignoreCase = true) && !url.startsWith("https://", ignoreCase = true)) {
+            return false
+        }
+        val cleanPath = url.substringBefore("?").substringBefore("#").lowercase()
+        val isManifest = cleanPath.endsWith(".m3u8") || cleanPath.endsWith(".mpd") ||
+            url.contains(".m3u8", ignoreCase = true) || url.contains(".mpd", ignoreCase = true)
+        return !isManifest && video.audioTracks.isEmpty() && video.subtitleTracks.isEmpty()
+    }
+
+    private suspend fun directHttpDownload(
+        download: AnimeDownload,
+        videoFile: UniFile,
+        filename: String,
+    ) {
+        val video = download.video!!
+        val networkHelper = Injekt.get<NetworkHelper>()
+        val rawHeaders = video.headers ?: download.source.headers
+        val isGPhoto = video.videoUrl.contains("googleusercontent.com", ignoreCase = true) ||
+            video.videoUrl.contains("photos.google.com", ignoreCase = true)
+
+        val headersBuilder = rawHeaders.newBuilder()
+        val hasUserAgent = (0 until rawHeaders.size).any {
+            rawHeaders.name(it).equals("User-Agent", ignoreCase = true)
+        }
+        if (!hasUserAgent) {
+            headersBuilder.set("User-Agent", networkHelper.defaultUserAgentProvider())
+        }
+        if (isGPhoto) {
+            if ((0 until rawHeaders.size).none { rawHeaders.name(it).equals("Origin", ignoreCase = true) }) {
+                headersBuilder.set("Origin", "https://photos.google.com")
+            }
+            if ((0 until rawHeaders.size).none { rawHeaders.name(it).equals("Referer", ignoreCase = true) }) {
+                headersBuilder.set("Referer", "https://photos.google.com/")
+            }
+        }
+
+        val request = okhttp3.Request.Builder()
+            .url(video.videoUrl)
+            .headers(headersBuilder.build())
+            .build()
+
+        val call = networkHelper.client.newCall(request)
+        call.execute().use { response ->
+            if (!response.isSuccessful) {
+                throw Exception("HTTP ${response.code}: ${response.message}")
+            }
+            val body = response.body
+            val contentLength = body.contentLength()
+            val contentType = body.contentType()?.toString()?.lowercase().orEmpty()
+            val ext = when {
+                contentType.contains("mp4") || video.videoUrl.substringBefore("?").endsWith(".mp4", ignoreCase = true) -> "mp4"
+                contentType.contains("webm") || video.videoUrl.substringBefore("?").endsWith(".webm", ignoreCase = true) -> "webm"
+                else -> "mkv"
+            }
+
+            var totalRead = 0L
+            var lastSampleTimeMs = System.currentTimeMillis()
+            var lastSampleBytes = 0L
+            var smoothedSpeed = 0L
+            val buffer = ByteArray(64 * 1024)
+
+            body.byteStream().use { input ->
+                videoFile.openOutputStream().use { output ->
+                    while (true) {
+                        if (kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]?.isActive == false) {
+                            call.cancel()
+                            throw CancellationException("Download cancelled")
+                        }
+                        val read = input.read(buffer)
+                        if (read == -1) break
+                        output.write(buffer, 0, read)
+                        totalRead += read
+
+                        val now = System.currentTimeMillis()
+                        val elapsedMs = now - lastSampleTimeMs
+                        if (elapsedMs >= 500L) {
+                            val deltaBytes = (totalRead - lastSampleBytes).coerceAtLeast(0L)
+                            val instantSpeed = (deltaBytes * 1000L) / elapsedMs
+                            smoothedSpeed = if (smoothedSpeed == 0L) {
+                                instantSpeed
+                            } else {
+                                (smoothedSpeed * 7L + instantSpeed * 3L) / 10L
+                            }
+                            if (contentLength > 0L) {
+                                download.progress = ((totalRead * 100L) / contentLength).toInt().coerceIn(0, 100)
+                                download.estimatedTotalBytes = contentLength
+                                download.etaSeconds = if (smoothedSpeed > 0L && contentLength > totalRead) {
+                                    (contentLength - totalRead) / smoothedSpeed
+                                } else {
+                                    -1L
+                                }
+                            } else {
+                                download.estimatedTotalBytes = 0L
+                                download.etaSeconds = -1L
+                            }
+                            download.downloadedBytes = totalRead
+                            download.downloadSpeedBytesPerSec = smoothedSpeed
+                            download.notifyStatsUpdated()
+
+                            lastSampleTimeMs = now
+                            lastSampleBytes = totalRead
+                        }
+                    }
+                    output.flush()
+                }
+            }
+
+            if (totalRead <= 0L) {
+                throw Exception("Downloaded empty file")
+            }
+
+            download.downloadedBytes = totalRead
+            download.estimatedTotalBytes = if (contentLength > 0L) contentLength else totalRead
+            download.progress = 100
+            download.notifyStatsUpdated()
+            videoFile.renameTo("$filename.$ext")
+        }
     }
 
     private suspend fun torrentDownload(
